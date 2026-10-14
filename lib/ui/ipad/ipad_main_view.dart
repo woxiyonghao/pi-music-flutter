@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/hifi_audio_service.dart';
 import '../../theme/hifi_theme.dart';
-import '../shared/vu_meter_widget.dart';
-import '../shared/spectrum_analyzer_widget.dart';
+import '../visualizers/visualizer_stage_widget.dart';
 import '../shared/playback_controls_widget.dart';
 import '../shared/glass_container.dart';
 
@@ -18,9 +17,6 @@ class IpadMainView extends StatelessWidget {
         final service = HifiAudioService.instance;
         final state = service.state;
         final track = service.currentTrack;
-
-        final leftLevel = state.spectrumLevels.isNotEmpty ? state.spectrumLevels[1] : 0.0;
-        final rightLevel = state.spectrumLevels.length > 2 ? state.spectrumLevels[2] : 0.0;
 
         return Scaffold(
           backgroundColor: HifiTheme.background,
@@ -76,22 +72,12 @@ class IpadMainView extends StatelessWidget {
                     padding: const EdgeInsets.all(24.0),
                     child: Column(
                       children: [
-                        // 经典麦景图湖蓝双表头
-                        Expanded(
-                          flex: 5,
-                          child: VuMeterWidget(
-                            leftLevel: leftLevel,
-                            rightLevel: rightLevel,
-                            height: double.infinity,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        // 12 频段音频频谱
-                        Expanded(
-                          flex: 3,
-                          child: SpectrumAnalyzerWidget(
-                            levels: state.spectrumLevels,
-                            height: double.infinity,
+                        // 经典发烧动效舞台 (集成麦景图/金嗓子/磁带机/LED频谱/极光波形/Siri球)
+                        const Expanded(
+                          flex: 7,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.all(Radius.circular(16)),
+                            child: VisualizerStageWidget(showSelector: true),
                           ),
                         ),
                         const SizedBox(height: 16),

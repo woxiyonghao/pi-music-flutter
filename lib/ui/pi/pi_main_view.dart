@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/hifi_audio_service.dart';
 import '../../theme/hifi_theme.dart';
-import '../shared/vu_meter_widget.dart';
-import '../shared/spectrum_analyzer_widget.dart';
+import '../visualizers/visualizer_stage_widget.dart';
 import '../shared/playback_controls_widget.dart';
 import '../shared/glass_container.dart';
 
@@ -19,47 +18,26 @@ class PiMainView extends StatelessWidget {
         final state = service.state;
         final track = service.currentTrack;
 
-        final leftLevel = state.spectrumLevels.isNotEmpty ? state.spectrumLevels[1] : 0.0;
-        final rightLevel = state.spectrumLevels.length > 2 ? state.spectrumLevels[2] : 0.0;
-
         return Scaffold(
           backgroundColor: HifiTheme.background,
           body: Padding(
             padding: const EdgeInsets.all(12.0),
             child: Row(
               children: [
-                // 左半区 (约 55% 宽度)：麦景图经典双表头 + 12段音频频谱瀑布
-                Expanded(
-                  flex: 55,
-                  child: Column(
-                    children: [
-                      // 麦景图湖蓝色双表头 (主视觉核心)
-                      Expanded(
-                        flex: 65,
-                        child: VuMeterWidget(
-                          leftLevel: leftLevel,
-                          rightLevel: rightLevel,
-                          height: double.infinity,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      // 12 频段音频频谱分析仪
-                      Expanded(
-                        flex: 35,
-                        child: SpectrumAnalyzerWidget(
-                          levels: state.spectrumLevels,
-                          height: double.infinity,
-                        ),
-                      ),
-                    ],
+                // 左半区 (约 58% 宽度)：发烧动效舞台 (集成麦景图/金嗓子/磁带机/LED频谱/极光波形/Siri球)
+                const Expanded(
+                  flex: 58,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.all(Radius.circular(16)),
+                    child: VisualizerStageWidget(showSelector: true),
                   ),
                 ),
 
                 const SizedBox(width: 12),
 
-                // 右半区 (约 45% 宽度)：曲目信息、硬件状态与大触控按键
+                // 右半区 (约 42% 宽度)：曲目信息、硬件状态与大触控按键
                 Expanded(
-                  flex: 45,
+                  flex: 42,
                   child: GlassContainer(
                     height: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -87,7 +65,7 @@ class PiMainView extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: HifiTheme.mcIntoshBlue.withOpacity(0.3),
+                                color: HifiTheme.mcIntoshBlue.withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
@@ -159,9 +137,9 @@ class PiMainView extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withOpacity(0.6), width: 0.8),
+        border: Border.all(color: color.withValues(alpha: 0.6), width: 0.8),
       ),
       child: Text(
         text,

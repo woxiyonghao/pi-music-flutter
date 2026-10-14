@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/hifi_audio_service.dart';
 import '../../theme/hifi_theme.dart';
-import '../shared/vu_meter_widget.dart';
-import '../shared/spectrum_analyzer_widget.dart';
+import '../visualizers/visualizer_stage_widget.dart';
 import '../shared/playback_controls_widget.dart';
 
 /// macOS 桌面专业端发烧播放器 UI (CoreAudio / Hog Mode)
@@ -17,9 +16,6 @@ class MacMainView extends StatelessWidget {
         final service = HifiAudioService.instance;
         final state = service.state;
         final track = service.currentTrack;
-
-        final leftLevel = state.spectrumLevels.isNotEmpty ? state.spectrumLevels[1] : 0.0;
-        final rightLevel = state.spectrumLevels.length > 2 ? state.spectrumLevels[2] : 0.0;
 
         return Scaffold(
           backgroundColor: HifiTheme.background,
@@ -130,29 +126,13 @@ class MacMainView extends StatelessWidget {
                       ),
                     ),
 
-                    // 中部发烧仪表核心
-                    Expanded(
+                    // 中部发烧动效舞台核心 (支持6大动效即时切换)
+                    const Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              flex: 6,
-                              child: VuMeterWidget(
-                                leftLevel: leftLevel,
-                                rightLevel: rightLevel,
-                                height: double.infinity,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Expanded(
-                              flex: 4,
-                              child: SpectrumAnalyzerWidget(
-                                levels: state.spectrumLevels,
-                                height: double.infinity,
-                              ),
-                            ),
-                          ],
+                        padding: EdgeInsets.all(20.0),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.all(Radius.circular(16)),
+                          child: VisualizerStageWidget(showSelector: true),
                         ),
                       ),
                     ),
