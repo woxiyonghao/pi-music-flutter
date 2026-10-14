@@ -152,7 +152,11 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           peakHold: _peakHold,
         );
         break;
-      case VisualizerType.neonWaveform:
+      case VisualizerType.neonWave:
+      case VisualizerType.siriWave:
+      case VisualizerType.cyberGrid:
+      case VisualizerType.glassClock:
+      case VisualizerType.bubbles:
         painter = NeonWaveformPainter(
           levels: state.spectrumLevels,
           animTime: _animTime,
@@ -165,6 +169,12 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
         painter = SiriOrbPainter(
           energy: avgEnergy,
           animTime: _animTime,
+        );
+        break;
+      case VisualizerType.pureBlack:
+        painter = LedSpectrumPainter(
+          levels: state.spectrumLevels,
+          peakHold: _peakHold,
         );
         break;
     }

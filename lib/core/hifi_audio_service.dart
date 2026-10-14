@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/track.dart';
 import '../models/playback_state.dart';
@@ -13,6 +14,15 @@ class HifiAudioService extends ChangeNotifier {
   Track? _currentTrack;
   Track? get currentTrack => _currentTrack;
 
+  List<Track> _playlistQueue = [];
+  List<Track> get playlistQueue => _playlistQueue;
+
+  int _currentIndex = -1;
+  int get currentIndex => _currentIndex;
+
+  PlayMode _playMode = PlayMode.loopList;
+  PlayMode get playMode => _playMode;
+
   PlaybackState _state = const PlaybackState();
   PlaybackState get state => _state;
 
@@ -24,10 +34,9 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void _startTicker() {
-    // 60fps 定时器轮询频谱与播放进度
     _ticker = Timer.periodic(const Duration(milliseconds: 16), (_) {
       if (!_bindings.isLoaded) {
-        // 未加载原生动态库时使用微小随机波动演示动效
+        // 未加载原生动态库时使用微小状态同步
         return;
       }
 
@@ -50,6 +59,9 @@ class HifiAudioService extends ChangeNotifier {
         progress: progress,
         volume: volume,
         isMuted: isMuted,
+        playMode: _playMode,
+        activeDeviceName: _currentTrack != null ? 'Apple Direct' : 'Apple Direct',
+        activeSampleRate: _currentTrack?.sampleRate ?? 192000,
         spectrumLevels: spectrum,
       );
 
@@ -57,14 +69,153 @@ class HifiAudioService extends ChangeNotifier {
     });
   }
 
-  void playTrack(Track track) {
+  void playTracks(List<Track> tracks, int startIndex) {
+    if (tracks.isEmpty || startIndex < 0 || startIndex >= tracks.length) return;
+    _playlistQueue = List.from(tracks);
+    _currentIndex = startIndex;
+    playTrack(_playlistQueue[_currentIndex]);
+  }
+
+  void playTrack(Track track, [List<Track>? queue, int? index]) {
     _currentTrack = track;
+    if (queue != null && index != null) {
+      _playlistQueue = List.from(queue);
+      _currentIndex = index;
+    } else if (!_playlistQueue.contains(track)) {
+      _playlistQueue = [track];
+      _currentIndex = 0;
+    } else {
+      _currentIndex = _playlistQueue.indexOf(track);
+    }
+
     _bindings.openAndPlay(track.filepath);
+    _state = PlaybackState(
+      isPlaying: true,
+      isPaused: false,
+      isBitPerfect: true,
+      currentTime: 0.0,
+      duration: track.durationSec.toDouble(),
+      progress: 0.0,
+      volume: _state.volume,
+      isMuted: _state.isMuted,
+      playMode: _playMode,
+      activeDeviceName: 'Apple Direct',
+      activeSampleRate: track.sampleRate,
+      spectrumLevels: _state.spectrumLevels,
+    );
     notifyListeners();
   }
 
   void togglePlayPause() {
+    if (_currentTrack == null && _playlistQueue.isNotEmpty) {
+      playTrack(_playlistQueue.first);
+      return;
+    }
     _bindings.toggle();
+    final nowPlaying = !_state.isPlaying;
+    _state = PlaybackState(
+      isPlaying: nowPlaying,
+      isPaused: !nowPlaying,
+      isBitPerfect: _state.isBitPerfect,
+      currentTime: _state.currentTime,
+      duration: _state.duration,
+      progress: _state.progress,
+      volume: _state.volume,
+      isMuted: _state.isMuted,
+      playMode: _playMode,
+      activeDeviceName: _state.activeDeviceName,
+      activeSampleRate: _state.activeSampleRate,
+      spectrumLevels: _state.spectrumLevels,
+    );
+    notifyListeners();
+  }
+
+  void play() {
+    _bindings.play();
+    notifyListeners();
+  }
+
+  void pause() {
+    _bindings.pause();
+    notifyListeners();
+  }
+
+  void previous() {
+    if (_playlistQueue.isEmpty) return;
+    if (_state.currentTime > 3.0) {
+      seek(0.0);
+      return;
+    }
+    if (_currentIndex > 0) {
+      _currentIndex--;
+    } else {
+      _currentIndex = _playlistQueue.length - 1;
+    }
+    playTrack(_playlistQueue[_currentIndex]);
+  }
+
+  void next() {
+    if (_playlistQueue.isEmpty) return;
+    switch (_playMode) {
+      case PlayMode.loopSingle:
+        seek(0.0);
+        play();
+        return;
+      case PlayMode.shuffle:
+        if (_playlistQueue.length > 1) {
+          int nextIdx;
+          do {
+            nextIdx = Random().nextInt(_playlistQueue.length);
+          } while (nextIdx == _currentIndex);
+          _currentIndex = nextIdx;
+        }
+        break;
+      case PlayMode.sequence:
+        if (_currentIndex < _playlistQueue.length - 1) {
+          _currentIndex++;
+        } else {
+          pause();
+          seek(0.0);
+          return;
+        }
+        break;
+      case PlayMode.loopList:
+      default:
+        _currentIndex = (_currentIndex + 1) % _playlistQueue.length;
+        break;
+    }
+    playTrack(_playlistQueue[_currentIndex]);
+  }
+
+  void cyclePlayMode() {
+    switch (_playMode) {
+      case PlayMode.loopList:
+        _playMode = PlayMode.loopSingle;
+        break;
+      case PlayMode.loopSingle:
+        _playMode = PlayMode.shuffle;
+        break;
+      case PlayMode.shuffle:
+        _playMode = PlayMode.sequence;
+        break;
+      case PlayMode.sequence:
+        _playMode = PlayMode.loopList;
+        break;
+    }
+    _state = PlaybackState(
+      isPlaying: _state.isPlaying,
+      isPaused: _state.isPaused,
+      isBitPerfect: _state.isBitPerfect,
+      currentTime: _state.currentTime,
+      duration: _state.duration,
+      progress: _state.progress,
+      volume: _state.volume,
+      isMuted: _state.isMuted,
+      playMode: _playMode,
+      activeDeviceName: _state.activeDeviceName,
+      activeSampleRate: _state.activeSampleRate,
+      spectrumLevels: _state.spectrumLevels,
+    );
     notifyListeners();
   }
 
@@ -74,12 +225,41 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void setVolume(double vol) {
-    _bindings.setVolume(vol);
+    _bindings.setVolume(vol.clamp(0.0, 1.0));
+    _state = PlaybackState(
+      isPlaying: _state.isPlaying,
+      isPaused: _state.isPaused,
+      isBitPerfect: _state.isBitPerfect,
+      currentTime: _state.currentTime,
+      duration: _state.duration,
+      progress: _state.progress,
+      volume: vol.clamp(0.0, 1.0),
+      isMuted: _state.isMuted,
+      playMode: _playMode,
+      activeDeviceName: _state.activeDeviceName,
+      activeSampleRate: _state.activeSampleRate,
+      spectrumLevels: _state.spectrumLevels,
+    );
     notifyListeners();
   }
 
   void toggleMute() {
-    _bindings.setMuted(!_state.isMuted);
+    final nextMuted = !_state.isMuted;
+    _bindings.setMuted(nextMuted);
+    _state = PlaybackState(
+      isPlaying: _state.isPlaying,
+      isPaused: _state.isPaused,
+      isBitPerfect: _state.isBitPerfect,
+      currentTime: _state.currentTime,
+      duration: _state.duration,
+      progress: _state.progress,
+      volume: _state.volume,
+      isMuted: nextMuted,
+      playMode: _playMode,
+      activeDeviceName: _state.activeDeviceName,
+      activeSampleRate: _state.activeSampleRate,
+      spectrumLevels: _state.spectrumLevels,
+    );
     notifyListeners();
   }
 

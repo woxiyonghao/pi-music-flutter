@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
-import '../../core/hifi_audio_service.dart';
-import '../../theme/hifi_theme.dart';
+import '../../models/sidebar_tab.dart';
+import '../../services/music_database_service.dart';
+import '../../theme/ui_config.dart';
+import '../common/glass_card.dart';
 import '../visualizers/visualizer_type.dart';
-import '../visualizers/visualizer_stage_widget.dart';
-import '../shared/playback_controls_widget.dart';
+import 'mac_background_widget.dart';
+import 'mac_sidebar_widget.dart';
+import 'mac_bottom_bar_widget.dart';
+import 'views/mac_all_music_view.dart';
+import 'views/mac_equalizer_view.dart';
+import 'views/mac_dac_setting_view.dart';
+import 'views/mac_theme_setting_view.dart';
+import 'views/mac_magic_tuning_view.dart';
+import 'views/mac_scan_music_view.dart';
+import 'views/mac_system_settings_view.dart';
+import 'views/mac_web_service_view.dart';
 
-/// macOS 桌面专业端发烧播放器 UI (CoreAudio / Hog Mode)
+/// macOS 专业桌面端发烧纯音数播主视窗 (1:1 严格对齐 C++ Application.cpp 全景架构)
 class MacMainView extends StatefulWidget {
   const MacMainView({super.key});
 
@@ -14,297 +25,109 @@ class MacMainView extends StatefulWidget {
 }
 
 class _MacMainViewState extends State<MacMainView> {
-  VisualizerType _activeVisualizer = VisualizerType.mcIntosh;
+  SidebarTab _currentTab = SidebarTab.allMusic;
+  int _selectedPlaylistId = 0;
+  VisualizerType _activeVisualizer = VisualizerType.ledSpectrum;
+  bool _showCreatePlaylistModal = false;
+  final TextEditingController _playlistNameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _playlistNameController.dispose();
+    super.dispose();
+  }
+
+  void _openCreatePlaylistModal() {
+    _playlistNameController.clear();
+    setState(() {
+      _showCreatePlaylistModal = true;
+    });
+  }
+
+  void _closeCreatePlaylistModal() {
+    setState(() {
+      _showCreatePlaylistModal = false;
+    });
+  }
+
+  void _submitCreatePlaylist() {
+    final name = _playlistNameController.text.trim();
+    if (name.isNotEmpty) {
+      MusicDatabaseService.instance.createPlaylist(name);
+    }
+    _closeCreatePlaylistModal();
+  }
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('[MacMainView] build: _currentTab = $_currentTab');
     return ListenableBuilder(
-      listenable: HifiAudioService.instance,
+      listenable: MusicDatabaseService.instance,
       builder: (context, _) {
-        final service = HifiAudioService.instance;
-        final state = service.state;
-        final track = service.currentTrack;
+        final db = MusicDatabaseService.instance;
+        final tracks = db.tracks;
+        final playlists = db.playlists;
 
         return Scaffold(
-          backgroundColor: HifiTheme.background,
-          body: Row(
+          backgroundColor: UIConfig.mainStageBg,
+          body: Stack(
+            fit: StackFit.expand,
             children: [
-              // 1. macOS 专业侧边栏 (220px 紧凑发烧布局，防溢出)
-              Container(
-                width: 220,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF0D1117),
-                  border: Border(right: BorderSide(color: HifiTheme.cardBorder)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // macOS 顶部交通灯安全留白
-                    const SizedBox(height: 44),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 18.0),
-                      child: Text(
-                        'MY HIFI MASTER',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: HifiTheme.textMuted,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildMacMenuItem(Icons.library_music_rounded, '音乐曲库', true),
-                    _buildMacMenuItem(Icons.playlist_play_rounded, '精选歌单', false),
-                    _buildMacMenuItem(Icons.album_rounded, '专辑唱片', false),
-                    const SizedBox(height: 20),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 18.0),
-                      child: Text(
-                        'HARDWARE & DAC',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: HifiTheme.textMuted,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _buildMacMenuItem(Icons.developer_board_rounded, 'AK4499EX 前级', false),
-                    _buildMacMenuItem(Icons.tune_rounded, '10段专业均衡器', false),
-                    _buildMacMenuItem(Icons.speaker_rounded, 'CoreAudio 独占', false),
-                    const Spacer(),
+              // 1. 全景底层背景与音乐律动动效 (48列全景 LED 频谱 / 名机表头)
+              MacBackgroundWidget(visualizerType: _activeVisualizer),
 
-                    // 底部声卡指示 (自适应防溢出)
-                    Container(
-                      margin: const EdgeInsets.all(12),
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: HifiTheme.cardBackground,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: HifiTheme.cardBorder),
-                      ),
-                      child: const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.lock_rounded, size: 12, color: HifiTheme.neonCyan),
-                              SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  'HOG MODE (EXCLUSIVE)',
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: HifiTheme.neonCyan,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 3),
-                          Text(
-                            'Bit-Perfect Direct Audio',
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 10, color: HifiTheme.textMuted),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+              // 2. 左侧：导航与歌单侧边栏 (230px 固定总宽度)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: UIConfig.sidebarWidth,
+                child: MacSidebarWidget(
+                  currentTab: _currentTab,
+                  selectedPlaylistId: _selectedPlaylistId,
+                  playlists: playlists,
+                  dacName: 'Apple Direct',
+                  isDacConnected: true,
+                  onTabSelected: (tab) {
+                    setState(() {
+                      _currentTab = tab;
+                    });
+                  },
+                  onPlaylistSelected: (plId) {
+                    setState(() {
+                      _currentTab = SidebarTab.customPlaylist;
+                      _selectedPlaylistId = plId;
+                    });
+                  },
+                  onCreatePlaylist: _openCreatePlaylistModal,
+                  onDacClicked: () {
+                    setState(() {
+                      _currentTab = SidebarTab.dacSettings;
+                    });
+                  },
                 ),
               ),
 
-              // 2. macOS 主舞台展示区
-              Expanded(
-                child: Column(
-                  children: [
-                    // 顶部窗口标头 (集成发烧动效切换与引擎状态)
-                    Container(
-                      height: 50,
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF090D14),
-                        border: Border(bottom: BorderSide(color: HifiTheme.cardBorder)),
-                      ),
-                      child: Row(
-                        children: [
-                          // 左侧标头与状态绿灯
-                          Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: HifiTheme.neonCyan,
-                                  boxShadow: [
-                                    BoxShadow(color: HifiTheme.neonCyan, blurRadius: 6),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'HiFi Master Audio Console',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: HifiTheme.textPrimary,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Spacer(),
-
-                          // 右侧发烧动效快捷切换 + 引擎指标 (自适应防溢出)
-                          Flexible(
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  // 动效切换器
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF141923),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: HifiTheme.cardBorder),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: DropdownButton<VisualizerType>(
-                                        value: _activeVisualizer,
-                                        dropdownColor: const Color(0xFF161B24),
-                                        isDense: true,
-                                        icon: const Icon(Icons.style_rounded, size: 14, color: HifiTheme.mcIntoshGlow),
-                                        style: const TextStyle(fontSize: 11, color: HifiTheme.textPrimary, fontWeight: FontWeight.bold),
-                                        items: VisualizerType.values.map((type) {
-                                          return DropdownMenuItem<VisualizerType>(
-                                            value: type,
-                                            child: Text(type.displayName),
-                                          );
-                                        }).toList(),
-                                        onChanged: (newType) {
-                                          if (newType != null) {
-                                            setState(() {
-                                              _activeVisualizer = newType;
-                                            });
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-
-                                  // 384kHz 引擎指标
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: HifiTheme.mcIntoshBlue.withValues(alpha: 0.18),
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(color: HifiTheme.mcIntoshGlow.withValues(alpha: 0.4)),
-                                    ),
-                                    child: const Text(
-                                      '384kHz / 32Bit Float Engine',
-                                      style: TextStyle(color: HifiTheme.mcIntoshGlow, fontSize: 11, fontWeight: FontWeight.w600),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // 中部发烧动效舞台核心 (无遮挡纯净画布)
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: ClipRRect(
-                          borderRadius: const BorderRadius.all(Radius.circular(14)),
-                          child: VisualizerStageWidget(
-                            activeType: _activeVisualizer,
-                            showSelector: false,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // 底部常驻播放控制栏 (自适应弹性布局，彻底杜绝 overflow 报警)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                      decoration: const BoxDecoration(
-                        color: HifiTheme.cardBackground,
-                        border: Border(top: BorderSide(color: HifiTheme.cardBorder)),
-                      ),
-                      child: Row(
-                        children: [
-                          // 曲目信息 (弹性收缩防溢出)
-                          Expanded(
-                            flex: 3,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  track?.title ?? 'McIntosh Reference Track',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  track?.artist ?? 'Apple CoreAudio Direct',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: HifiTheme.textMuted, fontSize: 11),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // 播放控制
-                          const Expanded(
-                            flex: 5,
-                            child: PlaybackControlsWidget(compact: true),
-                          ),
-
-                          // 音量控制 (弹性收缩 Slider，永不溢出)
-                          Expanded(
-                            flex: 2,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                const Icon(Icons.volume_up_rounded, size: 18, color: HifiTheme.textMuted),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: SliderTheme(
-                                    data: SliderTheme.of(context).copyWith(
-                                      trackHeight: 2,
-                                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-                                      activeTrackColor: HifiTheme.mcIntoshGlow,
-                                      inactiveTrackColor: HifiTheme.cardBorder,
-                                    ),
-                                    child: Slider(
-                                      value: state.volume,
-                                      onChanged: (val) => service.setVolume(val),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              // 3. 右上方：中央主舞台区域 (避让底部播放控制胶囊)
+              Positioned(
+                left: UIConfig.sidebarWidth,
+                top: UIConfig.containerMarginY,
+                right: UIConfig.containerMarginX,
+                bottom: UIConfig.bottomBarOffset,
+                child: _buildMainStage(tracks),
               ),
+
+              // 4. 右下方：底部液态玻璃播放控制胶囊栏
+              const Positioned(
+                left: UIConfig.sidebarWidth + UIConfig.containerMarginX,
+                right: UIConfig.containerMarginX,
+                bottom: UIConfig.containerMarginY,
+                height: UIConfig.bottomBarHeight,
+                child: MacBottomBarWidget(),
+              ),
+
+              // 5. 顶层新建播放列表模态弹窗
+              if (_showCreatePlaylistModal) _buildCreatePlaylistModal(),
             ],
           ),
         );
@@ -312,31 +135,157 @@ class _MacMainViewState extends State<MacMainView> {
     );
   }
 
-  Widget _buildMacMenuItem(IconData icon, String title, bool active) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: active ? HifiTheme.mcIntoshBlue.withOpacity(0.25) : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: active ? HifiTheme.mcIntoshGlow : HifiTheme.textMuted),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              title,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: active ? HifiTheme.textPrimary : HifiTheme.textMuted,
-                fontSize: 12,
-                fontWeight: active ? FontWeight.bold : FontWeight.normal,
-              ),
+  Widget _buildMainStage(tracks) {
+    switch (_currentTab) {
+      case SidebarTab.allMusic:
+      case SidebarTab.customPlaylist:
+        return MacAllMusicView(
+          tracks: tracks,
+          onNavigateToScan: () {
+            setState(() {
+              _currentTab = SidebarTab.scanMusic;
+            });
+          },
+        );
+      case SidebarTab.scanMusic:
+        return MacScanMusicView(
+          scannedCount: tracks.length,
+          onScanComplete: () {
+            MusicDatabaseService.instance.loadLibrary();
+          },
+        );
+      case SidebarTab.equalizer:
+        return const MacEqualizerView();
+      case SidebarTab.msebTuning:
+        return const MacMagicTuningView();
+      case SidebarTab.dacSettings:
+        return const MacDACSettingView();
+      case SidebarTab.themeSettings:
+        return MacThemeSettingView(
+          currentVisualizer: _activeVisualizer,
+          onVisualizerChanged: (type) {
+            setState(() {
+              _activeVisualizer = type;
+            });
+          },
+        );
+      case SidebarTab.systemSettings:
+        return const MacSystemSettingsView();
+      case SidebarTab.webService:
+        return const MacWebServiceView(isWifiTransfer: false);
+      case SidebarTab.wifiTransfer:
+        return const MacWebServiceView(isWifiTransfer: true);
+      case SidebarTab.terminal:
+        return const MacSystemSettingsView();
+    }
+  }
+
+  Widget _buildCreatePlaylistModal() {
+    return Stack(
+      children: [
+        // 全透明点击拦截遮罩
+        GestureDetector(
+          onTap: _closeCreatePlaylistModal,
+          behavior: HitTestBehavior.opaque,
+          child: Container(color: Colors.black.withOpacity(0.45)),
+        ),
+
+        // 居中 380x200 磨砂模态对话框 (对齐 Application.cpp::renderCreatePlaylistModal)
+        Center(
+          child: GlassCard(
+            width: 380.0,
+            height: 200.0,
+            borderRadius: 16.0,
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '新建播放列表',
+                  style: TextStyle(
+                    fontSize: UIConfig.fontMedium,
+                    fontWeight: FontWeight.bold,
+                    color: UIConfig.textActive,
+                  ),
+                ),
+                const SizedBox(height: 6.0),
+                const Text(
+                  '请输入歌单名称 (最多 8 个汉字/字符)',
+                  style: TextStyle(
+                    fontSize: UIConfig.fontSmall,
+                    color: UIConfig.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 16.0),
+
+                // 输入框
+                TextField(
+                  controller: _playlistNameController,
+                  autofocus: true,
+                  maxLength: 8,
+                  style: const TextStyle(
+                    fontSize: UIConfig.fontRegular,
+                    color: UIConfig.textActive,
+                  ),
+                  decoration: InputDecoration(
+                    counterText: '',
+                    filled: true,
+                    fillColor: const Color.fromRGBO(10, 14, 20, 0.85),
+                    hintText: '输入新歌单名称...',
+                    hintStyle: const TextStyle(color: UIConfig.textMuted),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12.0, vertical: 10.0),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6.0),
+                      borderSide: const BorderSide(
+                        color: Color.fromRGBO(255, 255, 255, 0.15),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6.0),
+                      borderSide: const BorderSide(
+                        color: UIConfig.accent,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                  onSubmitted: (_) => _submitCreatePlaylist(),
+                ),
+
+                const Spacer(),
+
+                // 底部取消与确定按钮
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _closeCreatePlaylistModal,
+                      style: TextButton.styleFrom(
+                        foregroundColor: UIConfig.textMuted,
+                      ),
+                      child: const Text('取消'),
+                    ),
+                    const SizedBox(width: 10.0),
+                    ElevatedButton(
+                      onPressed: _submitCreatePlaylist,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: UIConfig.accent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6.0),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 8.0),
+                      ),
+                      child: const Text('确定创建'),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
