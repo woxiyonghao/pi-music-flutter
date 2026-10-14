@@ -61,30 +61,31 @@ class _HiFiPlayerAppState extends State<HiFiPlayerApp> {
             children: [
               content,
               Positioned(
-                right: 16,
-                top: 40,
-                child: Opacity(
-                  opacity: 0.6,
+                left: 16,
+                bottom: 80,
+                child: Material(
+                  type: MaterialType.transparency,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.black87,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: HifiTheme.mcIntoshGlow.withOpacity(0.5)),
+                      color: const Color(0xFF161B22),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: HifiTheme.cardBorder),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<HifiPlatformType>(
                         value: platform,
-                        dropdownColor: HifiTheme.cardBackground,
-                        icon: const Icon(Icons.devices_rounded, size: 16, color: HifiTheme.mcIntoshGlow),
-                        style: const TextStyle(fontSize: 11, color: HifiTheme.textPrimary),
+                        dropdownColor: const Color(0xFF161B22),
+                        isDense: true,
+                        icon: const Icon(Icons.devices_rounded, size: 14, color: HifiTheme.textMuted),
+                        style: const TextStyle(fontSize: 11, color: HifiTheme.textSecondary),
                         items: const [
                           DropdownMenuItem(value: HifiPlatformType.mac, child: Text('🖥️ Mac')),
                           DropdownMenuItem(value: HifiPlatformType.pi, child: Text('🥧 树莓派 7寸')),
-                          DropdownMenuItem(value: HifiPlatformType.iphone, child: Text('📱 iPhone')),
                           DropdownMenuItem(value: HifiPlatformType.ipad, child: Text('📟 iPad')),
-                          DropdownMenuItem(value: HifiPlatformType.android, child: Text('🤖 Android')),
                           DropdownMenuItem(value: HifiPlatformType.window, child: Text('🪟 Windows')),
+                          DropdownMenuItem(value: HifiPlatformType.iphone, child: Text('📱 iPhone (后续)')),
+                          DropdownMenuItem(value: HifiPlatformType.android, child: Text('🤖 Android (后续)')),
                         ],
                         onChanged: (newPlat) {
                           if (newPlat != null) {

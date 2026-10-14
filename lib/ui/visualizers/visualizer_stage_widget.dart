@@ -13,13 +13,17 @@ import 'siri_orb_painter.dart';
 
 /// 统一发烧动效舞台容器 (专为横屏设备打造，内置 60fps 物理阻尼与动画引擎)
 class VisualizerStageWidget extends StatefulWidget {
+  final VisualizerType? activeType;
   final VisualizerType initialType;
+  final ValueChanged<VisualizerType>? onTypeChanged;
   final bool showSelector;
 
   const VisualizerStageWidget({
     super.key,
+    this.activeType,
     this.initialType = VisualizerType.mcIntosh,
-    this.showSelector = true,
+    this.onTypeChanged,
+    this.showSelector = false,
   });
 
   @override
@@ -118,8 +122,10 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
   Widget build(BuildContext context) {
     final state = HifiAudioService.instance.state;
 
+    final effectiveType = widget.activeType ?? _currentType;
+
     CustomPainter painter;
-    switch (_currentType) {
+    switch (effectiveType) {
       case VisualizerType.mcIntosh:
         painter = McIntoshMeterPainter(
           leftAngle: _leftAngle,
@@ -172,40 +178,44 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           ),
         ),
 
-        // 右上角动效切换 Pill 胶囊控件 (支持横屏下一键快速切换 6 大发烧动效)
+        // 右上角动效切换 Pill 胶囊控件 (可选)
         if (widget.showSelector)
           Positioned(
             right: 16,
             top: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.75),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: HifiTheme.mcIntoshGlow.withValues(alpha: 0.5)),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 8),
-                ],
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<VisualizerType>(
-                  value: _currentType,
-                  dropdownColor: const Color(0xFF161B24),
-                  icon: const Icon(Icons.style_rounded, size: 16, color: HifiTheme.mcIntoshGlow),
-                  style: const TextStyle(fontSize: 11, color: HifiTheme.textPrimary, fontWeight: FontWeight.bold),
-                  items: VisualizerType.values.map((type) {
-                    return DropdownMenuItem<VisualizerType>(
-                      value: type,
-                      child: Text(type.displayName),
-                    );
-                  }).toList(),
-                  onChanged: (newType) {
-                    if (newType != null) {
-                      setState(() {
-                        _currentType = newType;
-                      });
-                    }
-                  },
+            child: Material(
+              type: MaterialType.transparency,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: HifiTheme.mcIntoshGlow.withValues(alpha: 0.5)),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 8),
+                  ],
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<VisualizerType>(
+                    value: effectiveType,
+                    dropdownColor: const Color(0xFF161B24),
+                    icon: const Icon(Icons.style_rounded, size: 16, color: HifiTheme.mcIntoshGlow),
+                    style: const TextStyle(fontSize: 11, color: HifiTheme.textPrimary, fontWeight: FontWeight.bold),
+                    items: VisualizerType.values.map((type) {
+                      return DropdownMenuItem<VisualizerType>(
+                        value: type,
+                        child: Text(type.displayName),
+                      );
+                    }).toList(),
+                    onChanged: (newType) {
+                      if (newType != null) {
+                        setState(() {
+                          _currentType = newType;
+                        });
+                        widget.onTypeChanged?.call(newType);
+                      }
+                    },
+                  ),
                 ),
               ),
             ),
