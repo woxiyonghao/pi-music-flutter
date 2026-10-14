@@ -44,12 +44,12 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                   color: UIConfig.textActive,
                 ),
               ),
-              InkWell(
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () {
                   theme.resetToDefault();
                   widget.onVisualizerChanged(VisualizerType.ledSpectrum);
                 },
-                borderRadius: BorderRadius.circular(7.0),
                 child: Container(
                   height: 28.0,
                   padding: const EdgeInsets.symmetric(horizontal: 14.0),
@@ -108,6 +108,20 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
     );
   }
 
+  static const List<IconData> _visualModeIcons = [
+    Icons.equalizer_rounded,           // 48列全景 LED 频谱
+    Icons.speed_rounded,               // 名机动圈大表头
+    Icons.speed_outlined,              // 金嗓子旗舰大表头
+    Icons.album_rounded,               // 复古开盘磁带机
+    Icons.waves_rounded,               // Siri 流光声波
+    Icons.lens_blur_rounded,           // Siri 悬浮微光球
+    Icons.bubble_chart_rounded,        // 音乐微光气泡
+    Icons.nightlight_round,            // 极简纯黑纯音直通
+    Icons.graphic_eq_rounded,          // 电光霓虹声波
+    Icons.grid_4x4_rounded,            // 赛博粒子网格
+    Icons.access_time_filled_rounded,  // 液态玻璃时钟
+  ];
+
   /// 毛玻璃板块卡片容器
   Widget _buildSectionContainer({
     required String title,
@@ -116,13 +130,28 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color.fromRGBO(20, 26, 36, 0.7),
-        borderRadius: BorderRadius.circular(10.0),
-        border: Border.all(
-          color: const Color.fromRGBO(255, 255, 255, 0.11),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF19202E),
+            Color(0xFF111622),
+          ],
         ),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(
+          color: const Color.fromRGBO(255, 255, 255, 0.08),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 14.0,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -134,13 +163,14 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                 style: const TextStyle(
                   fontSize: UIConfig.fontRegular,
                   fontWeight: FontWeight.w600,
+                  letterSpacing: 0.8,
                   color: UIConfig.textActive,
                 ),
               ),
               if (headerTrailing != null) headerTrailing,
             ],
           ),
-          const SizedBox(height: 12.0),
+          const SizedBox(height: 14.0),
           child,
         ],
       ),
@@ -156,46 +186,85 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: cols,
-          mainAxisSpacing: 8.0,
-          crossAxisSpacing: 12.0,
-          mainAxisExtent: 52.0,
+          mainAxisSpacing: 10.0,
+          crossAxisSpacing: 14.0,
+          mainAxisExtent: 56.0,
         ),
         itemCount: ThemeService.presets.length,
         itemBuilder: (context, i) {
           final p = ThemeService.presets[i];
           final isCur = theme.currentThemeId == p.id;
 
-          return InkWell(
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () {
               theme.setTheme(p.id);
               widget.onVisualizerChanged(
                 VisualizerType.values[p.defaultVisualMode.clamp(0, VisualizerType.values.length - 1)],
               );
             },
-            borderRadius: BorderRadius.circular(8.0),
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
               padding: const EdgeInsets.symmetric(horizontal: 14.0),
               decoration: BoxDecoration(
-                color: isCur
-                    ? p.accentColor.withValues(alpha: 0.15)
-                    : const Color.fromRGBO(255, 255, 255, 0.04),
-                borderRadius: BorderRadius.circular(8.0),
+                gradient: isCur
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          p.accentColor.withValues(alpha: 0.22),
+                          p.accentColor.withValues(alpha: 0.08),
+                          const Color(0xFF131824),
+                        ],
+                        stops: const [0.0, 0.45, 1.0],
+                      )
+                    : const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF222B3D),
+                          Color(0xFF161C28),
+                        ],
+                      ),
+                borderRadius: BorderRadius.circular(10.0),
                 border: Border.all(
                   color: isCur
-                      ? p.accentColor
-                      : const Color.fromRGBO(255, 255, 255, 0.1),
-                  width: isCur ? 1.5 : 1.0,
+                      ? p.accentColor.withValues(alpha: 0.85)
+                      : const Color.fromRGBO(255, 255, 255, 0.08),
+                  width: isCur ? 1.2 : 1.0,
                 ),
+                boxShadow: isCur
+                    ? [
+                        BoxShadow(
+                          color: p.accentColor.withValues(alpha: 0.28),
+                          blurRadius: 14.0,
+                          spreadRadius: -2.0,
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.22),
+                          blurRadius: 6.0,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
               ),
               child: Row(
                 children: [
-                  // 双圆环主题标点
+                  // 发烧微光珠宝指示圆环
                   Container(
-                    width: 14.0,
-                    height: 14.0,
+                    width: 16.0,
+                    height: 16.0,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: p.accentColor,
+                      boxShadow: [
+                        BoxShadow(
+                          color: p.accentColor.withValues(alpha: isCur ? 0.75 : 0.35),
+                          blurRadius: isCur ? 8.0 : 4.0,
+                        ),
+                      ],
                     ),
                     child: isCur
                         ? Center(
@@ -229,6 +298,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                                 : const Color.fromRGBO(220, 230, 245, 0.9),
                           ),
                         ),
+                        const SizedBox(height: 2.0),
                         Text(
                           p.soundStyle,
                           overflow: TextOverflow.ellipsis,
@@ -241,7 +311,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                     ),
                   ),
 
-                  // 3 颗调色代表色条
+                  // 3 颗微晶胶囊调色代表柱
                   _buildColorChip(p.accentColor),
                   const SizedBox(width: 4.0),
                   _buildColorChip(p.litColor),
@@ -249,14 +319,27 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                   _buildColorChip(p.peakColor),
 
                   if (isCur) ...[
-                    const SizedBox(width: 8.0),
+                    const SizedBox(width: 10.0),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6.0, vertical: 2.0),
+                          horizontal: 8.0, vertical: 3.0),
                       decoration: BoxDecoration(
-                        color: p.accentColor.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(4.0),
-                        border: Border.all(color: p.accentColor, width: 1.0),
+                        gradient: LinearGradient(
+                          colors: [
+                            p.accentColor.withValues(alpha: 0.35),
+                            p.accentColor.withValues(alpha: 0.15),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(10.0),
+                        border: Border.all(
+                            color: p.accentColor.withValues(alpha: 0.75),
+                            width: 0.8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: p.accentColor.withValues(alpha: 0.30),
+                            blurRadius: 6.0,
+                          ),
+                        ],
                       ),
                       child: const Text(
                         '已激活',
@@ -264,6 +347,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                           fontSize: 9.5,
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
+                          letterSpacing: 0.6,
                         ),
                       ),
                     ),
@@ -279,12 +363,29 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
 
   Widget _buildColorChip(Color c) {
     return Container(
-      width: 12.0,
-      height: 18.0,
+      width: 7.0,
+      height: 17.0,
       decoration: BoxDecoration(
-        color: c,
-        borderRadius: BorderRadius.circular(3.0),
-        border: Border.all(color: const Color.fromRGBO(255, 255, 255, 0.2)),
+        borderRadius: BorderRadius.circular(3.5),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            c.withValues(alpha: 0.95),
+            c,
+            c.withValues(alpha: 0.65),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: c.withValues(alpha: 0.40),
+            blurRadius: 3.0,
+          ),
+        ],
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.30),
+          width: 0.5,
+        ),
       ),
     );
   }
@@ -292,7 +393,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
   /// 背景律动网格 (4列)
   Widget _buildVisualizerModesGrid(ThemeService theme) {
     return LayoutBuilder(builder: (context, constraints) {
-      final cols = constraints.maxWidth < 600 ? 3 : 4;
+      final cols = constraints.maxWidth < 620 ? 3 : 4;
       return GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -300,42 +401,87 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
           crossAxisCount: cols,
           mainAxisSpacing: 8.0,
           crossAxisSpacing: 10.0,
-          mainAxisExtent: 30.0,
+          mainAxisExtent: 34.0,
         ),
         itemCount: ThemeService.visualModeLabels.length,
         itemBuilder: (context, i) {
           final isCur = theme.backgroundVisualMode == i;
           final label = ThemeService.visualModeLabels[i];
           final accent = theme.accentColor;
+          final iconData = i < _visualModeIcons.length
+              ? _visualModeIcons[i]
+              : Icons.graphic_eq_rounded;
 
-          return InkWell(
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () {
               theme.setBackgroundVisualMode(i);
               widget.onVisualizerChanged(
                 VisualizerType.values[i.clamp(0, VisualizerType.values.length - 1)],
               );
             },
-            borderRadius: BorderRadius.circular(7.0),
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: const EdgeInsets.symmetric(horizontal: 10.0),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isCur
-                    ? accent.withValues(alpha: 0.28)
-                    : const Color.fromRGBO(255, 255, 255, 0.04),
-                borderRadius: BorderRadius.circular(7.0),
+                gradient: isCur
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          accent.withValues(alpha: 0.30),
+                          accent.withValues(alpha: 0.12),
+                          const Color(0xFF161C28),
+                        ],
+                      )
+                    : const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFF202838),
+                          Color(0xFF151A26),
+                        ],
+                      ),
+                borderRadius: BorderRadius.circular(8.0),
                 border: Border.all(
                   color: isCur
-                      ? accent
-                      : const Color.fromRGBO(255, 255, 255, 0.1),
+                      ? accent.withValues(alpha: 0.85)
+                      : const Color.fromRGBO(255, 255, 255, 0.08),
+                  width: isCur ? 1.1 : 0.8,
                 ),
+                boxShadow: isCur
+                    ? [
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.28),
+                          blurRadius: 10.0,
+                          spreadRadius: -2.0,
+                        ),
+                      ]
+                    : null,
               ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: isCur ? FontWeight.w600 : FontWeight.normal,
-                  color: isCur ? UIConfig.textActive : UIConfig.textNormal,
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    iconData,
+                    size: 14.0,
+                    color: isCur ? accent : UIConfig.textMuted,
+                  ),
+                  const SizedBox(width: 6.0),
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: isCur ? FontWeight.w600 : FontWeight.normal,
+                        color: isCur ? UIConfig.textActive : UIConfig.textNormal,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -408,8 +554,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                 children: [
                   // 颜色预览方块
                   Container(
-                    width: 36.0,
-                    height: 36.0,
+                    width: 42.0,
+                    height: 42.0,
                     decoration: BoxDecoration(
                       color: theme.accentColor,
                       borderRadius: BorderRadius.circular(6.0),
@@ -425,7 +571,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                   Expanded(
                     child: _buildCodeBox(
                       'HEX',
-                      '#${theme.accentColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                      '#${theme.accentColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
                     ),
                   ),
                   const SizedBox(width: 8.0),
@@ -434,7 +580,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                   Expanded(
                     child: _buildCodeBox(
                       'RGB',
-                      '${theme.accentColor.red}, ${theme.accentColor.green}, ${theme.accentColor.blue}',
+                      '${(theme.accentColor.r * 255).round()}, ${(theme.accentColor.g * 255).round()}, ${(theme.accentColor.b * 255).round()}',
                     ),
                   ),
                   const SizedBox(width: 8.0),
@@ -456,7 +602,10 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
   }
 
   Widget _buildHexPill(Color c) {
-    final hex = '#${c.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+    final hex = '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+    final cr = (c.r * 255).round();
+    final cg = (c.g * 255).round();
+    final cb = (c.b * 255).round();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 3.0),
       decoration: BoxDecoration(
@@ -465,7 +614,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
         border: Border.all(color: c.withValues(alpha: 0.55)),
       ),
       child: Text(
-        '$hex  ·  RGB(${c.red}, ${c.green}, ${c.blue})',
+        '$hex  ·  RGB($cr, $cg, $cb)',
         style: const TextStyle(
           fontSize: 11.0,
           color: UIConfig.textActive,
@@ -477,7 +626,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
 
   Widget _buildCodeBox(String label, String value) {
     return Container(
-      height: 36.0,
+      height: 42.0,
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
       decoration: BoxDecoration(
         color: const Color.fromRGBO(255, 255, 255, 0.04),
@@ -492,14 +641,17 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
             label,
             style: const TextStyle(
               fontSize: 9.5,
+              height: 1.1,
               color: UIConfig.textMuted,
             ),
           ),
+          const SizedBox(height: 1.0),
           Text(
             value,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontSize: 11.0,
+              fontSize: 10.5,
+              height: 1.2,
               fontWeight: FontWeight.w600,
               color: UIConfig.textActive,
               fontFamily: 'monospace',

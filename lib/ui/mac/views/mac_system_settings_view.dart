@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
 
-/// 系统设置视图 (1:1 严格对齐 C++ SystemSettingsView.cpp，纯平铺按钮组，无任何 popup/dropdown)
+/// 系统设置视图 (1:1 严格对齐 C++ SystemSettingsView.cpp，纯平铺按钮组，无任何 popup/dropdown，完整 SQLite 持久化)
 class MacSystemSettingsView extends StatefulWidget {
   const MacSystemSettingsView({super.key});
 
@@ -23,6 +24,24 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
   double _screenBrightness = 0.85; // 85%
   int _screenTimeoutMode = 0;   // 0: 从不, 1: 5分钟, 2: 15分钟, 3: 30分钟
   int _idleFullscreenMode = 4;  // 0: 15秒, 1: 30秒, 2: 1分钟, 3: 5分钟, 4: 永不
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  void _loadSettings() {
+    final db = MusicDatabaseService.instance;
+    _sampleRateMode = int.tryParse(db.getSetting('setting_sample_rate', '0'))?.clamp(0, 2) ?? 0;
+    _dsdMode = int.tryParse(db.getSetting('setting_dsd_mode', '0'))?.clamp(0, 2) ?? 0;
+    _bufferSizeMode = int.tryParse(db.getSetting('setting_buffer_size', '1'))?.clamp(0, 2) ?? 1;
+    _fadeDurationMode = int.tryParse(db.getSetting('setting_fade_duration_mode', '2'))?.clamp(0, 3) ?? 2;
+    _cpuGovernor = int.tryParse(db.getSetting('setting_cpu_governor', '0'))?.clamp(0, 1) ?? 0;
+    _screenBrightness = double.tryParse(db.getSetting('setting_brightness', '0.85'))?.clamp(0.1, 1.0) ?? 0.85;
+    _screenTimeoutMode = int.tryParse(db.getSetting('setting_screen_timeout', '0'))?.clamp(0, 3) ?? 0;
+    _idleFullscreenMode = int.tryParse(db.getSetting('setting_idle_fullscreen', '4'))?.clamp(0, 4) ?? 4;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +79,10 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                         '极频 384kHz/32Bit',
                       ],
                       selectedIndex: _sampleRateMode,
-                      onSelected: (idx) => setState(() => _sampleRateMode = idx),
+                      onSelected: (idx) {
+                        setState(() => _sampleRateMode = idx);
+                        MusicDatabaseService.instance.setSetting('setting_sample_rate', idx.toString());
+                      },
                     ),
                     const SizedBox(height: 10.0),
                     _buildButtonGroupRow(
@@ -71,7 +93,10 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                         'DSD 软解 PCM',
                       ],
                       selectedIndex: _dsdMode,
-                      onSelected: (idx) => setState(() => _dsdMode = idx),
+                      onSelected: (idx) {
+                        setState(() => _dsdMode = idx);
+                        MusicDatabaseService.instance.setSetting('setting_dsd_mode', idx.toString());
+                      },
                     ),
                     const SizedBox(height: 10.0),
                     _buildButtonGroupRow(
@@ -82,7 +107,10 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                         '512 帧 (防爆音深缓冲)',
                       ],
                       selectedIndex: _bufferSizeMode,
-                      onSelected: (idx) => setState(() => _bufferSizeMode = idx),
+                      onSelected: (idx) {
+                        setState(() => _bufferSizeMode = idx);
+                        MusicDatabaseService.instance.setSetting('setting_buffer_size', idx.toString());
+                      },
                     ),
                     const SizedBox(height: 10.0),
                     _buildButtonGroupRow(
@@ -94,7 +122,10 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                         '1.0 秒 (悠扬慢淡)',
                       ],
                       selectedIndex: _fadeDurationMode,
-                      onSelected: (idx) => setState(() => _fadeDurationMode = idx),
+                      onSelected: (idx) {
+                        setState(() => _fadeDurationMode = idx);
+                        MusicDatabaseService.instance.setSetting('setting_fade_duration_mode', idx.toString());
+                      },
                     ),
                   ],
                 ),
@@ -111,13 +142,19 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                         'Schedutil (动态温控平衡)',
                       ],
                       selectedIndex: _cpuGovernor,
-                      onSelected: (idx) => setState(() => _cpuGovernor = idx),
+                      onSelected: (idx) {
+                        setState(() => _cpuGovernor = idx);
+                        MusicDatabaseService.instance.setSetting('setting_cpu_governor', idx.toString());
+                      },
                     ),
                     const SizedBox(height: 10.0),
                     _buildSliderRow(
                       label: '屏幕背光亮度',
                       value: _screenBrightness,
-                      onChanged: (val) => setState(() => _screenBrightness = val),
+                      onChanged: (val) {
+                        setState(() => _screenBrightness = val);
+                        MusicDatabaseService.instance.setSetting('setting_brightness', val.toStringAsFixed(2));
+                      },
                     ),
                     const SizedBox(height: 10.0),
                     _buildButtonGroupRow(
@@ -129,7 +166,10 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                         '30 分钟',
                       ],
                       selectedIndex: _screenTimeoutMode,
-                      onSelected: (idx) => setState(() => _screenTimeoutMode = idx),
+                      onSelected: (idx) {
+                        setState(() => _screenTimeoutMode = idx);
+                        MusicDatabaseService.instance.setSetting('setting_screen_timeout', idx.toString());
+                      },
                     ),
                     const SizedBox(height: 10.0),
                     _buildButtonGroupRow(
@@ -142,7 +182,10 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                         '永不',
                       ],
                       selectedIndex: _idleFullscreenMode,
-                      onSelected: (idx) => setState(() => _idleFullscreenMode = idx),
+                      onSelected: (idx) {
+                        setState(() => _idleFullscreenMode = idx);
+                        MusicDatabaseService.instance.setSetting('setting_idle_fullscreen', idx.toString());
+                      },
                     ),
                   ],
                 ),
@@ -215,9 +258,9 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
               for (int i = 0; i < options.length; i++) ...[
                 if (i > 0) const SizedBox(width: 8.0),
                 Expanded(
-                  child: InkWell(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => onSelected(i),
-                    borderRadius: BorderRadius.circular(6.0),
                     child: Container(
                       height: 28.0,
                       alignment: Alignment.center,

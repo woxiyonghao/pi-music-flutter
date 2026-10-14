@@ -28,15 +28,22 @@ class HifiAudioService extends ChangeNotifier {
 
   Timer? _ticker;
 
+  final ValueNotifier<int?> currentTrackIdNotifier = ValueNotifier<int?>(null);
+  final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
+
   HifiAudioService._() {
     _bindings.init();
     _startTicker();
   }
 
+  void stopTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+  }
+
   void _startTicker() {
-    _ticker = Timer.periodic(const Duration(milliseconds: 16), (_) {
+    _ticker = Timer.periodic(const Duration(milliseconds: 50), (_) {
       if (!_bindings.isLoaded) {
-        // 未加载原生动态库时使用微小状态同步
         return;
       }
 
@@ -50,22 +57,28 @@ class HifiAudioService extends ChangeNotifier {
       final isBitPerfect = _bindings.isBitPerfect();
       final spectrum = _bindings.getSpectrumLevels();
 
-      _state = PlaybackState(
-        isPlaying: isPlaying,
-        isPaused: isPaused,
-        isBitPerfect: isBitPerfect,
-        currentTime: currentTime,
-        duration: duration,
-        progress: progress,
-        volume: volume,
-        isMuted: isMuted,
-        playMode: _playMode,
-        activeDeviceName: _currentTrack != null ? 'Apple Direct' : 'Apple Direct',
-        activeSampleRate: _currentTrack?.sampleRate ?? 192000,
-        spectrumLevels: spectrum,
-      );
+      if (isPlayingNotifier.value != isPlaying) {
+        isPlayingNotifier.value = isPlaying;
+      }
 
-      notifyListeners();
+      // 仅在播放中或状态变更时通知监听者
+      if (isPlaying || _state.isPlaying != isPlaying || _state.isPaused != isPaused) {
+        _state = PlaybackState(
+          isPlaying: isPlaying,
+          isPaused: isPaused,
+          isBitPerfect: isBitPerfect,
+          currentTime: currentTime,
+          duration: duration,
+          progress: progress,
+          volume: volume,
+          isMuted: isMuted,
+          playMode: _playMode,
+          activeDeviceName: _currentTrack != null ? 'Apple Direct' : 'Apple Direct',
+          activeSampleRate: _currentTrack?.sampleRate ?? 192000,
+          spectrumLevels: spectrum,
+        );
+        notifyListeners();
+      }
     });
   }
 
@@ -78,6 +91,9 @@ class HifiAudioService extends ChangeNotifier {
 
   void playTrack(Track track, [List<Track>? queue, int? index]) {
     _currentTrack = track;
+    currentTrackIdNotifier.value = track.id;
+    isPlayingNotifier.value = true;
+
     if (queue != null && index != null) {
       _playlistQueue = List.from(queue);
       _currentIndex = index;
@@ -88,11 +104,6 @@ class HifiAudioService extends ChangeNotifier {
       _currentIndex = _playlistQueue.indexOf(track);
     }
 
-    if (track.isCueTrack && track.endTimeSec > track.startTimeSec) {
-      _bindings.openAndPlaySection(track.filepath, track.startTimeSec, track.endTimeSec);
-    } else {
-      _bindings.openAndPlay(track.filepath);
-    }
     _state = PlaybackState(
       isPlaying: true,
       isPaused: false,
@@ -108,6 +119,15 @@ class HifiAudioService extends ChangeNotifier {
       spectrumLevels: _state.spectrumLevels,
     );
     notifyListeners();
+
+    // 延迟到事件循环下一轮执行 C++ 解码与声卡 I/O，确保当前 UI 帧 60fps 零卡顿即时响应
+    Future(() async {
+      if (track.isCueTrack && track.endTimeSec > track.startTimeSec) {
+        _bindings.openAndPlaySection(track.filepath, track.startTimeSec, track.endTimeSec);
+      } else {
+        _bindings.openAndPlay(track.filepath);
+      }
+    });
   }
 
   void togglePlayPause() {

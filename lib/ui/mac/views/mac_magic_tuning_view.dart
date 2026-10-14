@@ -297,9 +297,10 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
             children: [
               // 左说明
               SizedBox(
-                width: 60.0,
+                width: 68.0,
                 child: Text(
                   def.leftLabel,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11.5,
                     color: val < -0.05 ? accent : UIConfig.textMuted,
@@ -324,15 +325,18 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
 
               // 右说明 + 数值
               SizedBox(
-                width: 92.0,
+                width: 106.0,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Text(
-                      def.rightLabel,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: val > 0.05 ? accent : UIConfig.textMuted,
+                    Flexible(
+                      child: Text(
+                        def.rightLabel,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: val > 0.05 ? accent : UIConfig.textMuted,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 4.0),

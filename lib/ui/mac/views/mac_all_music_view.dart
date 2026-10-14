@@ -433,13 +433,16 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
   }
 
   Widget _buildTrackRow(Track track, int index, List<Track> queueContext) {
+    final service = HifiAudioService.instance;
     return ListenableBuilder(
-      listenable: HifiAudioService.instance,
+      listenable: Listenable.merge([
+        service.currentTrackIdNotifier,
+        service.isPlayingNotifier,
+      ]),
       builder: (context, _) {
-        final service = HifiAudioService.instance;
         final isCurrent = service.currentTrack?.id == track.id ||
             service.currentTrack?.filepath == track.filepath;
-        final isPlaying = isCurrent && service.state.isPlaying;
+        final isPlaying = isCurrent && service.isPlayingNotifier.value;
 
         final numStr = '${(index + 1).toString().padLeft(2, '0')}.';
 

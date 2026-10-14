@@ -28,6 +28,57 @@ class MusicDatabaseService extends ChangeNotifier {
     return defaultPath;
   }
 
+  void _ensureSettingsTable(Database db) {
+    db.execute('''
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    ''');
+  }
+
+  /// 获取持久化设置项 (1:1 对齐 C++ MusicDatabase::getSetting)
+  String getSetting(String key, String defaultValue) {
+    final dbFile = File(_databasePath);
+    if (!dbFile.existsSync()) return defaultValue;
+    try {
+      final db = sqlite3.open(_databasePath);
+      _ensureSettingsTable(db);
+      final stmt = db.prepare('SELECT value FROM app_settings WHERE key = ?;');
+      final ResultSet res = stmt.select([key]);
+      stmt.dispose();
+      String val = defaultValue;
+      if (res.isNotEmpty) {
+        val = res.first['value'] as String? ?? defaultValue;
+      }
+      db.dispose();
+      return val;
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] getSetting error for $key: $e');
+      return defaultValue;
+    }
+  }
+
+  /// 保存持久化设置项 (1:1 对齐 C++ MusicDatabase::setSetting)
+  bool setSetting(String key, String value) {
+    final dbFile = File(_databasePath);
+    try {
+      if (!dbFile.parent.existsSync()) {
+        dbFile.parent.createSync(recursive: true);
+      }
+      final db = sqlite3.open(_databasePath);
+      _ensureSettingsTable(db);
+      final stmt = db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?);');
+      stmt.execute([key, value]);
+      stmt.dispose();
+      db.dispose();
+      return true;
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] setSetting error for $key: $e');
+      return false;
+    }
+  }
+
   void loadLibrary() {
     final dbFile = File(_databasePath);
     if (dbFile.existsSync()) {

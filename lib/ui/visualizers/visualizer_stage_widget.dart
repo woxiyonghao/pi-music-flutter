@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../../core/hifi_audio_service.dart';
+import '../../services/theme_service.dart';
 import '../../theme/hifi_theme.dart';
 import 'visualizer_type.dart';
 import 'mcintosh_meter_painter.dart';
@@ -10,6 +11,9 @@ import 'tape_reel_painter.dart';
 import 'led_spectrum_painter.dart';
 import 'neon_waveform_painter.dart';
 import 'siri_orb_painter.dart';
+import 'audio_bubbles_painter.dart';
+import 'cyber_grid_painter.dart';
+import 'glass_clock_painter.dart';
 
 /// 统一发烧动效舞台容器 (专为横屏设备打造，内置 60fps 物理阻尼与动画引擎)
 class VisualizerStageWidget extends StatefulWidget {
@@ -48,6 +52,53 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
   // 动画时间
   double _animTime = 0.0;
   double _lastTimestamp = 0.0;
+
+  // 音乐微光气泡粒子物理模型 (38 颗分阶气泡)
+  final List<AudioBubble> _bubbles = [];
+  bool _bubblesInitialized = false;
+
+  void _initBubbles(Size size) {
+    _bubbles.clear();
+    final rand = Random();
+    final w = size.width > 10 ? size.width : 1400.0;
+    final h = size.height > 10 ? size.height : 900.0;
+    for (int i = 0; i < 38; i++) {
+      final rClass = i % 10;
+      double baseR;
+      int freqBand;
+      double vy;
+      double alpha;
+      if (rClass < 6) {
+        baseR = 12.0 + rand.nextInt(16);
+        freqBand = 2 + (i % 2);
+        vy = 28.0 + rand.nextInt(22);
+        alpha = 0.45 + rand.nextInt(30) * 0.01;
+      } else if (rClass < 9) {
+        baseR = 28.0 + rand.nextInt(18);
+        freqBand = 1;
+        vy = 18.0 + rand.nextInt(16);
+        alpha = 0.35 + rand.nextInt(25) * 0.01;
+      } else {
+        baseR = 52.0 + rand.nextInt(22);
+        freqBand = 0;
+        vy = 12.0 + rand.nextInt(10);
+        alpha = 0.22 + rand.nextInt(18) * 0.01;
+      }
+      _bubbles.add(AudioBubble(
+        x: rand.nextDouble() * w,
+        y: rand.nextDouble() * h,
+        vy: vy,
+        vxPhase: rand.nextDouble() * 6.28,
+        vxSpeed: 0.6 + rand.nextInt(12) * 0.1,
+        vxAmp: 10.0 + rand.nextInt(20),
+        baseRadius: baseR,
+        currentRadius: baseR,
+        alpha: alpha,
+        freqBand: freqBand,
+      ));
+    }
+    _bubblesInitialized = true;
+  }
 
   @override
   void initState() {
@@ -110,6 +161,43 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
     // 5. 波形与能量球演进时间
     final avgEnergy = levels.isNotEmpty ? levels.reduce((a, b) => a + b) / levels.length : 0.0;
     _animTime += (1.5 + avgEnergy * 3.5) * dt;
+
+    // 6. 音乐微光气泡物理更新
+    if (_bubblesInitialized) {
+      double bass = 0.0;
+      double mid = 0.0;
+      double treble = 0.0;
+      if (state.isPlaying && levels.isNotEmpty) {
+        final len = levels.length;
+        bass = (levels[0] + (len > 1 ? levels[1] : 0.0) + (len > 2 ? levels[2] : 0.0)) / 3.0;
+        if (len > 6) mid = (levels[3] + levels[4] + levels[5] + levels[6]) / 4.0;
+        if (len > 10) treble = (levels[7] + levels[8] + levels[9] + levels[10]) / 4.0;
+      }
+      final totalEnergy = bass * 0.5 + mid * 0.3 + treble * 0.2;
+      final speedFactor = state.isPlaying ? (1.0 + totalEnergy * 2.2) : 1.0;
+
+      for (final b in _bubbles) {
+        b.y -= b.vy * speedFactor * dt;
+        b.vxPhase += b.vxSpeed * dt;
+        if (b.y < -b.currentRadius * 1.5) {
+          b.y = 900.0 + b.currentRadius + (Random().nextInt(40));
+          b.x = Random().nextDouble() * 1400.0;
+        }
+        double targetR = b.baseRadius;
+        if (state.isPlaying) {
+          if (b.freqBand == 0) {
+            targetR = b.baseRadius * (1.0 + bass * 0.45);
+          } else if (b.freqBand == 1) {
+            targetR = b.baseRadius * (1.0 + bass * 0.30 + mid * 0.15);
+          } else if (b.freqBand == 2) {
+            targetR = b.baseRadius * (1.0 + mid * 0.35);
+          } else {
+            targetR = b.baseRadius * (1.0 + treble * 0.30);
+          }
+        }
+        b.currentRadius += (targetR - b.currentRadius) * (12.0 * dt);
+      }
+    }
   }
 
   @override
@@ -154,11 +242,39 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
         break;
       case VisualizerType.neonWave:
       case VisualizerType.siriWave:
-      case VisualizerType.cyberGrid:
-      case VisualizerType.glassClock:
-      case VisualizerType.bubbles:
         painter = NeonWaveformPainter(
           levels: state.spectrumLevels,
+          animTime: _animTime,
+        );
+        break;
+      case VisualizerType.cyberGrid:
+        painter = CyberGridPainter(
+          spectrumLevels: state.spectrumLevels,
+          animTime: _animTime,
+          accentColor: ThemeService.instance.accentColor,
+          isPlaying: state.isPlaying,
+        );
+        break;
+      case VisualizerType.glassClock:
+        final avgEnergy = state.spectrumLevels.isNotEmpty
+            ? state.spectrumLevels.reduce((a, b) => a + b) / state.spectrumLevels.length
+            : 0.0;
+        painter = GlassClockPainter(
+          animTime: _animTime,
+          accentColor: ThemeService.instance.accentColor,
+          isPlaying: state.isPlaying,
+          energy: avgEnergy,
+        );
+        break;
+      case VisualizerType.bubbles:
+        if (!_bubblesInitialized) {
+          _initBubbles(const Size(1400, 900));
+        }
+        painter = AudioBubblesPainter(
+          bubbles: _bubbles,
+          accentColor: ThemeService.instance.accentColor,
+          isPlaying: state.isPlaying,
+          spectrumLevels: state.spectrumLevels,
           animTime: _animTime,
         );
         break;

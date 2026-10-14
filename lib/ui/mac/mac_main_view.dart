@@ -32,6 +32,15 @@ class _MacMainViewState extends State<MacMainView> {
   final TextEditingController _playlistNameController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    final savedTabIdx = int.tryParse(MusicDatabaseService.instance.getSetting('active_sidebar_tab', '0'));
+    if (savedTabIdx != null && savedTabIdx >= 0 && savedTabIdx < SidebarTab.values.length) {
+      _currentTab = SidebarTab.values[savedTabIdx];
+    }
+  }
+
+  @override
   void dispose() {
     _playlistNameController.dispose();
     super.dispose();
@@ -93,18 +102,21 @@ class _MacMainViewState extends State<MacMainView> {
                     setState(() {
                       _currentTab = tab;
                     });
+                    MusicDatabaseService.instance.setSetting('active_sidebar_tab', tab.index.toString());
                   },
                   onPlaylistSelected: (plId) {
                     setState(() {
                       _currentTab = SidebarTab.customPlaylist;
                       _selectedPlaylistId = plId;
                     });
+                    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.customPlaylist.index.toString());
                   },
                   onCreatePlaylist: _openCreatePlaylistModal,
                   onDacClicked: () {
                     setState(() {
                       _currentTab = SidebarTab.dacSettings;
                     });
+                    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.dacSettings.index.toString());
                   },
                 ),
               ),
@@ -137,46 +149,58 @@ class _MacMainViewState extends State<MacMainView> {
   }
 
   Widget _buildMainStage(List<dynamic> tracks, VisualizerType activeVisualizer) {
-    switch (_currentTab) {
-      case SidebarTab.allMusic:
-      case SidebarTab.customPlaylist:
-        return MacAllMusicView(
+    final idx = _currentTab.index.clamp(0, SidebarTab.values.length - 1);
+    return IndexedStack(
+      index: idx,
+      children: [
+        // 0: allMusic
+        MacAllMusicView(
           tracks: tracks.cast(),
           onNavigateToScan: () {
             setState(() {
               _currentTab = SidebarTab.scanMusic;
             });
           },
-        );
-      case SidebarTab.scanMusic:
-        return MacScanMusicView(
+        ),
+        // 1: customPlaylist
+        MacAllMusicView(
+          tracks: tracks.cast(),
+          onNavigateToScan: () {
+            setState(() {
+              _currentTab = SidebarTab.scanMusic;
+            });
+          },
+        ),
+        // 2: scanMusic
+        MacScanMusicView(
           scannedCount: tracks.length,
           onScanComplete: () {
             MusicDatabaseService.instance.loadLibrary();
           },
-        );
-      case SidebarTab.equalizer:
-        return const MacEqualizerView();
-      case SidebarTab.msebTuning:
-        return const MacMagicTuningView();
-      case SidebarTab.dacSettings:
-        return const MacDACSettingView();
-      case SidebarTab.themeSettings:
-        return MacThemeSettingView(
+        ),
+        // 3: equalizer
+        const MacEqualizerView(),
+        // 4: msebTuning
+        const MacMagicTuningView(),
+        // 5: dacSettings
+        const MacDACSettingView(),
+        // 6: themeSettings
+        MacThemeSettingView(
           currentVisualizer: activeVisualizer,
           onVisualizerChanged: (type) {
             ThemeService.instance.setBackgroundVisualMode(type.index);
           },
-        );
-      case SidebarTab.systemSettings:
-        return const MacSystemSettingsView();
-      case SidebarTab.webService:
-        return const MacWebServiceView(isWifiTransfer: false);
-      case SidebarTab.wifiTransfer:
-        return const MacWebServiceView(isWifiTransfer: true);
-      case SidebarTab.terminal:
-        return const MacSystemSettingsView();
-    }
+        ),
+        // 7: systemSettings
+        const MacSystemSettingsView(),
+        // 8: webService
+        const MacWebServiceView(isWifiTransfer: false),
+        // 9: wifiTransfer
+        const MacWebServiceView(isWifiTransfer: true),
+        // 10: terminal
+        const MacSystemSettingsView(),
+      ],
+    );
   }
 
   Widget _buildCreatePlaylistModal() {

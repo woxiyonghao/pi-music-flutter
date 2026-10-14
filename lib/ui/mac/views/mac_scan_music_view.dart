@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../core/hifi_audio_service.dart';
@@ -206,20 +205,23 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
   }
 
   // ===========================================================================
-  // 2. 扫描态：纯净沉浸式太阳日冕与曲速星芒 (对齐 ScanMusicWidget::drawLaserWarpAnimation)
+  // 2. 扫描态：纯净沉浸式太阳日冕与曲速星芒 (严格受限于卡片边界，绝不溢出)
   // ===========================================================================
   Widget _buildScanningState(Color accent) {
-    return AnimatedBuilder(
-      animation: _animController,
-      builder: (context, _) {
-        return CustomPaint(
-          size: Size.infinite,
-          painter: _CosmicWarpPainter(
-            timer: _animController.value * 10.0,
-            accentColor: accent,
-          ),
-        );
-      },
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(UIConfig.containerRounding),
+      child: AnimatedBuilder(
+        animation: _animController,
+        builder: (context, _) {
+          return CustomPaint(
+            size: Size.infinite,
+            painter: _CosmicWarpPainter(
+              timer: _animController.value * 10.0,
+              accentColor: accent,
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -242,9 +244,9 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            InkWell(
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () => setState(() => _isEditMode = !_isEditMode),
-              borderRadius: BorderRadius.circular(6.0),
               child: Container(
                 height: 28.0,
                 padding: const EdgeInsets.symmetric(horizontal: 14.0),
@@ -270,9 +272,9 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
               ),
             ),
             const SizedBox(width: 8.0),
-            InkWell(
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: _triggerScan,
-              borderRadius: BorderRadius.circular(6.0),
               child: Container(
                 height: 28.0,
                 padding: const EdgeInsets.symmetric(horizontal: 14.0),
@@ -442,7 +444,7 @@ class _SearchIconPainter extends CustomPainter {
   bool shouldRepaint(covariant _SearchIconPainter old) => old.accentColor != accentColor;
 }
 
-/// 扫描态纯净宇宙太阳光球与星芒激光流绘制器 (1:1 严格对齐 drawLaserWarpAnimation)
+/// 扫描态纯净宇宙太阳光球与星芒激光流绘制器 (1:1 严格对齐 C++ ScanMusicWidget::drawLaserWarpAnimation)
 class _CosmicWarpPainter extends CustomPainter {
   final double timer;
   final Color accentColor;
@@ -454,76 +456,164 @@ class _CosmicWarpPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // 严格限制在卡片内部裁剪，绝对不溢出到窗口外边框或侧边栏 (对齐 C++ dl->PushClipRect)
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(
+      Offset.zero & size,
+      const Radius.circular(10.0),
+    ));
+
     final center = Offset(size.width / 2, size.height / 2);
     final maxDist = math.sqrt(center.dx * center.dx + center.dy * center.dy) + 40.0;
 
-    // 1. 密集径向激光流 (180 束)
-    const numRays = 180;
+    final r = (accentColor.r * 255).round();
+    final g = (accentColor.g * 255).round();
+    final b = (accentColor.b * 255).round();
+
+    final rLight = (r + (255 - r) * 0.75).round().clamp(0, 255);
+    final gLight = (g + (255 - g) * 0.75).round().clamp(0, 255);
+    final bLight = (b + (255 - b) * 0.75).round().clamp(0, 255);
+
+    // =========================================================================
+    // 1. 密集发丝级径向星芒激光流 (360 束，严格对齐 C++ NUM_RAYS = 360)
+    // =========================================================================
+    const numRays = 360;
     for (int i = 0; i < numRays; i++) {
+      // 黄金分割角 (137.5° / 2.3999632 rad) 均匀环形铺展
       final angle = i * 2.3999632;
+
+      // 确定性随机相位与多频流动速度
       final phase = ((i * 17 + 31) * 0.0137) % 1.0;
-      final speed = 0.2 + ((i * 7) * 0.019) % 0.15;
+      final speed = 0.18 + ((i * 7) * 0.019) % 0.12;
       final progress = (timer * speed + phase) % 1.0;
 
+      // 连续长光束延伸
       final rStart = 18.0 + progress * 50.0;
-      final rEnd = math.min(maxDist, rStart + 80.0 + progress * progress * (maxDist - 80.0));
+      final rEnd = math.min(maxDist, rStart + 80.0 + (progress * progress) * (maxDist - 80.0));
 
       final x1 = center.dx + math.cos(angle) * rStart;
-      final y1 = center.dy + math.sin(angle) * (rStart * 0.9);
+      final y1 = center.dy + math.sin(angle) * (rStart * 0.90);
       final x2 = center.dx + math.cos(angle) * rEnd;
-      final y2 = center.dy + math.sin(angle) * (rEnd * 0.9);
+      final y2 = center.dy + math.sin(angle) * (rEnd * 0.90);
 
-      final alpha = (25.0 + progress * 150.0).clamp(0.0, 255.0) / 255.0;
-      final rayColor = (i % 8 == 0)
-          ? Colors.white.withValues(alpha: alpha * 0.8)
-          : accentColor.withValues(alpha: alpha * 0.5);
+      // 多层通透微光：大部分为细腻幽光 (Alpha 25~120)，少数高亮主光束 (Alpha 180~220)
+      var alpha = (25.0 + progress * 95.0).round();
+      if (i % 8 == 0) {
+        alpha = math.min(225, alpha + 90);
+      }
 
-      canvas.drawLine(
-        Offset(x1, y1),
-        Offset(x2, y2),
-        Paint()..color = rayColor..strokeWidth = 1.0,
-      );
+      // 1.0px 发丝级细腻线条
+      final rayPaint = Paint()
+        ..color = Color.fromARGB(alpha.clamp(0, 255), r, g, b)
+        ..strokeWidth = 1.0;
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), rayPaint);
+
+      // 高亮主光束核心叠加入射白炽微光
+      if (alpha > 150) {
+        final midX = x1 + (x2 - x1) * 0.5;
+        final midY = y1 + (y2 - y1) * 0.5;
+        final corePaint = Paint()
+          ..color = Color.fromARGB((alpha * 0.65).round().clamp(0, 255), rLight, gLight, bLight)
+          ..strokeWidth = 1.0;
+        canvas.drawLine(Offset(midX, midY), Offset(x2, y2), corePaint);
+      }
     }
 
-    // 2. 漫天星尘与闪烁十字星芒
-    const numParticles = 120;
+    // =========================================================================
+    // 2. 漫天星尘与闪烁十字星芒粒子系统 (240 颗，严格对齐 C++ NUM_PARTICLES = 240)
+    // =========================================================================
+    const numParticles = 240;
     for (int j = 0; j < numParticles; j++) {
       final pAngle = (j * 2.3999632) + ((j * 13) * 0.021) % 0.25;
       final pPhase = ((j * 29 + 11) * 0.0173) % 1.0;
       final pSpeed = 0.16 + ((j * 11) * 0.013) % 0.10;
       final pProg = (timer * pSpeed + pPhase) % 1.0;
 
-      final pCurve = pProg * pProg;
+      final pCurve = pProg * pProg; // 二次加速，呈现远小近大的空间透视
       final pR = 16.0 + pCurve * (maxDist - 16.0);
 
       final px = center.dx + math.cos(pAngle) * pR;
-      final py = center.dy + math.sin(pAngle) * (pR * 0.9);
+      final py = center.dy + math.sin(pAngle) * (pR * 0.90);
 
+      // 渐入渐出透明度包络
       final fade = (pProg < 0.12) ? (pProg / 0.12) : (1.0 - pCurve * 0.65);
-      final pAlpha = fade.clamp(0.0, 1.0);
+      final pAlpha = (fade * 255.0).clamp(0.0, 255.0).round();
       final pSize = 0.8 + pCurve * 2.2;
 
-      if (j % 12 >= 10) {
-        // 十字星芒
-        final flareLen = 4.0 + pCurve * 10.0;
-        final starPaint = Paint()..color = Colors.white.withValues(alpha: pAlpha * 0.85)..strokeWidth = 1.0;
-        canvas.drawLine(Offset(px - flareLen, py), Offset(px + flareLen, py), starPaint);
-        canvas.drawLine(Offset(px, py - flareLen), Offset(px, py + flareLen), starPaint);
-        canvas.drawCircle(Offset(px, py), 1.5, Paint()..color = Colors.white);
+      final pType = j % 12;
+      if (pType < 7) {
+        // (1) 普通深空微光星尘：细微点缀
+        canvas.drawCircle(
+          Offset(px, py),
+          pSize,
+          Paint()..color = Color.fromARGB(pAlpha, rLight, gLight, bLight),
+        );
+      } else if (pType < 10) {
+        // (2) 带有主题色柔和光晕的恒星粒子：双层微发光
+        final haloR = pSize * 2.6;
+        canvas.drawCircle(
+          Offset(px, py),
+          haloR,
+          Paint()..color = Color.fromARGB((pAlpha * 0.35).round().clamp(0, 255), r, g, b),
+        );
+        canvas.drawCircle(
+          Offset(px, py),
+          pSize,
+          Paint()..color = Color.fromARGB(pAlpha, 255, 255, 255),
+        );
       } else {
-        // 普通恒星微粒
-        canvas.drawCircle(Offset(px, py), pSize, Paint()..color = accentColor.withValues(alpha: pAlpha * 0.6));
-        canvas.drawCircle(Offset(px, py), pSize * 0.5, Paint()..color = Colors.white.withValues(alpha: pAlpha));
+        // (3) 星球大战原版同款 4 芒十字衍射星芒 (Cross Star Flares)
+        final flareLen = 4.0 + pCurve * 10.0;
+        canvas.drawCircle(
+          Offset(px, py),
+          pSize * 2.0,
+          Paint()..color = Color.fromARGB((pAlpha * 0.45).round().clamp(0, 255), r, g, b),
+        );
+        final flarePaint = Paint()
+          ..color = Color.fromARGB((pAlpha * 0.85).round().clamp(0, 255), rLight, gLight, bLight)
+          ..strokeWidth = 1.0;
+        canvas.drawLine(Offset(px - flareLen, py), Offset(px + flareLen, py), flarePaint);
+        canvas.drawLine(Offset(px, py - flareLen), Offset(px, py + flareLen), flarePaint);
+        canvas.drawCircle(
+          Offset(px, py),
+          1.5,
+          Paint()..color = const Color.fromARGB(255, 255, 255, 255),
+        );
       }
     }
 
-    // 3. 核心太阳光球
-    final pulse = 1.0 + 0.04 * math.sin(timer * 2.5);
-    canvas.drawCircle(center, 36.0 * pulse, Paint()..color = accentColor.withValues(alpha: 0.1));
-    canvas.drawCircle(center, 28.0 * pulse, Paint()..color = accentColor.withValues(alpha: 0.25));
-    canvas.drawCircle(center, 18.0 * pulse, Paint()..color = accentColor.withValues(alpha: 0.5));
-    canvas.drawCircle(center, 10.0 * pulse, Paint()..color = Colors.white.withValues(alpha: 0.85));
-    canvas.drawCircle(center, 4.0 * pulse, Paint()..color = Colors.white);
+    // =========================================================================
+    // 3. 核心太阳光球 (1:1 严格对齐 C++ drawSmoothSolarSphere)
+    // =========================================================================
+    final pulse = 1.0 + 0.03 * math.sin(timer * 2.5);
+
+    // 1. 广域深空外日冕柔和微光辉晕 (由 36px 向外平滑渐隐入深空背景)
+    canvas.drawCircle(center, 36.0 * pulse, Paint()..color = Color.fromARGB(20, r, g, b));
+    canvas.drawCircle(center, 28.0 * pulse, Paint()..color = Color.fromARGB(45, r, g, b));
+    canvas.drawCircle(center, 21.0 * pulse, Paint()..color = Color.fromARGB(85, r, g, b));
+    canvas.drawCircle(center, 15.0 * pulse, Paint()..color = Color.fromARGB(140, r, g, b));
+
+    // 2. 高温过渡色球层 (由主题色经由白炽过渡)
+    final r1 = (r + (255 - r) * 0.40).round().clamp(0, 255);
+    final g1 = (g + (255 - g) * 0.40).round().clamp(0, 255);
+    final b1 = (b + (255 - b) * 0.40).round().clamp(0, 255);
+
+    final r2 = (r + (255 - r) * 0.70).round().clamp(0, 255);
+    final g2 = (g + (255 - g) * 0.70).round().clamp(0, 255);
+    final b2 = (b + (255 - b) * 0.70).round().clamp(0, 255);
+
+    final r3 = (r + (255 - r) * 0.90).round().clamp(0, 255);
+    final g3 = (g + (255 - g) * 0.90).round().clamp(0, 255);
+    final b3 = (b + (255 - b) * 0.90).round().clamp(0, 255);
+
+    canvas.drawCircle(center, 11.0 * pulse, Paint()..color = Color.fromARGB(190, r1, g1, b1));
+    canvas.drawCircle(center, 7.5 * pulse, Paint()..color = Color.fromARGB(230, r2, g2, b2));
+    canvas.drawCircle(center, 5.0 * pulse, Paint()..color = Color.fromARGB(250, r3, g3, b3));
+
+    // 3. 极热白炽恒星核 (100% 纯净白炽圆球)
+    canvas.drawCircle(center, 3.2 * pulse, Paint()..color = const Color.fromARGB(255, 255, 255, 255));
+
+    canvas.restore();
   }
 
   @override

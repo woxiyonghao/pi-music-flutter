@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../theme/ui_config.dart';
+import 'music_database_service.dart';
 
-/// 预设主题实体
+/// 预设主题实体 (1:1 严格对齐 C++ ThemeManager::ThemePresetInfo)
 class ThemePreset {
   final int id;
   final String name;
@@ -23,7 +25,7 @@ class ThemePreset {
   });
 }
 
-/// 全局主题响应式服务单例 (严格对齐 C++ ThemeManager)
+/// 全局主题响应式服务单例 (严格对齐 C++ ThemeManager，并支持 SQLite 完整持久化)
 class ThemeService extends ChangeNotifier {
   static final ThemeService instance = ThemeService._internal();
 
@@ -69,7 +71,7 @@ class ThemeService extends ChangeNotifier {
       defaultVisualMode: 3,
     ),
     ThemePreset(
-      id: 4,
+      id: 5,
       name: '经典马兰士',
       englishName: 'Marantz Emerald',
       soundStyle: '甜润醇厚 · 模拟乐感',
@@ -79,7 +81,7 @@ class ThemeService extends ChangeNotifier {
       defaultVisualMode: 1,
     ),
     ThemePreset(
-      id: 5,
+      id: 6,
       name: '柏林之声冷银',
       englishName: 'Burmester Pure Silver',
       soundStyle: '极高解析 · 德国精密',
@@ -89,7 +91,7 @@ class ThemeService extends ChangeNotifier {
       defaultVisualMode: 1,
     ),
     ThemePreset(
-      id: 6,
+      id: 7,
       name: '英国名暗夜翠',
       englishName: 'Naim Classic Green',
       soundStyle: '音乐节奏 · 饱满弹跳',
@@ -99,7 +101,7 @@ class ThemeService extends ChangeNotifier {
       defaultVisualMode: 1,
     ),
     ThemePreset(
-      id: 7,
+      id: 8,
       name: '马克莱文森赤晶',
       englishName: 'Mark Levinson Ruby Red',
       soundStyle: '沉稳权威 · 宽广纵深',
@@ -138,19 +140,61 @@ class ThemeService extends ChangeNotifier {
   double get customSat => _customSat;
   double get customVal => _customVal;
 
-  ThemeService._internal();
+  ThemeService._internal() {
+    _loadFromDatabase();
+  }
 
-  void setTheme(int id) {
-    if (id >= 0 && id < presets.length) {
-      _currentThemeId = id;
-      _accentColor = presets[id].accentColor;
-      _backgroundVisualMode = presets[id].defaultVisualMode;
+  void _loadFromDatabase() {
+    final db = MusicDatabaseService.instance;
+    final savedThemeStr = db.getSetting('theme_id', '0');
+    final savedBgStr = db.getSetting('bg_visual_mode', '0');
+    final savedThemeId = int.tryParse(savedThemeStr) ?? 0;
+    final savedBgMode = int.tryParse(savedBgStr) ?? 0;
+
+    _backgroundVisualMode = savedBgMode.clamp(0, visualModeLabels.length - 1);
+
+    if (savedThemeId == 4) {
+      // 4: Custom 自定义调色
+      _currentThemeId = 4;
+      final cr = double.tryParse(db.getSetting('theme_custom_r', '0.98')) ?? 0.98;
+      final cg = double.tryParse(db.getSetting('theme_custom_g', '0.18')) ?? 0.18;
+      final cb = double.tryParse(db.getSetting('theme_custom_b', '0.28')) ?? 0.28;
+      _accentColor = Color.fromRGBO(
+        (cr * 255).round().clamp(0, 255),
+        (cg * 255).round().clamp(0, 255),
+        (cb * 255).round().clamp(0, 255),
+        1.0,
+      );
       final hsv = HSVColor.fromColor(_accentColor);
       _customHue = hsv.hue;
       _customSat = hsv.saturation;
       _customVal = hsv.value;
-      notifyListeners();
+    } else {
+      final preset = presets.firstWhere((p) => p.id == savedThemeId, orElse: () => presets.first);
+      _currentThemeId = preset.id;
+      _accentColor = preset.accentColor;
+      final hsv = HSVColor.fromColor(_accentColor);
+      _customHue = hsv.hue;
+      _customSat = hsv.saturation;
+      _customVal = hsv.value;
     }
+  }
+
+  void setTheme(int id) {
+    final preset = presets.firstWhere((p) => p.id == id, orElse: () => presets.first);
+    _currentThemeId = preset.id;
+    _accentColor = preset.accentColor;
+    _backgroundVisualMode = preset.defaultVisualMode;
+    final hsv = HSVColor.fromColor(_accentColor);
+    _customHue = hsv.hue;
+    _customSat = hsv.saturation;
+    _customVal = hsv.value;
+
+    final db = MusicDatabaseService.instance;
+    db.setSetting('theme_id', preset.id.toString());
+    db.setSetting('bg_visual_mode', _backgroundVisualMode.toString());
+
+    notifyListeners();
   }
 
   void setCustomHsv(double h, double s, double v) {
@@ -158,13 +202,21 @@ class ThemeService extends ChangeNotifier {
     _customSat = s.clamp(0.0, 1.0);
     _customVal = v.clamp(0.05, 1.0);
     _accentColor = HSVColor.fromAHSV(1.0, _customHue, _customSat, _customVal).toColor();
-    _currentThemeId = -1; // 标记为自定义
+    _currentThemeId = 4; // 标记为自定义 (ThemeId::Custom = 4)
+
+    final db = MusicDatabaseService.instance;
+    db.setSetting('theme_id', '4');
+    db.setSetting('theme_custom_r', (_accentColor.red / 255.0).toStringAsFixed(4));
+    db.setSetting('theme_custom_g', (_accentColor.green / 255.0).toStringAsFixed(4));
+    db.setSetting('theme_custom_b', (_accentColor.blue / 255.0).toStringAsFixed(4));
+
     notifyListeners();
   }
 
   void setBackgroundVisualMode(int mode) {
     if (mode >= 0 && mode < visualModeLabels.length) {
       _backgroundVisualMode = mode;
+      MusicDatabaseService.instance.setSetting('bg_visual_mode', mode.toString());
       notifyListeners();
     }
   }

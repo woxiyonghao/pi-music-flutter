@@ -130,25 +130,32 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
                       ),
                     ),
 
-                    // 悬停态中心播放三角按钮
+                    // 悬停态中心播放三角按钮 (1:1 严格同心对齐黑胶唱片中心 cd_center = (cardW / 2, 66.0))
                     if (_isHovered && !widget.isEditMode)
-                      Center(
+                      Positioned(
+                        top: 66.0 - 23.5,
+                        left: (cardW - 47.0) / 2,
+                        width: 47.0,
+                        height: 47.0,
                         child: Container(
-                          width: 44.0,
-                          height: 44.0,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: accent,
                             boxShadow: [
                               BoxShadow(
-                                color: accent.withValues(alpha: 0.6),
+                                color: Colors.black.withValues(alpha: 0.38),
+                                blurRadius: 4.0,
+                                offset: const Offset(0, 2),
+                              ),
+                              BoxShadow(
+                                color: accent.withValues(alpha: 0.40),
                                 blurRadius: 8.0,
                               ),
                             ],
                           ),
                           child: const Center(
                             child: Padding(
-                              padding: EdgeInsets.only(left: 3.0),
+                              padding: EdgeInsets.only(left: 2.0),
                               child: Icon(
                                 Icons.play_arrow_rounded,
                                 color: Colors.white,
