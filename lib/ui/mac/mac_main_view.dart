@@ -212,6 +212,7 @@ class _MacMainViewState extends State<MacMainView> {
                                       style: TextStyle(color: HifiTheme.mcIntoshGlow, fontSize: 11, fontWeight: FontWeight.w600),
                                     ),
                                   ),
+                                  const SizedBox(width: 4),
                                 ],
                               ),
                             ),

@@ -225,11 +225,15 @@ class McIntoshMeterPainter extends CustomPainter {
     )..layout();
     titleTp.paint(canvas, Offset(rect.center.dx - titleTp.width * 0.5, rect.top + 16.0));
 
-    // POWER GUARD 经典绿色安全指示小灯
+    // POWER GUARD 经典绿色安全指示小灯 (两侧对齐，带有发光微晕)
     const pgColor = Color(0xFF00F5D4);
-    final pgPaint = Paint()..color = pgColor;
-    canvas.drawCircle(Offset(rect.center.dx - 45, rect.top + 22.0), 2.5, pgPaint);
-    canvas.drawCircle(Offset(rect.center.dx + 45, rect.top + 22.0), 2.5, pgPaint);
+    final ledY = rect.top + 16.0 + titleTp.height * 0.5;
+    final leftLedX = rect.center.dx - titleTp.width * 0.5 - 14.0;
+    final rightLedX = rect.center.dx + titleTp.width * 0.5 + 14.0;
+    canvas.drawCircle(Offset(leftLedX, ledY), 4.0, Paint()..color = pgColor.withValues(alpha: 0.35));
+    canvas.drawCircle(Offset(rightLedX, ledY), 4.0, Paint()..color = pgColor.withValues(alpha: 0.35));
+    canvas.drawCircle(Offset(leftLedX, ledY), 2.2, Paint()..color = pgColor);
+    canvas.drawCircle(Offset(rightLedX, ledY), 2.2, Paint()..color = pgColor);
 
     // 中心单位标牌
     final subTp = TextPainter(

@@ -15,7 +15,6 @@ class IpadMainView extends StatelessWidget {
       listenable: HifiAudioService.instance,
       builder: (context, _) {
         final service = HifiAudioService.instance;
-        final state = service.state;
         final track = service.currentTrack;
 
         return Scaffold(
