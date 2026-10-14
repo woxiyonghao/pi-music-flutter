@@ -8,10 +8,12 @@ import '../visualizers/visualizer_stage_widget.dart';
 /// macOS 全景底层背景与音乐律动动效 (1:1 严格对齐 C++ Application::renderBackground)
 class MacBackgroundWidget extends StatelessWidget {
   final VisualizerType visualizerType;
+  final double fullscreenProgress;
 
   const MacBackgroundWidget({
     super.key,
     this.visualizerType = VisualizerType.ledSpectrum,
+    this.fullscreenProgress = 0.0,
   });
 
   @override
@@ -39,7 +41,7 @@ class MacBackgroundWidget extends StatelessWidget {
               )
             else if (visualizerType != VisualizerType.pureBlack)
               Opacity(
-                opacity: 0.85,
+                opacity: (0.85 + 0.15 * fullscreenProgress).clamp(0.0, 1.0),
                 child: VisualizerStageWidget(activeType: visualizerType),
               ),
           ],

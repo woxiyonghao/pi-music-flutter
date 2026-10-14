@@ -7,6 +7,9 @@ import 'package:hide_player_flutter/ui/visualizers/visualizer_stage_widget.dart'
 import 'package:hide_player_flutter/ui/visualizers/audio_bubbles_painter.dart';
 import 'package:hide_player_flutter/ui/visualizers/cyber_grid_painter.dart';
 import 'package:hide_player_flutter/ui/visualizers/glass_clock_painter.dart';
+import 'package:hide_player_flutter/ui/visualizers/mcintosh_meter_painter.dart';
+import 'package:hide_player_flutter/ui/visualizers/accuphase_meter_painter.dart';
+import 'package:hide_player_flutter/ui/visualizers/tape_reel_painter.dart';
 import 'package:hide_player_flutter/services/theme_service.dart';
 import 'package:hide_player_flutter/ui/mac/views/mac_magic_tuning_view.dart';
 
@@ -178,5 +181,51 @@ void main() {
 
       await tester.pumpWidget(const SizedBox());
     });
+
+    test('McIntoshMeterPainter paints successfully with dual scales and shadow', () {
+      final painter = McIntoshMeterPainter(
+        leftAngle: -1.5,
+        rightAngle: -1.2,
+        accentColor: const Color(0xFF00B4D8),
+      );
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      painter.paint(canvas, const Size(1200, 800));
+      final picture = recorder.endRecording();
+      expect(picture, isNotNull);
+    });
+
+    test('AccuphaseMeterPainter paints successfully with trapezoid dual ribbon', () {
+      final painter = AccuphaseMeterPainter(
+        leftValue: 0.65,
+        rightValue: 0.72,
+        animTime: 2.5,
+        volumePercent: 82,
+        themeId: 2,
+        accentColor: const Color(0xFFE2C792),
+      );
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      painter.paint(canvas, const Size(1200, 800));
+      final picture = recorder.endRecording();
+      expect(picture, isNotNull);
+    });
+
+    test('TapeReelPainter paints successfully with NAB hub and tape counter', () {
+      final painter = TapeReelPainter(
+        progress: 0.45,
+        leftAngle: 1.8,
+        rightAngle: 2.1,
+        isPlaying: true,
+        elapsedSec: 154.0,
+        accentColor: const Color(0xFFF97316),
+      );
+      final recorder = PictureRecorder();
+      final canvas = Canvas(recorder);
+      painter.paint(canvas, const Size(1200, 800));
+      final picture = recorder.endRecording();
+      expect(picture, isNotNull);
+    });
   });
 }
+

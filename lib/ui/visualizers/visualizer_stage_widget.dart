@@ -41,6 +41,8 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
   // 物理阻尼角度 (针运动)
   double _leftAngle = McIntoshMeterPainter.minAngle;
   double _rightAngle = McIntoshMeterPainter.minAngle;
+  double _accuphaseValL = 0.0;
+  double _accuphaseValR = 0.0;
 
   // 磁带轮旋转角度
   double _tapeLeftAngle = 0.0;
@@ -142,6 +144,20 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
       _rightAngle += (targetAngleR - _rightAngle) * 0.06;
     }
 
+    // Accuphase 物理非线性映射与惯性阻尼 (Attack 0.35, Decay 0.07, pow 0.82)
+    final accNormL = pow(rawL.clamp(0.0, 1.0), 0.82).toDouble();
+    final accNormR = pow(rawR.clamp(0.0, 1.0), 0.82).toDouble();
+    if (accNormL > _accuphaseValL) {
+      _accuphaseValL += (accNormL - _accuphaseValL) * 0.35;
+    } else {
+      _accuphaseValL += (accNormL - _accuphaseValL) * 0.07;
+    }
+    if (accNormR > _accuphaseValR) {
+      _accuphaseValR += (accNormR - _accuphaseValR) * 0.35;
+    } else {
+      _accuphaseValR += (accNormR - _accuphaseValR) * 0.07;
+    }
+
     // 3. 磁带轮旋转物理模型 (线速度恒定，角速度与当前带卷半径成反比)
     if (state.isPlaying) {
       _tapeLeftAngle += (1.5 + (1.0 - state.progress) * 1.5) * dt;
@@ -218,12 +234,19 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
         painter = McIntoshMeterPainter(
           leftAngle: _leftAngle,
           rightAngle: _rightAngle,
+          accentColor: ThemeService.instance.accentColor,
         );
         break;
       case VisualizerType.accuphase:
         painter = AccuphaseMeterPainter(
           leftAngle: _leftAngle,
           rightAngle: _rightAngle,
+          leftValue: _accuphaseValL,
+          rightValue: _accuphaseValR,
+          animTime: _animTime,
+          volumePercent: (state.volume * 100).round(),
+          themeId: ThemeService.instance.currentThemeId,
+          accentColor: ThemeService.instance.accentColor,
         );
         break;
       case VisualizerType.tapeReel:
@@ -232,6 +255,8 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           leftAngle: _tapeLeftAngle,
           rightAngle: _tapeRightAngle,
           isPlaying: state.isPlaying,
+          elapsedSec: state.currentTime,
+          accentColor: ThemeService.instance.accentColor,
         );
         break;
       case VisualizerType.ledSpectrum:

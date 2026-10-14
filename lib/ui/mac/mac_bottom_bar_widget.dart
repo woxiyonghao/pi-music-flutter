@@ -7,7 +7,12 @@ import '../common/glass_card.dart';
 
 /// macOS 底部液态玻璃播放控制胶囊栏 (1:1 严格对齐 C++ BottomBarView.cpp)
 class MacBottomBarWidget extends StatelessWidget {
-  const MacBottomBarWidget({super.key});
+  final VoidCallback? onToggleFullscreen;
+
+  const MacBottomBarWidget({
+    super.key,
+    this.onToggleFullscreen,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +244,22 @@ class MacBottomBarWidget extends StatelessWidget {
             ),
           ),
         ),
+
+        if (onToggleFullscreen != null) ...[
+          const SizedBox(width: 8.0),
+          IconButton(
+            onPressed: onToggleFullscreen,
+            tooltip: '全屏沉浸表头 (双击任意处亦可切换)',
+            icon: const Icon(
+              Icons.fullscreen_rounded,
+              size: 20.0,
+              color: UIConfig.iconNormal,
+            ),
+            splashRadius: 14.0,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          ),
+        ],
       ],
     );
   }
