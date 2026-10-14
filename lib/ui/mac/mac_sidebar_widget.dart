@@ -102,13 +102,6 @@ class MacSidebarWidget extends StatelessWidget {
                       isSelected: currentTab == SidebarTab.webService,
                       onTap: () => onTabSelected(SidebarTab.webService),
                     ),
-                    _buildNavItem(
-                      tab: SidebarTab.wifiTransfer,
-                      label: 'WiFi传歌',
-                      iconData: Icons.wifi_rounded,
-                      isSelected: currentTab == SidebarTab.wifiTransfer,
-                      onTap: () => onTabSelected(SidebarTab.wifiTransfer),
-                    ),
 
                     const SizedBox(height: 8.0),
 

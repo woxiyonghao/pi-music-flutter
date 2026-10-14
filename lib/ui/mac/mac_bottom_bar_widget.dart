@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../services/theme_service.dart';
 import '../../models/playback_state.dart';
 import '../../core/hifi_audio_service.dart';
 import '../../theme/ui_config.dart';
@@ -11,7 +12,7 @@ class MacBottomBarWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: HifiAudioService.instance,
+      listenable: Listenable.merge([HifiAudioService.instance, ThemeService.instance]),
       builder: (context, _) {
         final service = HifiAudioService.instance;
         final state = service.state;

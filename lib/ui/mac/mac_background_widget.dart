@@ -79,7 +79,7 @@ class _LedSpectrumBackgroundPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     // 点亮态与顶峰指示色
-    const litColor = UIConfig.accent;
+    final litColor = UIConfig.accent;
     const peakColor = Color(0xFFFF758C);
     final litPaint = Paint()..style = PaintingStyle.fill;
 

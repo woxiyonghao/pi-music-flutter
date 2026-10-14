@@ -9,6 +9,9 @@ typedef _HifiAudioInitDart = bool Function();
 typedef _HifiAudioOpenAndPlayC = Bool Function(Pointer<Utf8>);
 typedef _HifiAudioOpenAndPlayDart = bool Function(Pointer<Utf8>);
 
+typedef _HifiAudioOpenSectionC = Bool Function(Pointer<Utf8>, Double, Double);
+typedef _HifiAudioOpenSectionDart = bool Function(Pointer<Utf8>, double, double);
+
 typedef _HifiAudioVoidC = Void Function();
 typedef _HifiAudioVoidDart = void Function();
 
@@ -45,6 +48,7 @@ class HifiAudioBindings {
   // 导出的 Dart 方法指针
   late final _HifiAudioInitDart _init;
   late final _HifiAudioOpenAndPlayDart _openAndPlay;
+  late final _HifiAudioOpenSectionDart _openAndPlaySection;
   late final _HifiAudioVoidDart _play;
   late final _HifiAudioVoidDart _pause;
   late final _HifiAudioVoidDart _toggle;
@@ -79,8 +83,15 @@ class HifiAudioBindings {
       }
 
       if (Platform.isMacOS) {
-        // macOS: 优先从当前可执行文件同级或 build 产物中加载
+        // macOS: 多路径探测，支持 Xcode app bundle 与直接运行
+        final execPath = Platform.resolvedExecutable;
+        final execDir = File(execPath).parent.path;
+        final appDir = File(execPath).parent.parent.path;
         _lib = _tryOpen([
+          '$appDir/Frameworks/libhifi_audio_ffi.dylib',
+          '$execDir/libhifi_audio_ffi.dylib',
+          '/Users/mk10/Desktop/hide_player_flutter/native/build/libhifi_audio_ffi.dylib',
+          '/Users/mk10/Desktop/hide_player_flutter/libhifi_audio_ffi.dylib',
           'libhifi_audio_ffi.dylib',
           'native/build/libhifi_audio_ffi.dylib',
           '../native/build/libhifi_audio_ffi.dylib',
@@ -109,6 +120,7 @@ class HifiAudioBindings {
       // 绑定函数指针
       _init = _lib.lookupFunction<_HifiAudioInitC, _HifiAudioInitDart>('hifi_audio_init');
       _openAndPlay = _lib.lookupFunction<_HifiAudioOpenAndPlayC, _HifiAudioOpenAndPlayDart>('hifi_audio_open_and_play');
+      _openAndPlaySection = _lib.lookupFunction<_HifiAudioOpenSectionC, _HifiAudioOpenSectionDart>('hifi_audio_open_and_play_section');
       _play = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>('hifi_audio_play');
       _pause = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>('hifi_audio_pause');
       _toggle = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>('hifi_audio_toggle');
@@ -129,7 +141,7 @@ class HifiAudioBindings {
 
       _isLoaded = true;
     } catch (e) {
-      // 库未编译时的模拟降级模式 (方便在未编译原生库时调试 UI)
+      // 库未编译时的模拟降级模式
       _isLoaded = false;
     }
   }
@@ -149,6 +161,13 @@ class HifiAudioBindings {
     if (!_isLoaded) return false;
     final nativePath = path.toNativeUtf8();
     final res = _openAndPlay(nativePath);
+    calloc.free(nativePath);
+    return res;
+  }
+  bool openAndPlaySection(String path, double startSec, double endSec) {
+    if (!_isLoaded) return false;
+    final nativePath = path.toNativeUtf8();
+    final res = _openAndPlaySection(nativePath, startSec, endSec);
     calloc.free(nativePath);
     return res;
   }

@@ -332,7 +332,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                   AnimatedRotation(
                     turns: isOpen ? 0.0 : -0.25,
                     duration: const Duration(milliseconds: 180),
-                    child: const Icon(
+                    child: Icon(
                       Icons.arrow_drop_down_rounded,
                       size: 20.0,
                       color: UIConfig.accent,
@@ -354,7 +354,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                     ),
                     child: Text(
                       badge,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10.0,
                         fontWeight: FontWeight.bold,
                         color: UIConfig.accent,
@@ -468,13 +468,13 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                   SizedBox(
                     width: 24.0,
                     child: isPlaying
-                        ? const Icon(
+                        ? Icon(
                             Icons.equalizer_rounded,
                             size: 16.0,
                             color: UIConfig.accent,
                           )
                         : (isCurrent
-                            ? const Icon(
+                            ? Icon(
                                 Icons.play_arrow_rounded,
                                 size: 16.0,
                                 color: UIConfig.accent,

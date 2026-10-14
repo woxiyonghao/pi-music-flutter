@@ -88,7 +88,11 @@ class HifiAudioService extends ChangeNotifier {
       _currentIndex = _playlistQueue.indexOf(track);
     }
 
-    _bindings.openAndPlay(track.filepath);
+    if (track.isCueTrack && track.endTimeSec > track.startTimeSec) {
+      _bindings.openAndPlaySection(track.filepath, track.startTimeSec, track.endTimeSec);
+    } else {
+      _bindings.openAndPlay(track.filepath);
+    }
     _state = PlaybackState(
       isPlaying: true,
       isPaused: false,

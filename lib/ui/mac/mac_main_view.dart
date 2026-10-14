@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/sidebar_tab.dart';
 import '../../services/music_database_service.dart';
+import '../../services/theme_service.dart';
 import '../../theme/ui_config.dart';
 import '../common/glass_card.dart';
 import '../visualizers/visualizer_type.dart';
@@ -27,7 +28,6 @@ class MacMainView extends StatefulWidget {
 class _MacMainViewState extends State<MacMainView> {
   SidebarTab _currentTab = SidebarTab.allMusic;
   int _selectedPlaylistId = 0;
-  VisualizerType _activeVisualizer = VisualizerType.ledSpectrum;
   bool _showCreatePlaylistModal = false;
   final TextEditingController _playlistNameController = TextEditingController();
 
@@ -60,10 +60,11 @@ class _MacMainViewState extends State<MacMainView> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('[MacMainView] build: _currentTab = $_currentTab');
     return ListenableBuilder(
-      listenable: MusicDatabaseService.instance,
+      listenable: Listenable.merge([MusicDatabaseService.instance, ThemeService.instance]),
       builder: (context, _) {
+        final theme = ThemeService.instance;
+        final activeVisualizer = VisualizerType.values[theme.backgroundVisualMode.clamp(0, VisualizerType.values.length - 1)];
         final db = MusicDatabaseService.instance;
         final tracks = db.tracks;
         final playlists = db.playlists;
@@ -74,7 +75,7 @@ class _MacMainViewState extends State<MacMainView> {
             fit: StackFit.expand,
             children: [
               // 1. 全景底层背景与音乐律动动效 (48列全景 LED 频谱 / 名机表头)
-              MacBackgroundWidget(visualizerType: _activeVisualizer),
+              MacBackgroundWidget(visualizerType: activeVisualizer),
 
               // 2. 左侧：导航与歌单侧边栏 (230px 固定总宽度)
               Positioned(
@@ -114,16 +115,16 @@ class _MacMainViewState extends State<MacMainView> {
                 top: UIConfig.containerMarginY,
                 right: UIConfig.containerMarginX,
                 bottom: UIConfig.bottomBarOffset,
-                child: _buildMainStage(tracks),
+                child: _buildMainStage(tracks, activeVisualizer),
               ),
 
               // 4. 右下方：底部液态玻璃播放控制胶囊栏
-              const Positioned(
+              Positioned(
                 left: UIConfig.sidebarWidth + UIConfig.containerMarginX,
                 right: UIConfig.containerMarginX,
                 bottom: UIConfig.containerMarginY,
                 height: UIConfig.bottomBarHeight,
-                child: MacBottomBarWidget(),
+                child: const MacBottomBarWidget(),
               ),
 
               // 5. 顶层新建播放列表模态弹窗
@@ -135,12 +136,12 @@ class _MacMainViewState extends State<MacMainView> {
     );
   }
 
-  Widget _buildMainStage(tracks) {
+  Widget _buildMainStage(List<dynamic> tracks, VisualizerType activeVisualizer) {
     switch (_currentTab) {
       case SidebarTab.allMusic:
       case SidebarTab.customPlaylist:
         return MacAllMusicView(
-          tracks: tracks,
+          tracks: tracks.cast(),
           onNavigateToScan: () {
             setState(() {
               _currentTab = SidebarTab.scanMusic;
@@ -162,11 +163,9 @@ class _MacMainViewState extends State<MacMainView> {
         return const MacDACSettingView();
       case SidebarTab.themeSettings:
         return MacThemeSettingView(
-          currentVisualizer: _activeVisualizer,
+          currentVisualizer: activeVisualizer,
           onVisualizerChanged: (type) {
-            setState(() {
-              _activeVisualizer = type;
-            });
+            ThemeService.instance.setBackgroundVisualMode(type.index);
           },
         );
       case SidebarTab.systemSettings:
@@ -243,7 +242,7 @@ class _MacMainViewState extends State<MacMainView> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6.0),
-                      borderSide: const BorderSide(
+                      borderSide: BorderSide(
                         color: UIConfig.accent,
                         width: 1.5,
                       ),

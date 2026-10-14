@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
 
-/// 系统设置视图 (1:1 严格对齐 C++ SystemSettingsView.cpp)
+/// 系统设置视图 (1:1 严格对齐 C++ SystemSettingsView.cpp，纯平铺按钮组，无任何 popup/dropdown)
 class MacSystemSettingsView extends StatefulWidget {
   const MacSystemSettingsView({super.key});
 
@@ -11,32 +12,29 @@ class MacSystemSettingsView extends StatefulWidget {
 }
 
 class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
-  int _bufferSizeIndex = 2; // 256 samples
-  int _idleScreensaverIndex = 2; // 3分钟
-  bool _exclusiveHogMode = true;
+  // 板块一：音频重放与时钟引擎
+  int _sampleRateMode = 0;       // 0: Bit-Perfect 源码直出, 1: 超采样 192k/24b, 2: 极频 384k/32b
+  int _dsdMode = 0;             // 0: DoP (DSD over PCM), 1: Native 原生直通, 2: DSD 软解 PCM
+  int _bufferSizeMode = 1;      // 0: 64帧, 1: 256帧 (标准发烧), 2: 512帧
+  int _fadeDurationMode = 2;    // 0: 关闭, 1: 0.3s, 2: 0.5s (发烧标准), 3: 1.0s
 
-  static const List<String> bufferSizes = [
-    '64 采样 (极低延迟 1.4ms)',
-    '128 采样 (发烧低延迟 2.9ms)',
-    '256 采样 (标准发烧推荐 5.8ms)',
-    '512 采样 (高稳定性 11.6ms)',
-    '1024 采样 (低功耗容错 23.2ms)',
-  ];
-
-  static const List<String> idleTimes = [
-    '30 秒', '1 分钟', '3 分钟', '5 分钟', '永不进入屏保',
-  ];
+  // 板块二：硬件性能与显示控制
+  int _cpuGovernor = 0;         // 0: Performance (纯音锁频最高), 1: Schedutil
+  double _screenBrightness = 0.85; // 85%
+  int _screenTimeoutMode = 0;   // 0: 从不, 1: 5分钟, 2: 15分钟, 3: 30分钟
+  int _idleFullscreenMode = 4;  // 0: 15秒, 1: 30秒, 2: 1分钟, 3: 5分钟, 4: 永不
 
   @override
   Widget build(BuildContext context) {
     return GlassCard(
       borderRadius: UIConfig.containerRounding,
-      padding: const EdgeInsets.all(20.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 标题「系统设置」 (无 subtitle，无右上角杂项)
           const Text(
-            '设置',
+            '系统设置',
             style: TextStyle(
               fontSize: UIConfig.fontMedium,
               fontWeight: FontWeight.bold,
@@ -45,81 +43,110 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
           ),
           const SizedBox(height: 16.0),
 
+          // 滚动内容区
           Expanded(
             child: ListView(
               physics: const BouncingScrollPhysics(),
               children: [
-                _buildCardSection(
-                  title: '音频底层驱动与缓冲区 (CoreAudio Architecture)',
+                // 板块一：音频重放与时钟引擎
+                _buildCardContainer(
+                  title: '音频重放与时钟引擎',
                   children: [
-                    _buildDropdownRow(
-                      '硬件 DMA 环形缓冲区尺寸',
-                      '缓冲区越小延迟越低；如遇 CPU 重负载偶发断音可适度上调。',
-                      bufferSizes,
-                      _bufferSizeIndex,
-                      (idx) => setState(() => _bufferSizeIndex = idx),
-                    ),
-                    const Divider(color: Color.fromRGBO(255, 255, 255, 0.08)),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'CoreAudio 独占直通 (Bit-Perfect Hog Mode)',
-                              style: TextStyle(
-                                fontSize: UIConfig.fontSmall,
-                                color: UIConfig.textNormal,
-                              ),
-                            ),
-                            SizedBox(height: 2.0),
-                            Text(
-                              '锁定声卡专属驱动访问，杜绝系统混音降质。',
-                              style: TextStyle(
-                                fontSize: 11.0,
-                                color: UIConfig.textMuted,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Switch(
-                          value: _exclusiveHogMode,
-                          activeColor: UIConfig.accent,
-                          onChanged: (val) =>
-                              setState(() => _exclusiveHogMode = val),
-                        ),
+                    _buildButtonGroupRow(
+                      label: '输出采样率',
+                      options: const [
+                        'Bit-Perfect 源码直出',
+                        '超采样 192kHz/24Bit',
+                        '极频 384kHz/32Bit',
                       ],
+                      selectedIndex: _sampleRateMode,
+                      onSelected: (idx) => setState(() => _sampleRateMode = idx),
+                    ),
+                    const SizedBox(height: 10.0),
+                    _buildButtonGroupRow(
+                      label: 'DSD 播放模式',
+                      options: const [
+                        'DoP (DSD over PCM)',
+                        'Native 原生直通',
+                        'DSD 软解 PCM',
+                      ],
+                      selectedIndex: _dsdMode,
+                      onSelected: (idx) => setState(() => _dsdMode = idx),
+                    ),
+                    const SizedBox(height: 10.0),
+                    _buildButtonGroupRow(
+                      label: '硬件缓冲深度',
+                      options: const [
+                        '64 帧 (极低延迟)',
+                        '256 帧 (标准发烧)',
+                        '512 帧 (防爆音深缓冲)',
+                      ],
+                      selectedIndex: _bufferSizeMode,
+                      onSelected: (idx) => setState(() => _bufferSizeMode = idx),
+                    ),
+                    const SizedBox(height: 10.0),
+                    _buildButtonGroupRow(
+                      label: '切歌过渡效果',
+                      options: const [
+                        '关闭 (直接切歌)',
+                        '0.3 秒 (极速)',
+                        '0.5 秒 (发烧标准)',
+                        '1.0 秒 (悠扬慢淡)',
+                      ],
+                      selectedIndex: _fadeDurationMode,
+                      onSelected: (idx) => setState(() => _fadeDurationMode = idx),
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 14.0),
 
-                _buildCardSection(
-                  title: '全景屏保与空闲沉浸 (Idle Screensaver)',
+                // 板块二：硬件性能与显示控制
+                _buildCardContainer(
+                  title: '硬件性能与显示控制',
                   children: [
-                    _buildDropdownRow(
-                      '无操作自动全屏动效超时',
-                      '超时后四角控制面板平滑淡出，进入名机表头大画面沉浸。',
-                      idleTimes,
-                      _idleScreensaverIndex,
-                      (idx) => setState(() => _idleScreensaverIndex = idx),
+                    _buildButtonGroupRow(
+                      label: 'CPU 调频策略',
+                      options: const [
+                        'Performance (纯音锁频最高)',
+                        'Schedutil (动态温控平衡)',
+                      ],
+                      selectedIndex: _cpuGovernor,
+                      onSelected: (idx) => setState(() => _cpuGovernor = idx),
+                    ),
+                    const SizedBox(height: 10.0),
+                    _buildSliderRow(
+                      label: '屏幕背光亮度',
+                      value: _screenBrightness,
+                      onChanged: (val) => setState(() => _screenBrightness = val),
+                    ),
+                    const SizedBox(height: 10.0),
+                    _buildButtonGroupRow(
+                      label: '自动息屏待机',
+                      options: const [
+                        '从不',
+                        '5 分钟',
+                        '15 分钟',
+                        '30 分钟',
+                      ],
+                      selectedIndex: _screenTimeoutMode,
+                      onSelected: (idx) => setState(() => _screenTimeoutMode = idx),
+                    ),
+                    const SizedBox(height: 10.0),
+                    _buildButtonGroupRow(
+                      label: '空余时间显示全屏',
+                      options: const [
+                        '15 秒',
+                        '30 秒',
+                        '1 分钟',
+                        '5 分钟',
+                        '永不',
+                      ],
+                      selectedIndex: _idleFullscreenMode,
+                      onSelected: (idx) => setState(() => _idleFullscreenMode = idx),
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 14.0),
-
-                _buildCardSection(
-                  title: '系统规格与版本信息 (System Information)',
-                  children: [
-                    _buildInfoRow('应用程序', 'PiHifiPlayer for macOS (Modern C++20 + Flutter 3)'),
-                    _buildInfoRow('音频渲染引擎', 'Apple CoreAudio Zero-Copy SPSC RingBuffer'),
-                    _buildInfoRow('解码母带格式', 'DSD (DSF/DFF), FLAC, WAV, ALAC, MP3, CUE'),
-                    _buildInfoRow('目标物理刷新率', '60 FPS 垂直同步防撕裂'),
-                  ],
-                ),
+                const SizedBox(height: 16.0),
               ],
             ),
           ),
@@ -128,17 +155,18 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
     );
   }
 
-  Widget _buildCardSection({
+  /// 封装毛玻璃底板卡片
+  Widget _buildCardContainer({
     required String title,
     required List<Widget> children,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14.0),
+      padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: const Color.fromRGBO(20, 26, 36, 0.7),
-        borderRadius: BorderRadius.circular(8.0),
+        borderRadius: BorderRadius.circular(10.0),
         border: Border.all(
-          color: const Color.fromRGBO(255, 255, 255, 0.1),
+          color: const Color.fromRGBO(255, 255, 255, 0.08),
         ),
       ),
       child: Column(
@@ -152,94 +180,146 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
               color: UIConfig.textActive,
             ),
           ),
-          const SizedBox(height: 10.0),
+          const SizedBox(height: 14.0),
           ...children,
         ],
       ),
     );
   }
 
-  Widget _buildDropdownRow(
-    String title,
-    String subtitle,
-    List<String> items,
-    int selectedIndex,
-    ValueChanged<int> onChanged,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: UIConfig.fontSmall,
-            color: UIConfig.textNormal,
-          ),
-        ),
-        const SizedBox(height: 2.0),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            fontSize: 11.0,
-            color: UIConfig.textMuted,
-          ),
-        ),
-        const SizedBox(height: 8.0),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 2.0),
-          decoration: BoxDecoration(
-            color: const Color.fromRGBO(10, 14, 20, 0.8),
-            borderRadius: BorderRadius.circular(6.0),
-            border: Border.all(
-              color: const Color.fromRGBO(255, 255, 255, 0.1),
-            ),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              value: selectedIndex,
-              dropdownColor: const Color(0xFF141923),
-              isDense: true,
-              style: const TextStyle(
-                fontSize: UIConfig.fontSmall,
-                color: UIConfig.textActive,
-              ),
-              items: [
-                for (int i = 0; i < items.length; i++)
-                  DropdownMenuItem(value: i, child: Text(items[i])),
-              ],
-              onChanged: (val) {
-                if (val != null) onChanged(val);
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  /// 纯平铺段选按钮行 (1:1 对齐 renderButtonGroup)
+  Widget _buildButtonGroupRow({
+    required String label,
+    required List<String> options,
+    required int selectedIndex,
+    required ValueChanged<int> onSelected,
+  }) {
+    final accent = ThemeService.instance.accentColor;
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 130.0,
+          child: Text(
             label,
             style: const TextStyle(
               fontSize: UIConfig.fontSmall,
               color: UIConfig.textMuted,
             ),
           ),
-          Text(
-            value,
+        ),
+        Expanded(
+          child: Row(
+            children: [
+              for (int i = 0; i < options.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8.0),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => onSelected(i),
+                    borderRadius: BorderRadius.circular(6.0),
+                    child: Container(
+                      height: 28.0,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: selectedIndex == i
+                            ? accent.withValues(alpha: 0.28)
+                            : const Color.fromRGBO(255, 255, 255, 0.04),
+                        borderRadius: BorderRadius.circular(6.0),
+                        border: Border.all(
+                          color: selectedIndex == i
+                              ? accent
+                              : const Color.fromRGBO(255, 255, 255, 0.1),
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Text(
+                        options[i],
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: selectedIndex == i
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: selectedIndex == i
+                              ? UIConfig.textActive
+                              : UIConfig.textNormal,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 屏幕亮度平滑滑块行
+  Widget _buildSliderRow({
+    required String label,
+    required double value,
+    required ValueChanged<double> onChanged,
+  }) {
+    final accent = ThemeService.instance.accentColor;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 130.0,
+          child: Text(
+            label,
             style: const TextStyle(
               fontSize: UIConfig.fontSmall,
-              color: UIConfig.textNormal,
-              fontFamily: 'monospace',
+              color: UIConfig.textMuted,
             ),
           ),
-        ],
-      ),
+        ),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(
+                child: SliderTheme(
+                  data: SliderThemeData(
+                    trackHeight: 3.5,
+                    activeTrackColor: accent,
+                    inactiveTrackColor: const Color.fromRGBO(255, 255, 255, 0.12),
+                    thumbColor: Colors.white,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 6.0,
+                      elevation: 2.0,
+                    ),
+                    overlayColor: accent.withValues(alpha: 0.2),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12.0),
+                  ),
+                  child: Slider(
+                    value: value,
+                    min: 0.1,
+                    max: 1.0,
+                    onChanged: onChanged,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12.0),
+              SizedBox(
+                width: 40.0,
+                child: Text(
+                  '${(value * 100).round()}%',
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(
+                    fontSize: UIConfig.fontSmall,
+                    color: UIConfig.textActive,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

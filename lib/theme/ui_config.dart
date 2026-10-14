@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import '../services/theme_service.dart';
 
 /// 全局 UI 视觉与样式配置中心 (1:1 严格对齐 C++ UIConfig.hpp)
 class UIConfig {
   // ==========================================================================
   // 1. 发烧调色板 (Colors)
   // ==========================================================================
-  // [主题强调色]：用于高亮、激活图标、选中指示等 (默认 Apple Music 标志性玫红 #FA2D48)
-  static const Color accent = Color(0xFFFA2D48);
+  // [主题强调色]：用于高亮、激活图标、选中指示等 (动态联动 ThemeService)
+  static Color get accent => ThemeService.instance.accentColor;
 
   // [背景与底板]
   static const Color windowBg = Color(0xF012161C); // 侧边栏深邃半透明暗色底
@@ -17,7 +18,7 @@ class UIConfig {
   static const Color containerBorder = Color.fromRGBO(255, 255, 255, 30 / 255);
 
   // [选中项发光液态玻璃胶囊 (Liquid Glass Active Indicator)]
-  static const Color glassActiveTint = Color.fromRGBO(250, 45, 72, 60 / 255);
+  static Color get glassActiveTint => ThemeService.instance.accentColor.withValues(alpha: 60 / 255);
   static const Color glassActive = Color.fromRGBO(255, 255, 255, 30 / 255);
   static const Color glassHover = Color.fromRGBO(255, 255, 255, 18 / 255);
   static const Color glassBorder = Color.fromRGBO(255, 255, 255, 50 / 255);

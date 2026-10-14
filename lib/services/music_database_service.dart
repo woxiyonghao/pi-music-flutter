@@ -20,7 +20,12 @@ class MusicDatabaseService extends ChangeNotifier {
   /// 获取 C++ SQLite 数据库默认绝对路径
   String get _databasePath {
     final home = Platform.environment['HOME'] ?? '';
-    return '$home/.config/hifi_player/library.db';
+    final defaultPath = '$home/.config/hifi_player/library.db';
+    if (File(defaultPath).existsSync()) return defaultPath;
+    if (File('/Users/mk10/.config/hifi_player/library.db').existsSync()) {
+      return '/Users/mk10/.config/hifi_player/library.db';
+    }
+    return defaultPath;
   }
 
   void loadLibrary() {
