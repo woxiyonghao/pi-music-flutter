@@ -5,8 +5,8 @@ class PlaybackState {
   final bool isBitPerfect;
   final double currentTime;
   final double duration;
-  final float progress;
-  final float volume;
+  final double progress;
+  final double volume;
   final bool isMuted;
   final List<double> spectrumLevels; // 12 频段实时振幅
 

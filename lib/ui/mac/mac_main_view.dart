@@ -4,7 +4,6 @@ import '../../theme/hifi_theme.dart';
 import '../shared/vu_meter_widget.dart';
 import '../shared/spectrum_analyzer_widget.dart';
 import '../shared/playback_controls_widget.dart';
-import '../shared/glass_container.dart';
 
 /// macOS 桌面专业端发烧播放器 UI (CoreAudio / Hog Mode)
 class MacMainView extends StatelessWidget {
