@@ -179,11 +179,11 @@ class _MacMainViewState extends State<MacMainView> {
           },
         ),
         // 3: equalizer
-        const MacEqualizerView(),
+        MacEqualizerView(),
         // 4: msebTuning
-        const MacMagicTuningView(),
+        MacMagicTuningView(),
         // 5: dacSettings
-        const MacDACSettingView(),
+        MacDACSettingView(),
         // 6: themeSettings
         MacThemeSettingView(
           currentVisualizer: activeVisualizer,
@@ -192,13 +192,13 @@ class _MacMainViewState extends State<MacMainView> {
           },
         ),
         // 7: systemSettings
-        const MacSystemSettingsView(),
+        MacSystemSettingsView(),
         // 8: webService
         const MacWebServiceView(isWifiTransfer: false),
         // 9: wifiTransfer
         const MacWebServiceView(isWifiTransfer: true),
         // 10: terminal
-        const MacSystemSettingsView(),
+        MacSystemSettingsView(),
       ],
     );
   }

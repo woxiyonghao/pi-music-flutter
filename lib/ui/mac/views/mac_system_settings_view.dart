@@ -45,7 +45,10 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
+    return ListenableBuilder(
+      listenable: ThemeService.instance,
+      builder: (context, _) {
+        return GlassCard(
       borderRadius: UIConfig.containerRounding,
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
       child: Column(
@@ -195,6 +198,8 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
           ),
         ],
       ),
+    );
+      },
     );
   }
 

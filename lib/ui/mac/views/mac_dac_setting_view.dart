@@ -123,9 +123,12 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = ThemeService.instance.accentColor;
+    return ListenableBuilder(
+      listenable: ThemeService.instance,
+      builder: (context, _) {
+        final accent = ThemeService.instance.accentColor;
 
-    return GlassCard(
+        return GlassCard(
       borderRadius: UIConfig.containerRounding,
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
       child: Column(
@@ -274,6 +277,8 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
           ),
         ],
       ),
+    );
+      },
     );
   }
 

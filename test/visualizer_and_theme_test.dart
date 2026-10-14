@@ -8,6 +8,7 @@ import 'package:hide_player_flutter/ui/visualizers/audio_bubbles_painter.dart';
 import 'package:hide_player_flutter/ui/visualizers/cyber_grid_painter.dart';
 import 'package:hide_player_flutter/ui/visualizers/glass_clock_painter.dart';
 import 'package:hide_player_flutter/services/theme_service.dart';
+import 'package:hide_player_flutter/ui/mac/views/mac_magic_tuning_view.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -149,6 +150,31 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 100));
       expect(find.byType(VisualizerStageWidget), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('MacMagicTuningView immediately reflects ThemeService color changes without user interaction', (tester) async {
+      final theme = ThemeService.instance;
+      theme.setTheme(0); // 现代深空玫红
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 1000,
+              height: 700,
+              child: MacMagicTuningView(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(MacMagicTuningView), findsOneWidget);
+
+      // Change theme to McIntosh Blue
+      theme.setTheme(1); // 麦景图湖蓝 0xFF00B4D8
+      await tester.pump();
+      expect(theme.accentColor, const Color(0xFF00B4D8));
 
       await tester.pumpWidget(const SizedBox());
     });

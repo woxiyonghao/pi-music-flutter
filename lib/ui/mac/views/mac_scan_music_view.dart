@@ -122,21 +122,26 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
 
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeService.instance;
-    final accent = theme.accentColor;
+    return ListenableBuilder(
+      listenable: ThemeService.instance,
+      builder: (context, _) {
+        final theme = ThemeService.instance;
+        final accent = theme.accentColor;
 
-    return GlassCard(
-      borderRadius: UIConfig.containerRounding,
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // 状态机分发渲染
-          if (_state == ScanUIState.idle) _buildIdleState(accent),
-          if (_state == ScanUIState.scanning) _buildScanningState(accent),
-          if (_state == ScanUIState.completed) _buildCompletedState(accent),
-        ],
-      ),
+        return GlassCard(
+          borderRadius: UIConfig.containerRounding,
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // 状态机分发渲染
+              if (_state == ScanUIState.idle) _buildIdleState(accent),
+              if (_state == ScanUIState.scanning) _buildScanningState(accent),
+              if (_state == ScanUIState.completed) _buildCompletedState(accent),
+            ],
+          ),
+        );
+      },
     );
   }
 
