@@ -73,6 +73,11 @@ class HifiAudioBindings {
 
   void _loadLibrary() {
     try {
+      if (Platform.environment.containsKey('FLUTTER_TEST')) {
+        _isLoaded = false;
+        return;
+      }
+
       if (Platform.isMacOS) {
         // macOS: 优先从当前可执行文件同级或 build 产物中加载
         _lib = _tryOpen([
@@ -171,6 +176,6 @@ class HifiAudioBindings {
   }
 
   void dispose() {
-    calloc.free(_spectrumBuffer);
+    // 单例全局常驻，无需提前释放以防止悬挂指针
   }
 }

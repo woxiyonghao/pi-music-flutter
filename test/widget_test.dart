@@ -9,9 +9,9 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
 
     await tester.pumpWidget(const HiFiPlayerApp());
+    await tester.pump(const Duration(milliseconds: 50));
     expect(find.byType(HiFiPlayerApp), findsOneWidget);
 
-    // Cancel pending timer to satisfy test invariant
     HifiAudioService.instance.dispose();
   });
 }
