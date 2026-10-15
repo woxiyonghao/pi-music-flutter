@@ -29,12 +29,12 @@ void main() {
     expect(find.text('WiFi 局域网传歌'), findsOneWidget);
 
     // Verify Web Remote Control tab elements
-    expect(find.text('遥控访问网址: http://192.168.0.100:8088'), findsOneWidget);
+    expect(find.textContaining('遥控访问网址: http://'), findsOneWidget);
 
     // Switch to WiFi transfer tab
     await tester.tap(find.text('WiFi 局域网传歌'));
     await tester.pumpAndSettle();
 
-    expect(find.text('传歌网址: http://192.168.0.100:8080'), findsOneWidget);
+    expect(find.textContaining('传歌网址: http://'), findsOneWidget);
   });
 }

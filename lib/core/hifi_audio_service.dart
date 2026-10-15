@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/track.dart';
@@ -33,7 +34,9 @@ class HifiAudioService extends ChangeNotifier {
 
   HifiAudioService._() {
     _bindings.init();
-    _startTicker();
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      _startTicker();
+    }
   }
 
   void stopTicker() {
@@ -230,6 +233,27 @@ class HifiAudioService extends ChangeNotifier {
         break;
     }
     playTrack(_playlistQueue[_currentIndex]);
+  }
+
+  void addToQueue(Track track) {
+    _playlistQueue.add(track);
+    notifyListeners();
+  }
+
+  void removeFromQueue(int index) {
+    if (index >= 0 && index < _playlistQueue.length) {
+      _playlistQueue.removeAt(index);
+      if (_currentIndex >= _playlistQueue.length) {
+        _currentIndex = _playlistQueue.length - 1;
+      }
+      notifyListeners();
+    }
+  }
+
+  void clearQueue() {
+    _playlistQueue.clear();
+    _currentIndex = -1;
+    notifyListeners();
   }
 
   void cyclePlayMode() {
