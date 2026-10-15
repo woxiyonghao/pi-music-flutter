@@ -141,7 +141,7 @@ class MacBottomBarWidget extends StatelessWidget {
           child: SliderTheme(
             data: SliderThemeData(
               trackHeight: 3.5,
-              activeTrackColor: UIConfig.accent,
+              activeTrackColor: ThemeService.instance.accentColor,
               inactiveTrackColor: const Color.fromRGBO(255, 255, 255, 0.15),
               thumbColor: Colors.white,
               thumbShape: const RoundSliderThumbShape(
@@ -149,7 +149,7 @@ class MacBottomBarWidget extends StatelessWidget {
                 elevation: 3.0,
               ),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 10.0),
-              overlayColor: UIConfig.accent.withOpacity(0.2),
+              overlayColor: ThemeService.instance.accentColor.withValues(alpha: 0.25),
             ),
             child: Slider(
               value: progress,
@@ -197,7 +197,7 @@ class MacBottomBarWidget extends StatelessWidget {
           icon: Icon(
             volIcon,
             size: 18.0,
-            color: state.isMuted ? UIConfig.accent : UIConfig.iconNormal,
+            color: state.isMuted ? ThemeService.instance.accentColor : UIConfig.iconNormal,
           ),
           splashRadius: 14.0,
           padding: EdgeInsets.zero,
@@ -211,7 +211,7 @@ class MacBottomBarWidget extends StatelessWidget {
             data: SliderThemeData(
               trackHeight: 3.5,
               activeTrackColor:
-                  state.isMuted ? UIConfig.iconNormal : UIConfig.accent,
+                  state.isMuted ? UIConfig.iconNormal : ThemeService.instance.accentColor,
               inactiveTrackColor: const Color.fromRGBO(255, 255, 255, 0.15),
               thumbColor: Colors.white,
               thumbShape: const RoundSliderThumbShape(
@@ -219,7 +219,7 @@ class MacBottomBarWidget extends StatelessWidget {
                 elevation: 2.0,
               ),
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 8.0),
-              overlayColor: UIConfig.accent.withOpacity(0.2),
+              overlayColor: ThemeService.instance.accentColor.withValues(alpha: 0.25),
             ),
             child: Slider(
               value: state.isMuted ? 0.0 : state.volume.clamp(0.0, 1.0),

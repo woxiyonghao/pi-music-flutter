@@ -351,7 +351,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                           child: DropdownButton<VisualizerType>(
                                             value: effectiveVisualizer,
                                             dropdownColor: const Color(0xFF161B24),
-                                            icon: Icon(Icons.style_rounded, size: 16, color: UIConfig.accent),
+                                            icon: Icon(Icons.style_rounded, size: 16, color: theme.accentColor),
                                             style: const TextStyle(fontSize: 11, color: UIConfig.textActive, fontWeight: FontWeight.bold),
                                             items: VisualizerType.values.map((type) {
                                               return DropdownMenuItem<VisualizerType>(

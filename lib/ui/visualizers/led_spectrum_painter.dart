@@ -11,9 +11,12 @@ class LedSpectrumPainter extends CustomPainter {
   static const Color ledRed = Color(0xFFEF4444);
   static const Color ledOff = Color(0xFF18202C);
 
+  final Color? accentColor;
+
   LedSpectrumPainter({
     required this.levels,
     required this.peakHold,
+    this.accentColor,
   });
 
   @override
@@ -50,12 +53,22 @@ class LedSpectrumPainter extends CustomPainter {
         final isPeak = s == peakSegment;
 
         Color segColor;
-        if (s < numSegments * 0.65) {
-          segColor = ledGreen;
-        } else if (s < numSegments * 0.88) {
-          segColor = ledAmber;
+        if (accentColor != null) {
+          if (s < numSegments * 0.70) {
+            segColor = accentColor!;
+          } else if (s < numSegments * 0.88) {
+            segColor = Color.lerp(accentColor!, Colors.white, 0.45)!;
+          } else {
+            segColor = ledRed;
+          }
         } else {
-          segColor = ledRed;
+          if (s < numSegments * 0.65) {
+            segColor = ledGreen;
+          } else if (s < numSegments * 0.88) {
+            segColor = ledAmber;
+          } else {
+            segColor = ledRed;
+          }
         }
 
         if (isActive) {

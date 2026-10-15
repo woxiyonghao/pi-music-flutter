@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../core/hifi_audio_service.dart';
+import '../../services/theme_service.dart';
 import '../../theme/ui_config.dart';
 import '../visualizers/visualizer_type.dart';
 import '../visualizers/visualizer_stage_widget.dart';
@@ -19,11 +20,17 @@ class MacBackgroundWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: HifiAudioService.instance,
+      listenable: Listenable.merge([HifiAudioService.instance, ThemeService.instance]),
       builder: (context, _) {
         final service = HifiAudioService.instance;
         final isPlaying = service.state.isPlaying;
         final spectrum = service.state.spectrumLevels;
+        final theme = ThemeService.instance;
+        final accent = theme.accentColor;
+        final currentPreset = ThemeService.presets.firstWhere(
+          (p) => p.id == theme.currentThemeId,
+          orElse: () => ThemeService.presets.first,
+        );
 
         return Stack(
           fit: StackFit.expand,
@@ -37,13 +44,15 @@ class MacBackgroundWidget extends StatelessWidget {
                 painter: _LedSpectrumBackgroundPainter(
                   isPlaying: isPlaying,
                   spectrumLevels: spectrum,
+                  litColor: accent,
+                  peakColor: currentPreset.peakColor,
                 ),
               )
             else if (visualizerType != VisualizerType.pureBlack)
               Opacity(
                 opacity: (0.85 + 0.15 * fullscreenProgress).clamp(0.0, 1.0),
                 child: VisualizerStageWidget(
-                  key: ValueKey(visualizerType),
+                  key: ValueKey('${visualizerType.index}_${theme.currentThemeId}_${accent.toARGB32()}'),
                   activeType: visualizerType,
                 ),
               ),
@@ -58,10 +67,14 @@ class MacBackgroundWidget extends StatelessWidget {
 class _LedSpectrumBackgroundPainter extends CustomPainter {
   final bool isPlaying;
   final List<double> spectrumLevels;
+  final Color litColor;
+  final Color peakColor;
 
   _LedSpectrumBackgroundPainter({
     required this.isPlaying,
     required this.spectrumLevels,
+    required this.litColor,
+    required this.peakColor,
   });
 
   @override
@@ -83,9 +96,6 @@ class _LedSpectrumBackgroundPainter extends CustomPainter {
       ..color = unlitColor
       ..style = PaintingStyle.fill;
 
-    // 点亮态与顶峰指示色
-    final litColor = UIConfig.accent;
-    const peakColor = Color(0xFFFF758C);
     final litPaint = Paint()..style = PaintingStyle.fill;
 
     // 绘制 48 列点阵
@@ -125,6 +135,9 @@ class _LedSpectrumBackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LedSpectrumBackgroundPainter oldDelegate) {
-    return isPlaying || oldDelegate.isPlaying != isPlaying;
+    return isPlaying ||
+        oldDelegate.isPlaying != isPlaying ||
+        oldDelegate.litColor != litColor ||
+        oldDelegate.peakColor != peakColor;
   }
 }

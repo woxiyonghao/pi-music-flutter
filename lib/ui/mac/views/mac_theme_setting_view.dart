@@ -23,88 +23,93 @@ class MacThemeSettingView extends StatefulWidget {
 class _MacThemeSettingViewState extends State<MacThemeSettingView> {
   @override
   Widget build(BuildContext context) {
-    final theme = ThemeService.instance;
-    final accent = theme.accentColor;
+    return ListenableBuilder(
+      listenable: ThemeService.instance,
+      builder: (context, _) {
+        final theme = ThemeService.instance;
+        final accent = theme.accentColor;
 
-    return GlassCard(
-      borderRadius: UIConfig.containerRounding,
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. 顶部 Header 栏：主标题「主题」，右侧「恢复名机预设」按钮
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return GlassCard(
+          borderRadius: UIConfig.containerRounding,
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '主题',
-                style: TextStyle(
-                  fontSize: UIConfig.fontMedium,
-                  fontWeight: FontWeight.bold,
-                  color: UIConfig.textActive,
-                ),
-              ),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  theme.resetToDefault();
-                  widget.onVisualizerChanged(VisualizerType.ledSpectrum);
-                },
-                child: Container(
-                  height: 28.0,
-                  padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color.fromRGBO(40, 48, 64, 0.7),
-                    borderRadius: BorderRadius.circular(7.0),
-                    border: Border.all(
-                      color: const Color.fromRGBO(255, 255, 255, 0.12),
-                    ),
-                  ),
-                  child: const Text(
-                    '恢复名机预设',
+              // 1. 顶部 Header 栏：主标题「主题」，右侧「恢复名机预设」按钮
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '主题',
                     style: TextStyle(
-                      fontSize: UIConfig.fontSmall,
-                      color: UIConfig.textNormal,
+                      fontSize: UIConfig.fontMedium,
+                      fontWeight: FontWeight.bold,
+                      color: UIConfig.textActive,
                     ),
                   ),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      theme.resetToDefault();
+                      widget.onVisualizerChanged(VisualizerType.ledSpectrum);
+                    },
+                    child: Container(
+                      height: 28.0,
+                      padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color.fromRGBO(40, 48, 64, 0.7),
+                        borderRadius: BorderRadius.circular(7.0),
+                        border: Border.all(
+                          color: const Color.fromRGBO(255, 255, 255, 0.12),
+                        ),
+                      ),
+                      child: const Text(
+                        '恢复名机预设',
+                        style: TextStyle(
+                          fontSize: UIConfig.fontSmall,
+                          color: UIConfig.textNormal,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14.0),
+
+              // 2. 独立滚动区域
+              Expanded(
+                child: ListView(
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    // 板块一：预设 (8款名机经典主题)
+                    _buildSectionContainer(
+                      title: '预设',
+                      child: _buildPresetsGrid(theme),
+                    ),
+                    const SizedBox(height: 12.0),
+
+                    // 板块二：背景律动 (11款律动模式)
+                    _buildSectionContainer(
+                      title: '背景律动',
+                      child: _buildVisualizerModesGrid(theme),
+                    ),
+                    const SizedBox(height: 12.0),
+
+                    // 板块三：自由调色 (macOS HSV 色轮与调色台)
+                    _buildSectionContainer(
+                      title: '自由调色',
+                      headerTrailing: _buildHexPill(accent),
+                      child: _buildColorWheelSection(theme),
+                    ),
+                    const SizedBox(height: 16.0),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14.0),
-
-          // 2. 独立滚动区域
-          Expanded(
-            child: ListView(
-              physics: const BouncingScrollPhysics(),
-              children: [
-                // 板块一：预设 (8款名机经典主题)
-                _buildSectionContainer(
-                  title: '预设',
-                  child: _buildPresetsGrid(theme),
-                ),
-                const SizedBox(height: 12.0),
-
-                // 板块二：背景律动 (11款律动模式)
-                _buildSectionContainer(
-                  title: '背景律动',
-                  child: _buildVisualizerModesGrid(theme),
-                ),
-                const SizedBox(height: 12.0),
-
-                // 板块三：自由调色 (macOS HSV 色轮与调色台)
-                _buildSectionContainer(
-                  title: '自由调色',
-                  headerTrailing: _buildHexPill(accent),
-                  child: _buildColorWheelSection(theme),
-                ),
-                const SizedBox(height: 16.0),
-              ],
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 

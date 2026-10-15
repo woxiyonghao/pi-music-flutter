@@ -1,48 +1,348 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
-/// 经典麦景图 (McIntosh) 湖蓝夜光双动圈大表头 - 高保真物理拟真版
+/// 表头多品牌发烧视觉调色板 (1:1 严格对齐 C++ VUMeterRenderer.cpp 8大品牌名机 + Custom HSV 动态调色)
+class _MeterPalette {
+  final Color chassisBg;
+  final Color meterBgDark;
+  final Color meterBgMid;
+  final Color meterBgBottom;
+  final Color glowCore;
+  final Color glowOuter;
+  final Color topGlow;
+  final Color bezelOuter;
+  final Color bezelInner;
+  final Color arcWattsColor;
+  final Color arcDbColor;
+  final Color tickSafe;
+  final Color tickTextSafe;
+  final Color overloadRed;
+  final Color needleColor;
+  final Color needleShadow;
+  final Color pivotBase;
+  final Color pivotRing;
+  final Color footerBadge;
+  final Color pgLedGreen;
+  final String subLabel;
+  final String footerLeft;
+  final String footerRight;
+
+  const _MeterPalette({
+    required this.chassisBg,
+    required this.meterBgDark,
+    required this.meterBgMid,
+    required this.meterBgBottom,
+    required this.glowCore,
+    required this.glowOuter,
+    required this.topGlow,
+    required this.bezelOuter,
+    required this.bezelInner,
+    required this.arcWattsColor,
+    required this.arcDbColor,
+    required this.tickSafe,
+    required this.tickTextSafe,
+    required this.overloadRed,
+    required this.needleColor,
+    required this.needleShadow,
+    required this.pivotBase,
+    required this.pivotRing,
+    required this.footerBadge,
+    required this.pgLedGreen,
+    required this.subLabel,
+    required this.footerLeft,
+    required this.footerRight,
+  });
+}
+
+/// 经典名机动态双动圈大表头 - 高保真物理拟真版 (支持麦景图湖蓝、金嗓子香槟金、复古琥珀、马兰士翡翠等8大名机及自定义色全量动态映射)
 /// 具备：双重对数刻度 (瓦数 + 分贝)、动圈红针动态视差投影、玻璃反光、角隅六角螺栓、双白炽灯漫射背光与透镜高光
 class McIntoshMeterPainter extends CustomPainter {
   final double leftAngle;   // 已经过物理阻尼滤波的弧度
   final double rightAngle;  // 已经过物理阻尼滤波的弧度
-  final String title;
+  final String? title;
+  final int themeId;
   final Color? accentColor;
 
   static const double minAngle = -pi * 0.74;
   static const double sweepAngle = pi * 0.48;
 
-  // 麦景图经典发烧配色规范
-  static const Color chassisBg = Color(0xFF030509);        // 深邃黑曜石拉丝底板
-  static const Color meterBgDark = Color(0xFF010E20);      // 表盘深邃暗蓝底色
-  static const Color meterBgMid = Color(0xFF021B38);       // 弧面过渡海蓝
-  static const Color glowCore = Color(0xB800C4EF);         // 灯泡核心强光
-  static const Color glowOuter = Color(0x400077B6);        // 弥散外层柔和湖蓝
-  static const Color bezelOuter = Color(0xFF253040);       // 压铸金属外框
-  static const Color bezelInner = Color(0xFF0B121C);       // 框内倒角阴影
-  static const Color arcWattsColor = Color(0xFFBAE6FD);    // 瓦数主刻度弧线
-  static const Color arcDbColor = Color(0xCC7DD3FC);       // 分贝主刻度弧线
-  static const Color tickSafe = Color(0xF0E0F2FE);         // 安全刻度线
-  static const Color tickTextSafe = Color(0xEEBAE6FD);     // 安全刻度文字
-  static const Color overloadRed = Color(0xFFFF2519);      // 过载警示红 (>=0dB / >100W)
-  static const Color needleColor = Color(0xFFFF2B1D);      // 亮红动圈指针
-  static const Color needleShadow = Color(0x80010E20);     // 指针投影在表盘的视差背影
-  static const Color pivotBase = Color(0xFF161E28);        // 轴心石墨底座
-  static const Color pivotRing = Color(0xFF94A3B8);        // 轴心外圈金属圈
-  static const Color footerBadge = Color(0xB438BDF8);      // 底部铭牌青
-  static const Color pgLedGreen = Color(0xFF00F5D4);       // POWER GUARD 祖母绿指示灯
-
   McIntoshMeterPainter({
     required this.leftAngle,
     required this.rightAngle,
-    this.title = 'McIntosh Precision Power Output Meter · Bit-Perfect 192kHz/24Bit ALSA',
+    this.title,
+    this.themeId = 1,
     this.accentColor,
   });
 
+  static _MeterPalette _resolvePalette(int themeId, Color? customCol) {
+    if (themeId == 4 || (customCol != null && themeId != 0 && themeId != 1 && themeId != 2 && themeId != 3 && themeId != 5 && themeId != 6 && themeId != 7 && themeId != 8)) {
+      final col = customCol ?? const Color(0xFF00B4D8);
+      final rf = col.r;
+      final gf = col.g;
+      final bf = col.b;
+
+      final chassisR = (rf * 14.0 + 3.0).round().clamp(0, 255);
+      final chassisG = (gf * 14.0 + 3.0).round().clamp(0, 255);
+      final chassisB = (bf * 14.0 + 4.0).round().clamp(0, 255);
+
+      final bgR = (rf * 28.0 + 4.0).round().clamp(0, 255);
+      final bgG = (gf * 28.0 + 4.0).round().clamp(0, 255);
+      final bgB = (bf * 28.0 + 6.0).round().clamp(0, 255);
+
+      final coreR = (rf * 160.0 + 95.0).round().clamp(0, 255);
+      final coreG = (gf * 160.0 + 95.0).round().clamp(0, 255);
+      final coreB = (bf * 160.0 + 95.0).round().clamp(0, 255);
+
+      final arcR = (rf * 180.0 + 75.0).round().clamp(0, 255);
+      final arcG = (gf * 180.0 + 75.0).round().clamp(0, 255);
+      final arcB = (bf * 180.0 + 75.0).round().clamp(0, 255);
+
+      return _MeterPalette(
+        chassisBg: Color.fromARGB(255, chassisR, chassisG, chassisB),
+        meterBgDark: Color.fromARGB(255, bgR, bgG, bgB),
+        meterBgMid: Color.fromARGB(255, (bgR * 1.8).round().clamp(0, 255), (bgG * 1.8).round().clamp(0, 255), (bgB * 1.8).round().clamp(0, 255)),
+        meterBgBottom: Color.fromARGB(255, (bgR * 2.6).round().clamp(0, 255), (bgG * 2.6).round().clamp(0, 255), (bgB * 2.6).round().clamp(0, 255)),
+        glowCore: Color.fromARGB(180, coreR, coreG, coreB),
+        glowOuter: col.withValues(alpha: 0.35),
+        topGlow: col.withValues(alpha: 0.22),
+        bezelOuter: Color.fromARGB(255, (chassisR * 2.5).round().clamp(0, 255), (chassisG * 2.5).round().clamp(0, 255), (chassisB * 2.5).round().clamp(0, 255)),
+        bezelInner: const Color(0xFF0B121C),
+        arcWattsColor: Color.fromARGB(220, arcR, arcG, arcB),
+        arcDbColor: Color.fromARGB(200, (arcR * 0.9).round(), (arcG * 0.9).round(), (arcB * 0.9).round()),
+        tickSafe: Color.fromARGB(235, min(255, arcR + 20), min(255, arcG + 20), min(255, arcB + 20)),
+        tickTextSafe: Color.fromARGB(220, arcR, arcG, arcB),
+        overloadRed: const Color(0xFFEF4444),
+        needleColor: const Color(0xFFFF2B1D),
+        needleShadow: Color.fromARGB(128, bgR, bgG, bgB),
+        pivotBase: const Color(0xFF161E28),
+        pivotRing: col.withValues(alpha: 0.75),
+        footerBadge: col.withValues(alpha: 0.85),
+        pgLedGreen: col,
+        subLabel: 'DECIBELS / WATTS',
+        footerLeft: 'Audiophile Custom Precision Power Output Meter · Bit-Perfect Direct Drive',
+        footerRight: 'VELVET SOUND ULTRA · FEMTOSECOND CLOCK',
+      );
+    }
+
+    switch (themeId) {
+      case 2: // Accuphase 金嗓子香槟金
+        return const _MeterPalette(
+          chassisBg: Color(0xFF0E0B08),
+          meterBgDark: Color(0xFF20190E),
+          meterBgMid: Color(0xFF382B18),
+          meterBgBottom: Color(0xFF523E1E),
+          glowCore: Color(0xC0FFDC6E),
+          glowOuter: Color(0x55D9A028),
+          topGlow: Color(0x35EAB308),
+          bezelOuter: Color(0xFF483A28),
+          bezelInner: Color(0xFF181511),
+          arcWattsColor: Color(0xFFFEF3C7),
+          arcDbColor: Color(0xCCFDE68A),
+          tickSafe: Color(0xF0FDE68A),
+          tickTextSafe: Color(0xEEFEF0B4),
+          overloadRed: Color(0xFFF97316),
+          needleColor: Color(0xFFF53C23),
+          needleShadow: Color(0x8020190E),
+          pivotBase: Color(0xFF282014),
+          pivotRing: Color(0xFFD2B478),
+          footerBadge: Color(0xC8EAB308),
+          pgLedGreen: Color(0xFF00EB96),
+          subLabel: 'DECIBELS / PEAK WATTS',
+          footerLeft: 'Accuphase Laboratory, Inc. · 40th Anniversary Dual Balanced',
+          footerRight: 'VELVET SOUND ULTRA · FEMTOSECOND CLOCK',
+        );
+      case 3: // RetroTape 复古琥珀卡座
+        return const _MeterPalette(
+          chassisBg: Color(0xFF0E0906),
+          meterBgDark: Color(0xFF1C1009),
+          meterBgMid: Color(0xFF341E10),
+          meterBgBottom: Color(0xFF4E2C16),
+          glowCore: Color(0xC0FFB446),
+          glowOuter: Color(0x50F97316),
+          topGlow: Color(0x35F97316),
+          bezelOuter: Color(0xFF422818),
+          bezelInner: Color(0xFF1A0E08),
+          arcWattsColor: Color(0xFFFED7AA),
+          arcDbColor: Color(0xCCFDBA74),
+          tickSafe: Color(0xF0FDBA74),
+          tickTextSafe: Color(0xEEFED7AA),
+          overloadRed: Color(0xFFEF4444),
+          needleColor: Color(0xFFFF453A),
+          needleShadow: Color(0x801C1009),
+          pivotBase: Color(0xFF23160F),
+          pivotRing: Color(0xFFB4825A),
+          footerBadge: Color(0xC8F97316),
+          pgLedGreen: Color(0xFFF59E0B),
+          subLabel: 'NAB / IEC EQUALIZATION',
+          footerLeft: 'Studer Revox Master Tape · Pure Analog Direct Calibration',
+          footerRight: '15 IPS 2-TRACK MASTER · 0VU = +4dBu',
+        );
+      case 0: // ModernCrimson 现代深空玫红
+        return const _MeterPalette(
+          chassisBg: Color(0xFF0C060A),
+          meterBgDark: Color(0xFF16080E),
+          meterBgMid: Color(0xFF2E0F1D),
+          meterBgBottom: Color(0xFF48142C),
+          glowCore: Color(0xB8FF6482),
+          glowOuter: Color(0x45FA2D48),
+          topGlow: Color(0x35FA2D48),
+          bezelOuter: Color(0xFF3D202A),
+          bezelInner: Color(0xFF160A10),
+          arcWattsColor: Color(0xFFFFDCE6),
+          arcDbColor: Color(0xCCFECDD3),
+          tickSafe: Color(0xF0FECDD3),
+          tickTextSafe: Color(0xEEFFDCE6),
+          overloadRed: Color(0xFFFFD700),
+          needleColor: Color(0xFFFF2D55),
+          needleShadow: Color(0x8016080E),
+          pivotBase: Color(0xFF1E1016),
+          pivotRing: Color(0xFFB48296),
+          footerBadge: Color(0xC8FA2D48),
+          pgLedGreen: Color(0xFFFF3366),
+          subLabel: 'LUFS / TRUE PEAK AUDIO',
+          footerLeft: 'Studio Reference Monitor · Bit-Perfect 384kHz 32-Bit Float',
+          footerRight: 'APPLE LOSSLESS AUDIO · ULTRA HI-RES',
+        );
+      case 5: // Marantz 经典马兰士
+        return const _MeterPalette(
+          chassisBg: Color(0xFF030E0A),
+          meterBgDark: Color(0xFF041812),
+          meterBgMid: Color(0xFF0A2E22),
+          meterBgBottom: Color(0xFF0F4231),
+          glowCore: Color(0xB834D399),
+          glowOuter: Color(0x5010B981),
+          topGlow: Color(0x3510B981),
+          bezelOuter: Color(0xFF1C3A2C),
+          bezelInner: Color(0xFF0A1C14),
+          arcWattsColor: Color(0xFFA7F3D0),
+          arcDbColor: Color(0xCCD1FAE5),
+          tickSafe: Color(0xF0D1FAE5),
+          tickTextSafe: Color(0xEEA7F3D0),
+          overloadRed: Color(0xFFEF4444),
+          needleColor: Color(0xFFFF3B30),
+          needleShadow: Color(0x80041812),
+          pivotBase: Color(0xFF14241C),
+          pivotRing: Color(0xFF6EE7B7),
+          footerBadge: Color(0xB410B981),
+          pgLedGreen: Color(0xFF10B981),
+          subLabel: 'SA-CD / DSD DIRECT STREAM',
+          footerLeft: 'Marantz Reference Porthole · Pure Class-A Discrete HDAM-SA3',
+          footerRight: 'MUSICAL MASTERING · ZERO NEGATIVE FEEDBACK',
+        );
+      case 6: // Burmester 柏林之声冷银
+        return const _MeterPalette(
+          chassisBg: Color(0xFF080B10),
+          meterBgDark: Color(0xFF101620),
+          meterBgMid: Color(0xFF1E2838),
+          meterBgBottom: Color(0xFF2C3A50),
+          glowCore: Color(0xB8F1F5F9),
+          glowOuter: Color(0x4594A3B8),
+          topGlow: Color(0x30CBD5E1),
+          bezelOuter: Color(0xFF334155),
+          bezelInner: Color(0xFF0F172A),
+          arcWattsColor: Color(0xFFF1F5F9),
+          arcDbColor: Color(0xCCE2E8F0),
+          tickSafe: Color(0xF0E2E8F0),
+          tickTextSafe: Color(0xEEF1F5F9),
+          overloadRed: Color(0xFFEF4444),
+          needleColor: Color(0xFFFF453A),
+          needleShadow: Color(0x80101620),
+          pivotBase: Color(0xFF1E293B),
+          pivotRing: Color(0xFFE2E8F0),
+          footerBadge: Color(0xB4CBD5E1),
+          pgLedGreen: Color(0xFF38BDF8),
+          subLabel: 'PRECISION POWER / BALANCED',
+          footerLeft: 'Burmester Audiosysteme Berlin · Reference Line Direct Drive',
+          footerRight: 'CHROME PRECISION · DUAL-MONO X-AMP',
+        );
+      case 7: // NaimAudio 英国名暗夜翠
+        return const _MeterPalette(
+          chassisBg: Color(0xFF070C08),
+          meterBgDark: Color(0xFF0C160E),
+          meterBgMid: Color(0xFF162B1A),
+          meterBgBottom: Color(0xFF1E3D24),
+          glowCore: Color(0xB84ADE80),
+          glowOuter: Color(0x5022C55E),
+          topGlow: Color(0x3522C55E),
+          bezelOuter: Color(0xFF1E3824),
+          bezelInner: Color(0xFF0B1A0E),
+          arcWattsColor: Color(0xFFBBF7D0),
+          arcDbColor: Color(0xCCD1FAE5),
+          tickSafe: Color(0xF0DCFCE7),
+          tickTextSafe: Color(0xEEBBF7D0),
+          overloadRed: Color(0xFFEF4444),
+          needleColor: Color(0xFFFF3B30),
+          needleShadow: Color(0x800C160E),
+          pivotBase: Color(0xFF16241A),
+          pivotRing: Color(0xFF4ADE80),
+          footerBadge: Color(0xB422C55E),
+          pgLedGreen: Color(0xFF22C55E),
+          subLabel: 'PACE, RHYTHM & TIMING (PRaT)',
+          footerLeft: 'Naim Audio Salisbury · Discrete Regulated Power Supply (DR)',
+          footerRight: 'STATEMENT TOPOLOGY · ULTRA-LOW NOISE FLOOR',
+        );
+      case 8: // MarkLevinson 马克莱文森赤晶
+        return const _MeterPalette(
+          chassisBg: Color(0xFF0E0608),
+          meterBgDark: Color(0xFF1A0A0E),
+          meterBgMid: Color(0xFF32121A),
+          meterBgBottom: Color(0xFF4D1A27),
+          glowCore: Color(0xB8F87171),
+          glowOuter: Color(0x50EF4444),
+          topGlow: Color(0x35EF4444),
+          bezelOuter: Color(0xFF3A1C22),
+          bezelInner: Color(0xFF160A0D),
+          arcWattsColor: Color(0xFFFECACA),
+          arcDbColor: Color(0xCCFEE2E2),
+          tickSafe: Color(0xF0FEE2E2),
+          tickTextSafe: Color(0xEEFECACA),
+          overloadRed: Color(0xFFFFD700),
+          needleColor: Color(0xFFFF3B30),
+          needleShadow: Color(0x801A0A0E),
+          pivotBase: Color(0xFF241216),
+          pivotRing: Color(0xFFF87171),
+          footerBadge: Color(0xB4EF4444),
+          pgLedGreen: Color(0xFFEF4444),
+          subLabel: 'PURE PATH DUAL-MONAURAL',
+          footerLeft: 'Mark Levinson Reference · Pure Path Direct-Coupled Architecture',
+          footerRight: 'PRECISION LINK DAC · 32-BIT ESS PRO CALIBRATED',
+        );
+      case 1: // McIntosh 麦景图湖蓝
+      default:
+        return const _MeterPalette(
+          chassisBg: Color(0xFF030712),
+          meterBgDark: Color(0xFF010E20),
+          meterBgMid: Color(0xFF021B38),
+          meterBgBottom: Color(0xFF03264C),
+          glowCore: Color(0xB800C4EF),
+          glowOuter: Color(0x400077B6),
+          topGlow: Color(0x3500B4D8),
+          bezelOuter: Color(0xFF253040),
+          bezelInner: Color(0xFF0B121C),
+          arcWattsColor: Color(0xFFBAE6FD),
+          arcDbColor: Color(0xCC7DD3FC),
+          tickSafe: Color(0xF0E0F2FE),
+          tickTextSafe: Color(0xEEBAE6FD),
+          overloadRed: Color(0xFFFF2519),
+          needleColor: Color(0xFFFF2B1D),
+          needleShadow: Color(0x80010E20),
+          pivotBase: Color(0xFF161E28),
+          pivotRing: Color(0xFF94A3B8),
+          footerBadge: Color(0xB438BDF8),
+          pgLedGreen: Color(0xFF00F5D4),
+          subLabel: 'DECIBELS / WATTS',
+          footerLeft: 'McIntosh Precision Power Output Meter · Bit-Perfect 192kHz/24Bit ALSA',
+          footerRight: 'AK4191EQ + AK4499EX VELVET SOUND · FEMTOSECOND CLOCK',
+        );
+    }
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
+    final pal = _resolvePalette(themeId, accentColor);
+
     // 1. 底板：微拉丝质感深空机架底色
-    final bgPaint = Paint()..color = chassisBg;
+    final bgPaint = Paint()..color = pal.chassisBg;
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
 
     // 细致拉丝光栅横向微纹理
@@ -72,16 +372,16 @@ class McIntoshMeterPainter extends CustomPainter {
     final leftRect = Rect.fromLTWH(paddingX, offsetY, meterW, meterH);
     final rightRect = Rect.fromLTWH(paddingX * 2 + meterW, offsetY, meterW, meterH);
 
-    _drawSingleMeter(canvas, leftRect, leftAngle, 'LEFT CHANNEL');
-    _drawSingleMeter(canvas, rightRect, rightAngle, 'RIGHT CHANNEL');
+    _drawSingleMeter(canvas, leftRect, leftAngle, 'LEFT CHANNEL', pal);
+    _drawSingleMeter(canvas, rightRect, rightAngle, 'RIGHT CHANNEL', pal);
 
     // 3. 底部发烧铭牌
-    _drawFooter(canvas, size, paddingX);
+    _drawFooter(canvas, size, paddingX, pal);
   }
 
-  void _drawSingleMeter(Canvas canvas, Rect rect, double angle, String channelLabel) {
+  void _drawSingleMeter(Canvas canvas, Rect rect, double angle, String channelLabel, _MeterPalette pal) {
     // 1. 外层金属机械压铸外框与内凹倒角阴影
-    _drawMetalBezel(canvas, rect);
+    _drawMetalBezel(canvas, rect, pal);
 
     // 2. 表盘内部区域 (开启圆角裁剪)
     final dialRect = rect.deflate(6.0);
@@ -89,20 +389,20 @@ class McIntoshMeterPainter extends CustomPainter {
     canvas.clipRRect(RRect.fromRectAndRadius(dialRect, const Radius.circular(10)));
 
     // 表盘透光导光底板 (双灯泡多重径向与线性混合光效)
-    _drawDialLighting(canvas, dialRect);
+    _drawDialLighting(canvas, dialRect, pal);
 
     // 计算表头几何圆心与半径 (黄金比例定位，表针枢轴居中靠下)
     final radius = min(dialRect.width * 0.60, dialRect.height * 0.88);
     final center = Offset(dialRect.center.dx, dialRect.bottom - dialRect.height * 0.04);
 
     // 绘制双重对数分度刻度 (上方 WATTS 瓦数标度 + 下方 DECIBELS 分贝标度)
-    _drawScales(canvas, center, radius);
+    _drawScales(canvas, center, radius, pal);
 
-    // 声道标牌与经典 POWER GUARD 绿色微光指示灯
-    _drawLabelsAndLeds(canvas, dialRect, center, radius, channelLabel);
+    // 声道标牌与经典指示灯
+    _drawLabelsAndLeds(canvas, dialRect, center, radius, channelLabel, pal);
 
     // 绘制物理动圈红针 (包含真实 3D 投射阴影、背部黄铜平衡尾柄与机械枢轴)
-    _drawRealisticNeedle(canvas, center, radius, angle);
+    _drawRealisticNeedle(canvas, center, radius, angle, pal);
 
     // 玻璃表镜弧形高光反射 (拟真光学镀膜反光)
     _drawGlassReflections(canvas, dialRect);
@@ -113,11 +413,11 @@ class McIntoshMeterPainter extends CustomPainter {
     _drawCornerScrews(canvas, rect);
   }
 
-  void _drawMetalBezel(Canvas canvas, Rect rect) {
+  void _drawMetalBezel(Canvas canvas, Rect rect, _MeterPalette pal) {
     // 外层金属压铸框
     final outerBezelRRect = RRect.fromRectAndRadius(rect, const Radius.circular(14));
     final outerBezelPaint = Paint()
-      ..color = bezelOuter
+      ..color = pal.bezelOuter
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.5;
     canvas.drawRRect(outerBezelRRect, outerBezelPaint);
@@ -132,38 +432,38 @@ class McIntoshMeterPainter extends CustomPainter {
     // 内凹阴影线
     final innerShadowRect = rect.deflate(4.0);
     final innerShadowPaint = Paint()
-      ..color = bezelInner
+      ..color = pal.bezelInner
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
     canvas.drawRRect(RRect.fromRectAndRadius(innerShadowRect, const Radius.circular(11)), innerShadowPaint);
   }
 
-  void _drawDialLighting(Canvas canvas, Rect dialRect) {
+  void _drawDialLighting(Canvas canvas, Rect dialRect, _MeterPalette pal) {
     // 纯黑深邃背景
-    canvas.drawRect(dialRect, Paint()..color = meterBgDark);
+    canvas.drawRect(dialRect, Paint()..color = pal.meterBgDark);
 
     // 底部弧面向上渐变
     final baseGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: const [meterBgDark, meterBgMid, Color(0xFF03264C)],
+      colors: [pal.meterBgDark, pal.meterBgMid, pal.meterBgBottom],
       stops: const [0.0, 0.65, 1.0],
     );
     canvas.drawRect(dialRect, Paint()..shader = baseGradient.createShader(dialRect));
 
-    // 麦景图标志性底部双灯泡散射 (双白炽灯泡位于左右两侧底部)
+    // 底部双白炽灯泡散射 (位于左右两侧底部)
     final lampY = dialRect.bottom - dialRect.height * 0.12;
     final leftLamp = Offset(dialRect.center.dx - dialRect.width * 0.26, lampY);
     final rightLamp = Offset(dialRect.center.dx + dialRect.width * 0.26, lampY);
     final lampRadius = dialRect.width * 0.65;
 
     final lampShaderL = RadialGradient(
-      colors: const [glowCore, glowOuter, Colors.transparent],
+      colors: [pal.glowCore, pal.glowOuter, Colors.transparent],
       stops: const [0.0, 0.45, 1.0],
     ).createShader(Rect.fromCircle(center: leftLamp, radius: lampRadius));
 
     final lampShaderR = RadialGradient(
-      colors: const [glowCore, glowOuter, Colors.transparent],
+      colors: [pal.glowCore, pal.glowOuter, Colors.transparent],
       stops: const [0.0, 0.45, 1.0],
     ).createShader(Rect.fromCircle(center: rightLamp, radius: lampRadius));
 
@@ -175,7 +475,7 @@ class McIntoshMeterPainter extends CustomPainter {
     final topGlow = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: const [Color(0x3500B4D8), Colors.transparent],
+      colors: [pal.topGlow, Colors.transparent],
     );
     canvas.drawRect(
       Rect.fromLTWH(dialRect.left, dialRect.top, dialRect.width, dialRect.height * 0.28),
@@ -183,13 +483,13 @@ class McIntoshMeterPainter extends CustomPainter {
     );
   }
 
-  void _drawScales(Canvas canvas, Offset center, double radius) {
+  void _drawScales(Canvas canvas, Offset center, double radius, _MeterPalette pal) {
     final wattsRadius = radius;
     final dbRadius = radius - 16.0;
 
     // 1. 上层 WATTS 瓦数主弧线
     final arcWattsPaint = Paint()
-      ..color = arcWattsColor
+      ..color = pal.arcWattsColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.4;
     canvas.drawArc(
@@ -202,7 +502,7 @@ class McIntoshMeterPainter extends CustomPainter {
 
     // 2. 下层 DECIBELS 分贝主弧线
     final arcDbPaint = Paint()
-      ..color = arcDbColor
+      ..color = pal.arcDbColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
     canvas.drawArc(
@@ -213,7 +513,7 @@ class McIntoshMeterPainter extends CustomPainter {
       arcDbPaint,
     );
 
-    // 3. 经典麦景图 WATTS 标度 (8 档对数: .001, .01, .1, 1.0, 10, 100, 200, 400)
+    // 3. 经典 WATTS 标度 (8 档对数: .001, .01, .1, 1.0, 10, 100, 200, 400)
     final wattsMarks = [
       (0.00, '.001'),
       (0.14, '.01'),
@@ -235,7 +535,7 @@ class McIntoshMeterPainter extends CustomPainter {
       final pInner = Offset(center.dx + cos(a) * (wattsRadius - 10.0), center.dy + sin(a) * (wattsRadius - 10.0));
 
       final tickPaint = Paint()
-        ..color = isOverload ? overloadRed : tickSafe
+        ..color = isOverload ? pal.overloadRed : pal.tickSafe
         ..strokeWidth = isOverload ? 2.4 : 1.8;
       canvas.drawLine(pInner, pOuter, tickPaint);
 
@@ -244,7 +544,7 @@ class McIntoshMeterPainter extends CustomPainter {
         text: TextSpan(
           text: label,
           style: TextStyle(
-            color: isOverload ? overloadRed : tickTextSafe,
+            color: isOverload ? pal.overloadRed : pal.tickTextSafe,
             fontSize: 9.5,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.3,
@@ -260,7 +560,7 @@ class McIntoshMeterPainter extends CustomPainter {
       tp.paint(canvas, textPos);
     }
 
-    // 4. 经典麦景图 DECIBELS 标度 (-50 到 +3 dB)
+    // 4. 经典 DECIBELS 标度 (-50 到 +3 dB)
     final dbMarks = [
       (0.00, '-50', false),
       (0.14, '-40', false),
@@ -288,7 +588,7 @@ class McIntoshMeterPainter extends CustomPainter {
       final pInner = Offset(center.dx + cos(a) * (dbRadius - tickLen), center.dy + sin(a) * (dbRadius - tickLen));
 
       final tickPaint = Paint()
-        ..color = isRed ? overloadRed : tickSafe.withValues(alpha: 0.85)
+        ..color = isRed ? pal.overloadRed : pal.tickSafe.withValues(alpha: 0.85)
         ..strokeWidth = isRed ? 2.0 : (isMajor ? 1.5 : 1.0);
       canvas.drawLine(pInner, pOuter, tickPaint);
 
@@ -297,7 +597,7 @@ class McIntoshMeterPainter extends CustomPainter {
           text: TextSpan(
             text: label,
             style: TextStyle(
-              color: isRed ? overloadRed : tickTextSafe.withValues(alpha: 0.90),
+              color: isRed ? pal.overloadRed : pal.tickTextSafe.withValues(alpha: 0.90),
               fontSize: 8.5,
               fontWeight: FontWeight.w600,
             ),
@@ -315,11 +615,11 @@ class McIntoshMeterPainter extends CustomPainter {
 
     // 5. 0dB 到 +3dB 红色安全警示条带
     final redArcPaint = Paint()
-      ..color = overloadRed
+      ..color = pal.overloadRed
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3.0;
-    final redStartAngle = minAngle + sweepAngle * 0.86;
-    final redSweep = sweepAngle * 0.14;
+    const redStartAngle = minAngle + sweepAngle * 0.86;
+    const redSweep = sweepAngle * 0.14;
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: wattsRadius),
       redStartAngle,
@@ -329,13 +629,13 @@ class McIntoshMeterPainter extends CustomPainter {
     );
   }
 
-  void _drawLabelsAndLeds(Canvas canvas, Rect rect, Offset center, double radius, String channelLabel) {
+  void _drawLabelsAndLeds(Canvas canvas, Rect rect, Offset center, double radius, String channelLabel, _MeterPalette pal) {
     // 1. 声道标牌
     final titleTp = TextPainter(
       text: TextSpan(
         text: channelLabel,
-        style: const TextStyle(
-          color: arcWattsColor,
+        style: TextStyle(
+          color: pal.arcWattsColor,
           fontSize: 11,
           fontWeight: FontWeight.bold,
           letterSpacing: 2.2,
@@ -345,20 +645,20 @@ class McIntoshMeterPainter extends CustomPainter {
     )..layout();
     titleTp.paint(canvas, Offset(rect.center.dx - titleTp.width * 0.5, rect.top + 16.0));
 
-    // 2. POWER GUARD 祖母绿指示灯 (麦景图传奇标志，左右各一颗)
+    // 2. POWER GUARD 微光宝石指示灯 (左右各一颗)
     final ledY = rect.top + 16.0 + titleTp.height * 0.5;
     final leftLedX = rect.center.dx - titleTp.width * 0.5 - 20.0;
     final rightLedX = rect.center.dx + titleTp.width * 0.5 + 20.0;
 
-    _drawJewelLed(canvas, Offset(leftLedX, ledY), pgLedGreen);
-    _drawJewelLed(canvas, Offset(rightLedX, ledY), pgLedGreen);
+    _drawJewelLed(canvas, Offset(leftLedX, ledY), pal.pgLedGreen);
+    _drawJewelLed(canvas, Offset(rightLedX, ledY), pal.pgLedGreen);
 
-    // 3. 中心 UNITS 单位标示
+    // 3. 中心 UNITS 单位标示 (WATTS + DECIBELS)
     final wattsTp = TextPainter(
-      text: const TextSpan(
+      text: TextSpan(
         text: 'WATTS',
         style: TextStyle(
-          color: arcWattsColor,
+          color: pal.arcWattsColor,
           fontSize: 10,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.5,
@@ -369,10 +669,10 @@ class McIntoshMeterPainter extends CustomPainter {
     wattsTp.paint(canvas, Offset(rect.center.dx - wattsTp.width * 0.5, center.dy - radius * 0.44));
 
     final decibelsTp = TextPainter(
-      text: const TextSpan(
+      text: TextSpan(
         text: 'DECIBELS',
         style: TextStyle(
-          color: arcDbColor,
+          color: pal.arcDbColor,
           fontSize: 9,
           fontWeight: FontWeight.w600,
           letterSpacing: 1.2,
@@ -396,7 +696,7 @@ class McIntoshMeterPainter extends CustomPainter {
     canvas.drawCircle(pos + const Offset(-0.8, -0.8), 1.2, Paint()..color = Colors.white.withValues(alpha: 0.85));
   }
 
-  void _drawRealisticNeedle(Canvas canvas, Offset center, double radius, double angle) {
+  void _drawRealisticNeedle(Canvas canvas, Offset center, double radius, double angle, _MeterPalette pal) {
     final needleLength = radius + 2.0;
     final needleTip = Offset(center.dx + cos(angle) * needleLength, center.dy + sin(angle) * needleLength);
 
@@ -406,7 +706,7 @@ class McIntoshMeterPainter extends CustomPainter {
       center.dy + sin(angle - 0.035) * (needleLength - 2.0) + 5.0,
     );
     final shadowPaint = Paint()
-      ..color = needleShadow
+      ..color = pal.needleShadow
       ..strokeWidth = 4.0
       ..strokeCap = StrokeCap.round
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
@@ -421,15 +721,15 @@ class McIntoshMeterPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(center, tailTip, tailPaint);
 
-    // 3. 亮红动圈实体指针本体 (微发光 + 纤细纯红钢针)
+    // 3. 动圈实体指针本体 (微发光 + 纤细钢针)
     final glowPaint = Paint()
-      ..color = const Color(0x50FF3B30)
+      ..color = pal.needleColor.withValues(alpha: 0.32)
       ..strokeWidth = 5.5
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(center, needleTip, glowPaint);
 
     final needlePaint = Paint()
-      ..color = needleColor
+      ..color = pal.needleColor
       ..strokeWidth = 2.2
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(center, needleTip, needlePaint);
@@ -443,19 +743,19 @@ class McIntoshMeterPainter extends CustomPainter {
 
     // 4. 三层同心机械轴盖 (Machined Hub with Chrome Bevel)
     // 底层石墨固定盘
-    canvas.drawCircle(center, 13.0, Paint()..color = pivotBase);
+    canvas.drawCircle(center, 13.0, Paint()..color = pal.pivotBase);
     // 中层阳极氧化铝倒角外圈
     final ringPaint = Paint()
-      ..color = pivotRing
+      ..color = pal.pivotRing
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
     canvas.drawCircle(center, 13.0, ringPaint);
 
     // 顶层镀铬紧固轴心
-    final chromeGrad = RadialGradient(
-      center: const Alignment(-0.3, -0.3),
-      colors: const [Color(0xFFE2E8F0), Color(0xFF64748B), Color(0xFF1E293B)],
-      stops: const [0.0, 0.6, 1.0],
+    final chromeGrad = const RadialGradient(
+      center: Alignment(-0.3, -0.3),
+      colors: [Color(0xFFE2E8F0), Color(0xFF64748B), Color(0xFF1E293B)],
+      stops: [0.0, 0.6, 1.0],
     );
     canvas.drawCircle(center, 7.5, Paint()..shader = chromeGrad.createShader(Rect.fromCircle(center: center, radius: 7.5)));
 
@@ -513,12 +813,15 @@ class McIntoshMeterPainter extends CustomPainter {
     }
   }
 
-  void _drawFooter(Canvas canvas, Size size, double paddingX) {
+  void _drawFooter(Canvas canvas, Size size, double paddingX, _MeterPalette pal) {
+    final leftText = title ?? pal.footerLeft;
+    final rightText = pal.footerRight;
+
     final leftTp = TextPainter(
       text: TextSpan(
-        text: title,
-        style: const TextStyle(
-          color: footerBadge,
+        text: leftText,
+        style: TextStyle(
+          color: pal.footerBadge,
           fontSize: 10,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.8,
@@ -528,10 +831,10 @@ class McIntoshMeterPainter extends CustomPainter {
     )..layout();
 
     final rightTp = TextPainter(
-      text: const TextSpan(
-        text: 'AK4191EQ + AK4499EX VELVET SOUND · FEMTOSECOND CLOCK',
+      text: TextSpan(
+        text: rightText,
         style: TextStyle(
-          color: footerBadge,
+          color: pal.footerBadge,
           fontSize: 10,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.8,
@@ -554,6 +857,7 @@ class McIntoshMeterPainter extends CustomPainter {
     return oldDelegate.leftAngle != leftAngle ||
         oldDelegate.rightAngle != rightAngle ||
         oldDelegate.title != title ||
+        oldDelegate.themeId != themeId ||
         oldDelegate.accentColor != accentColor;
   }
 }

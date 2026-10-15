@@ -22,9 +22,12 @@ class SiriWavePainter extends CustomPainter {
   static const Color colCoreTop = Color(0xFFFFFFFF);
   static const Color colCoreBot = Color(0xFFE2E8F0);
 
+  final Color? accentColor;
+
   const SiriWavePainter({
     required this.spectrumLevels,
     required this.animTime,
+    this.accentColor,
     this.isPlaying = true,
   });
 
@@ -68,8 +71,8 @@ class SiriWavePainter extends CustomPainter {
       freq: 2.2,
       phase: 0.0,
       speedT: animTime * 1.0,
-      colTop: colCyanTop.withValues(alpha: 0.55),
-      colBot: colCyanBot.withValues(alpha: 0.18),
+      colTop: (accentColor != null ? accentColor!.withValues(alpha: 0.58) : colCyanTop.withValues(alpha: 0.55)),
+      colBot: (accentColor != null ? accentColor!.withValues(alpha: 0.20) : colCyanBot.withValues(alpha: 0.18)),
       maxHalfH: 90.0,
       gaussianPow: 3.5,
     );
@@ -147,7 +150,7 @@ class SiriWavePainter extends CustomPainter {
         pA,
         pB,
         Paint()
-          ..color = Colors.white.withValues(alpha: 0.10 * lFade)
+          ..color = (accentColor ?? Colors.white).withValues(alpha: 0.15 * lFade)
           ..strokeWidth = 3.0,
       );
       // 核心细白线

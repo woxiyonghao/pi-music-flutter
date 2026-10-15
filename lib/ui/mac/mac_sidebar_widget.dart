@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/sidebar_tab.dart';
 import '../../models/track.dart';
+import '../../services/theme_service.dart';
 import '../../theme/ui_config.dart';
 import '../common/glass_card.dart';
 
@@ -228,18 +229,18 @@ class MacSidebarWidget extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
               color: isSelected
-                  ? UIConfig.glassActiveTint
+                  ? ThemeService.instance.accentColor.withValues(alpha: 0.16)
                   : Colors.transparent,
               border: isSelected
                   ? Border.all(
-                      color: UIConfig.glassBorder,
+                      color: ThemeService.instance.accentColor.withValues(alpha: 0.65),
                       width: 1.0,
                     )
                   : null,
               boxShadow: isSelected
                   ? [
                       BoxShadow(
-                        color: UIConfig.accent.withOpacity(0.35),
+                        color: ThemeService.instance.accentColor.withValues(alpha: 0.28),
                         blurRadius: 8.0,
                         spreadRadius: 1.0,
                       ),
@@ -252,7 +253,7 @@ class MacSidebarWidget extends StatelessWidget {
                   iconData,
                   size: 16.0,
                   color: isSelected
-                      ? UIConfig.textActive
+                      ? ThemeService.instance.accentColor
                       : UIConfig.iconNormal,
                 ),
                 const SizedBox(width: 12.0),

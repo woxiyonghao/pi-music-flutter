@@ -326,14 +326,14 @@ class TapeReelPainter extends CustomPainter {
     final textTp = TextPainter(
       text: TextSpan(
         text: timeStr,
-        style: const TextStyle(
-          color: Color(0xFFFF9E3D),
+        style: TextStyle(
+          color: accentColor ?? const Color(0xFFFF9E3D),
           fontSize: 14,
           fontWeight: FontWeight.bold,
           fontFamily: 'monospace',
           letterSpacing: 1.5,
           shadows: [
-            Shadow(color: Color(0x80FF9E3D), blurRadius: 8),
+            Shadow(color: (accentColor ?? const Color(0xFFFF9E3D)).withValues(alpha: 0.55), blurRadius: 8),
           ],
         ),
       ),
@@ -350,7 +350,7 @@ class TapeReelPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(cRect, const Radius.circular(6)),
       Paint()
-        ..color = const Color(0x60D4AF37)
+        ..color = (accentColor?.withValues(alpha: 0.55) ?? const Color(0x60D4AF37))
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0,
     );

@@ -245,6 +245,7 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
         painter = McIntoshMeterPainter(
           leftAngle: _leftAngle,
           rightAngle: _rightAngle,
+          themeId: ThemeService.instance.currentThemeId,
           accentColor: ThemeService.instance.accentColor,
         );
         break;
@@ -274,12 +275,14 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
         painter = LedSpectrumPainter(
           levels: state.spectrumLevels,
           peakHold: _peakHold,
+          accentColor: ThemeService.instance.accentColor,
         );
         break;
       case VisualizerType.siriWave:
         painter = SiriWavePainter(
           spectrumLevels: state.spectrumLevels,
           animTime: _animTime,
+          accentColor: ThemeService.instance.accentColor,
           isPlaying: state.isPlaying,
         );
         break;
@@ -337,6 +340,7 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
         painter = LedSpectrumPainter(
           levels: state.spectrumLevels,
           peakHold: _peakHold,
+          accentColor: ThemeService.instance.accentColor,
         );
         break;
     }
