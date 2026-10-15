@@ -525,10 +525,9 @@ class AccuphaseMeterPainter extends CustomPainter {
     // 1. 动圈指针在黑曜石底板上的物理投射阴影 (向右下偏移 4px)
     final shadowTip = Offset(tip.dx + 4.0, tip.dy + 5.0);
     final shadowPaint = Paint()
-      ..color = needleShadow
+      ..color = needleShadow.withValues(alpha: 0.35)
       ..strokeWidth = 3.5
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
+      ..strokeCap = StrokeCap.round;
     canvas.drawLine(pivot + const Offset(2, 3), shadowTip, shadowPaint);
 
     // 2. 指针透光微辉光

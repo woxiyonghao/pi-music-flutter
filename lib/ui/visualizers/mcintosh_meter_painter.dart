@@ -706,10 +706,9 @@ class McIntoshMeterPainter extends CustomPainter {
       center.dy + sin(angle - 0.035) * (needleLength - 2.0) + 5.0,
     );
     final shadowPaint = Paint()
-      ..color = pal.needleShadow
+      ..color = pal.needleShadow.withValues(alpha: 0.35)
       ..strokeWidth = 4.0
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
+      ..strokeCap = StrokeCap.round;
     canvas.drawLine(center + const Offset(2.0, 3.0), shadowTip, shadowPaint);
 
     // 2. 指针后部黄铜平衡配重柄 (Counterweight spade, 延伸至轴心后方 16px)

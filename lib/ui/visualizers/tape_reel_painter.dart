@@ -215,10 +215,9 @@ class TapeReelPainter extends CustomPainter {
     canvas.drawPath(
       tapePath,
       Paint()
-        ..color = const Color(0x60000000)
+        ..color = const Color(0x40000000)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 5.0
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0),
+        ..strokeWidth = 5.0,
     );
 
     // 磁带本体

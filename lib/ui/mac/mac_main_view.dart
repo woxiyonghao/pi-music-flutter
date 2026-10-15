@@ -231,91 +231,99 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                         return Stack(
                           fit: StackFit.expand,
                           children: [
-                            // 1. 全景底层背景与音乐律动动效 (麦景图湖蓝 / 金嗓子香槟金 / 开盘机 / 48列频谱)
-                            MacBackgroundWidget(
-                              visualizerType: effectiveVisualizer,
-                              fullscreenProgress: progress,
+                            // 1. 全景底层背景与音乐律动动效 (独立 GPU 图层隔离)
+                            RepaintBoundary(
+                              child: MacBackgroundWidget(
+                                visualizerType: effectiveVisualizer,
+                                fullscreenProgress: progress,
+                              ),
                             ),
 
-                            // 2. 左侧：导航与歌单侧边栏 (230px 固定总宽度，向左上方移出)
+                            // 2. 左侧：导航与歌单侧边栏 (230px 固定总宽度，向左上方移出，独立 GPU 图层隔离)
                             if (!isFullyFullscreen)
                               Positioned(
                                 left: 0,
                                 top: 0,
                                 bottom: 0,
                                 width: UIConfig.sidebarWidth,
-                                child: Transform.translate(
-                                  offset: Offset(topNavDx, topNavDy),
-                                  child: Opacity(
-                                    opacity: opacity,
-                                    child: IgnorePointer(
-                                      ignoring: progress > 0.4,
-                                      child: MacSidebarWidget(
-                                        currentTab: _currentTab,
-                                        selectedPlaylistId: _selectedPlaylistId,
-                                        playlists: playlists,
-                                        dacName: 'Apple Direct',
-                                        isDacConnected: true,
-                                        onTabSelected: (tab) {
-                                          setState(() {
-                                            _currentTab = tab;
-                                          });
-                                          MusicDatabaseService.instance.setSetting('active_sidebar_tab', tab.index.toString());
-                                        },
-                                        onPlaylistSelected: (plId) {
-                                          setState(() {
-                                            _currentTab = SidebarTab.customPlaylist;
-                                            _selectedPlaylistId = plId;
-                                          });
-                                          MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.customPlaylist.index.toString());
-                                        },
-                                        onCreatePlaylist: _openCreatePlaylistModal,
-                                        onDacClicked: () {
-                                          setState(() {
-                                            _currentTab = SidebarTab.dacSettings;
-                                          });
-                                          MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.dacSettings.index.toString());
-                                        },
+                                child: RepaintBoundary(
+                                  child: Transform.translate(
+                                    offset: Offset(topNavDx, topNavDy),
+                                    child: Opacity(
+                                      opacity: opacity,
+                                      child: IgnorePointer(
+                                        ignoring: progress > 0.4,
+                                        child: MacSidebarWidget(
+                                          currentTab: _currentTab,
+                                          selectedPlaylistId: _selectedPlaylistId,
+                                          playlists: playlists,
+                                          dacName: 'Apple Direct',
+                                          isDacConnected: true,
+                                          onTabSelected: (tab) {
+                                            setState(() {
+                                              _currentTab = tab;
+                                            });
+                                            MusicDatabaseService.instance.setSetting('active_sidebar_tab', tab.index.toString());
+                                          },
+                                          onPlaylistSelected: (plId) {
+                                            setState(() {
+                                              _currentTab = SidebarTab.customPlaylist;
+                                              _selectedPlaylistId = plId;
+                                            });
+                                            MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.customPlaylist.index.toString());
+                                          },
+                                          onCreatePlaylist: _openCreatePlaylistModal,
+                                          onDacClicked: () {
+                                            setState(() {
+                                              _currentTab = SidebarTab.dacSettings;
+                                            });
+                                            MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.dacSettings.index.toString());
+                                          },
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
 
-                            // 3. 右上方：中央主舞台区域 (向右上方移出)
+                            // 3. 右上方：中央主舞台区域 (向右上方移出，独立 GPU 图层隔离)
                             if (!isFullyFullscreen)
                               Positioned(
                                 left: UIConfig.sidebarWidth,
                                 top: UIConfig.containerMarginY,
                                 right: UIConfig.containerMarginX,
                                 bottom: UIConfig.bottomBarOffset,
-                                child: Transform.translate(
-                                  offset: Offset(mainDx, mainDy),
-                                  child: Opacity(
-                                    opacity: opacity,
-                                    child: IgnorePointer(
-                                      ignoring: progress > 0.4,
-                                      child: _buildMainStage(tracks, activeVisualizer),
+                                child: RepaintBoundary(
+                                  child: Transform.translate(
+                                    offset: Offset(mainDx, mainDy),
+                                    child: Opacity(
+                                      opacity: opacity,
+                                      child: IgnorePointer(
+                                        ignoring: progress > 0.4,
+                                        child: _buildMainStage(tracks, activeVisualizer),
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
 
-                            // 4. 右下方：底部液态玻璃播放控制胶囊栏 (向右下方移出)
+                            // 4. 右下方：底部液态玻璃播放控制胶囊栏 (向右下方移出，独立 GPU 图层隔离)
                             if (!isFullyFullscreen)
                               Positioned(
                                 left: UIConfig.sidebarWidth + UIConfig.containerMarginX,
                                 right: UIConfig.containerMarginX,
                                 bottom: UIConfig.containerMarginY,
                                 height: UIConfig.bottomBarHeight,
-                                child: Transform.translate(
-                                  offset: Offset(bottomDx, bottomDy),
-                                  child: Opacity(
-                                    opacity: opacity,
-                                    child: IgnorePointer(
-                                      ignoring: progress > 0.4,
-                                      child: MacBottomBarWidget(
-                                        onToggleFullscreen: _toggleFullscreen,
+                                child: RepaintBoundary(
+                                  child: Transform.translate(
+                                    offset: Offset(bottomDx, bottomDy),
+                                    child: Opacity(
+                                      opacity: opacity,
+                                      child: IgnorePointer(
+                                        ignoring: progress > 0.4,
+                                        child: MacBottomBarWidget(
+                                          onToggleFullscreen: _toggleFullscreen,
+                                        ),
                                       ),
                                     ),
                                   ),

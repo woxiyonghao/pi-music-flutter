@@ -55,6 +55,18 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
   // 动画时间
   double _animTime = 0.0;
   double _lastTimestamp = 0.0;
+  bool _isSettled = false;
+
+  void _onPlayStateChanged() {
+    if (mounted) {
+      _isSettled = false;
+      if (!_ticker.isTicking) {
+        _lastTimestamp = 0.0;
+        _ticker.start();
+      }
+      setState(() {});
+    }
+  }
 
   // 音乐微光气泡粒子物理模型 (38 颗分阶气泡)
   final List<AudioBubble> _bubbles = [];
@@ -107,6 +119,14 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
   void initState() {
     super.initState();
     _currentType = widget.activeType ?? widget.initialType;
+    HifiAudioService.instance.isPlayingNotifier.addListener(_onPlayStateChanged);
+
+    final state = HifiAudioService.instance.state;
+    final isMeterMode = _currentType == VisualizerType.mcIntosh ||
+        _currentType == VisualizerType.accuphase ||
+        _currentType == VisualizerType.tapeReel ||
+        _currentType == VisualizerType.ledSpectrum ||
+        _currentType == VisualizerType.pureBlack;
 
     _ticker = createTicker((elapsed) {
       final t = elapsed.inMicroseconds / 1000000.0;
@@ -114,17 +134,43 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
       _lastTimestamp = t;
 
       _updatePhysics(dt);
+
+      if (!HifiAudioService.instance.state.isPlaying && isMeterMode) {
+        final atRest = (_leftAngle - McIntoshMeterPainter.minAngle).abs() < 0.002 &&
+            (_rightAngle - McIntoshMeterPainter.minAngle).abs() < 0.002 &&
+            _accuphaseValL < 0.002 &&
+            _accuphaseValR < 0.002;
+        if (atRest) {
+          _leftAngle = McIntoshMeterPainter.minAngle;
+          _rightAngle = McIntoshMeterPainter.minAngle;
+          _accuphaseValL = 0.0;
+          _accuphaseValR = 0.0;
+          _isSettled = true;
+          _ticker.stop(); // 彻底停止 Ticker，释放 OS VSync，CPU 直降至 0.0%
+        }
+      }
+
       setState(() {});
-    })..start();
+    });
+
+    if (state.isPlaying || !isMeterMode) {
+      _ticker.start();
+    } else {
+      _isSettled = true;
+    }
   }
 
   @override
   void didUpdateWidget(covariant VisualizerStageWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.activeType != oldWidget.activeType && widget.activeType != null) {
-      setState(() {
-        _currentType = widget.activeType!;
-      });
+      _isSettled = false;
+      _currentType = widget.activeType!;
+      if (!_ticker.isTicking) {
+        _lastTimestamp = 0.0;
+        _ticker.start();
+      }
+      setState(() {});
     }
   }
 
@@ -229,6 +275,7 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
 
   @override
   void dispose() {
+    HifiAudioService.instance.isPlayingNotifier.removeListener(_onPlayStateChanged);
     _ticker.dispose();
     super.dispose();
   }

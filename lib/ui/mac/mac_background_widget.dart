@@ -38,22 +38,26 @@ class MacBackgroundWidget extends StatelessWidget {
             // 1. 基准发烧底色 (全屏通透统一深空基底)
             const ColoredBox(color: UIConfig.mainStageBg),
 
-            // 2. 背景动效层分发
+            // 2. 背景动效层分发 (严格使用 RepaintBoundary 建立独立 GPU 合成图层，彻底阻断对前台卡片列表的重绘波及)
             if (visualizerType == VisualizerType.ledSpectrum)
-              CustomPaint(
-                painter: _LedSpectrumBackgroundPainter(
-                  isPlaying: isPlaying,
-                  spectrumLevels: spectrum,
-                  litColor: accent,
-                  peakColor: currentPreset.peakColor,
+              RepaintBoundary(
+                child: CustomPaint(
+                  painter: _LedSpectrumBackgroundPainter(
+                    isPlaying: isPlaying,
+                    spectrumLevels: spectrum,
+                    litColor: accent,
+                    peakColor: currentPreset.peakColor,
+                  ),
                 ),
               )
             else if (visualizerType != VisualizerType.pureBlack)
-              Opacity(
-                opacity: (0.85 + 0.15 * fullscreenProgress).clamp(0.0, 1.0),
-                child: VisualizerStageWidget(
-                  key: ValueKey('${visualizerType.index}_${theme.currentThemeId}_${accent.toARGB32()}'),
-                  activeType: visualizerType,
+              RepaintBoundary(
+                child: Opacity(
+                  opacity: (0.85 + 0.15 * fullscreenProgress).clamp(0.0, 1.0),
+                  child: VisualizerStageWidget(
+                    key: ValueKey('${visualizerType.index}_${theme.currentThemeId}_${accent.toARGB32()}'),
+                    activeType: visualizerType,
+                  ),
                 ),
               ),
           ],
