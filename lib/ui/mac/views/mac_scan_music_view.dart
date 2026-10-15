@@ -371,7 +371,7 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
               separatorBuilder: (context, _) => const SizedBox(width: 16.0),
               itemBuilder: (context, index) {
                 final track = tracks[index];
-                final isPlaying = currentPlaying?.id == track.id;
+                final isPlaying = currentPlaying != null && currentPlaying.matches(track);
                 final isSelected = _selectedTrackIds.contains(track.id);
 
                 return MacMusicItemWidget(

@@ -62,6 +62,38 @@ class Track {
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
+  /// 严格判断两首音轨是否为同一曲目 (深度兼容 CUE 分轨共享大文件底图与常规单曲)
+  bool matches(Track? other) {
+    if (other == null) return false;
+    if (identical(this, other)) return true;
+    if (id > 0 && other.id > 0) {
+      return id == other.id;
+    }
+    // 若任一音轨属于 CUE 分轨，则必须比对具体分轨序号与起始时间，绝不可仅按母带文件路径模糊比对
+    if (isCueTrack || other.isCueTrack) {
+      return filepath == other.filepath &&
+          trackNumber == other.trackNumber &&
+          (startTimeSec - other.startTimeSec).abs() < 0.1;
+    }
+    return filepath == other.filepath;
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! Track) return false;
+    return matches(other);
+  }
+
+  @override
+  int get hashCode {
+    if (id > 0) return id.hashCode;
+    if (isCueTrack) {
+      return Object.hash(filepath, trackNumber, (startTimeSec * 10).round());
+    }
+    return Object.hash(filepath, title);
+  }
+
   static AudioFormat formatFromInt(int val) {
     switch (val) {
       case 1:

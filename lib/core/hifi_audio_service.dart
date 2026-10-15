@@ -61,6 +61,28 @@ class HifiAudioService extends ChangeNotifier {
         isPlayingNotifier.value = isPlaying;
       }
 
+      // 检查曲目是否自然播放结束 (包含 CUE 分轨区间播完)
+      if (_state.isPlaying && !isPlaying && !_state.isPaused) {
+        _state = PlaybackState(
+          isPlaying: false,
+          isPaused: false,
+          isBitPerfect: isBitPerfect,
+          currentTime: 0.0,
+          duration: duration,
+          progress: 0.0,
+          volume: volume,
+          isMuted: isMuted,
+          playMode: _playMode,
+          activeDeviceName: 'Apple Direct',
+          activeSampleRate: _currentTrack?.sampleRate ?? 192000,
+          spectrumLevels: List.filled(12, 0.0),
+        );
+        isPlayingNotifier.value = false;
+        notifyListeners();
+        next();
+        return;
+      }
+
       // 仅在播放中或状态变更时通知监听者
       if (isPlaying || _state.isPlaying != isPlaying || _state.isPaused != isPaused) {
         _state = PlaybackState(
@@ -86,7 +108,7 @@ class HifiAudioService extends ChangeNotifier {
     if (tracks.isEmpty || startIndex < 0 || startIndex >= tracks.length) return;
     _playlistQueue = List.from(tracks);
     _currentIndex = startIndex;
-    playTrack(_playlistQueue[_currentIndex]);
+    playTrack(_playlistQueue[_currentIndex], _playlistQueue, _currentIndex);
   }
 
   void playTrack(Track track, [List<Track>? queue, int? index]) {
@@ -204,7 +226,6 @@ class HifiAudioService extends ChangeNotifier {
         }
         break;
       case PlayMode.loopList:
-      default:
         _currentIndex = (_currentIndex + 1) % _playlistQueue.length;
         break;
     }

@@ -1188,6 +1188,7 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     if (is_eof_.load(std::memory_order_acquire) && ring_buffer_.available_read() == 0) {
         if (!eof_reported_.exchange(true, std::memory_order_acq_rel)) {
             std::cout << "[AudioEngine] onSinkDataNeeded: EOF and buffer drained, triggering eof_callback" << std::endl;
+            is_playing_.store(false, std::memory_order_release);
             if (eof_callback_) {
                 eof_callback_();
             }

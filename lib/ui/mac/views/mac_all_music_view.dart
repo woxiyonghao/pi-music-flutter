@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/track.dart';
 import '../../../core/hifi_audio_service.dart';
+import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
 
@@ -38,7 +39,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
         widget.tracks.fold(0, (sum, t) => sum + t.durationSec);
     final totalMinutes = (totalDurationSec / 60).floor();
 
-    final title = '所有音乐';
+    const title = '所有音乐';
     final subtitle = totalCount > 0
         ? '发烧曲库全景树状视图 · 共 $totalCount 首 · 总时长: $totalMinutes 分钟'
         : '本地发烧曲库树列表';
@@ -438,10 +439,12 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
       listenable: Listenable.merge([
         service.currentTrackIdNotifier,
         service.isPlayingNotifier,
+        ThemeService.instance,
       ]),
       builder: (context, _) {
-        final isCurrent = service.currentTrack?.id == track.id ||
-            service.currentTrack?.filepath == track.filepath;
+        final accent = ThemeService.instance.accentColor;
+        final isCurrent = service.currentTrack != null &&
+            service.currentTrack!.matches(track);
         final isPlaying = isCurrent && service.isPlayingNotifier.value;
 
         final numStr = '${(index + 1).toString().padLeft(2, '0')}.';
@@ -458,11 +461,11 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               decoration: BoxDecoration(
                 color: isCurrent
-                    ? UIConfig.accent.withOpacity(0.20)
+                    ? accent.withValues(alpha: 0.18)
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(6.0),
                 border: isCurrent
-                    ? Border.all(color: UIConfig.glassBorder, width: 1.0)
+                    ? Border.all(color: accent.withValues(alpha: 0.5), width: 1.0)
                     : null,
               ),
               child: Row(
@@ -474,13 +477,13 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                         ? Icon(
                             Icons.equalizer_rounded,
                             size: 16.0,
-                            color: UIConfig.accent,
+                            color: accent,
                           )
                         : (isCurrent
                             ? Icon(
                                 Icons.play_arrow_rounded,
                                 size: 16.0,
-                                color: UIConfig.accent,
+                                color: accent,
                               )
                             : Text(
                                 numStr,
