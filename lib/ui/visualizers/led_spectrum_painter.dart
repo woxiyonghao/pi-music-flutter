@@ -19,12 +19,26 @@ class LedSpectrumPainter extends CustomPainter {
     this.accentColor,
   });
 
+  static final List<TextPainter> _cachedFreqPainters = () {
+    const freqs = ['31', '62', '125', '250', '500', '1k', '2k', '4k', '8k', '12k', '16k', '20k'];
+    return freqs.map((f) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: f,
+          style: const TextStyle(color: HifiTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      return tp;
+    }).toList();
+  }();
+
   @override
   void paint(Canvas canvas, Size size) {
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), Paint()..color = const Color(0xFF080C14));
 
     final numBands = levels.isEmpty ? 12 : levels.length;
-    final padding = 16.0;
+    const padding = 16.0;
     final w = size.width - padding * 2;
     final h = size.height - padding * 2;
 
@@ -33,8 +47,14 @@ class LedSpectrumPainter extends CustomPainter {
     final barW = (w - totalGapX) / numBands;
     final segH = (h - (numSegments - 1) * 3.0) / numSegments;
 
-    // 频率标度标注文字
-    const freqs = ['31', '62', '125', '250', '500', '1k', '2k', '4k', '8k', '12k', '16k', '20k'];
+    final unlitPath = Path();
+    final greenPath = Path();
+    final amberPath = Path();
+    final redPath = Path();
+    final peakPath = Path();
+
+    final Color greenColor = accentColor ?? ledGreen;
+    final Color amberColor = accentColor != null ? Color.lerp(accentColor!, Colors.white, 0.45)! : ledAmber;
 
     for (int b = 0; b < numBands; b++) {
       final bx = padding + b * (barW + 8.0);
@@ -44,66 +64,42 @@ class LedSpectrumPainter extends CustomPainter {
       final activeSegments = (lvl * numSegments).round();
       final peakSegment = (peak * numSegments).clamp(0, numSegments - 1).toInt();
 
-      // 从下往上绘制每一个 LED 块
+      // 从下往上分层将 LED 块加入对应 Path
       for (int s = 0; s < numSegments; s++) {
         final by = padding + h - (s + 1) * (segH + 3.0);
-        final rect = Rect.fromLTWH(bx, by, barW, segH);
+        final rrect = RRect.fromRectAndRadius(Rect.fromLTWH(bx, by, barW, segH), const Radius.circular(2));
 
         final isActive = s < activeSegments;
         final isPeak = s == peakSegment;
 
-        Color segColor;
-        if (accentColor != null) {
-          if (s < numSegments * 0.70) {
-            segColor = accentColor!;
-          } else if (s < numSegments * 0.88) {
-            segColor = Color.lerp(accentColor!, Colors.white, 0.45)!;
-          } else {
-            segColor = ledRed;
-          }
-        } else {
-          if (s < numSegments * 0.65) {
-            segColor = ledGreen;
-          } else if (s < numSegments * 0.88) {
-            segColor = ledAmber;
-          } else {
-            segColor = ledRed;
-          }
-        }
-
         if (isActive) {
-          // 点亮的 LED (带光晕)
-          canvas.drawRRect(
-            RRect.fromRectAndRadius(rect, const Radius.circular(2)),
-            Paint()..color = segColor,
-          );
+          if (s < numSegments * 0.65) {
+            greenPath.addRRect(rrect);
+          } else if (s < numSegments * 0.88) {
+            amberPath.addRRect(rrect);
+          } else {
+            redPath.addRRect(rrect);
+          }
         } else if (isPeak) {
-          // 峰值保持亮块
-          canvas.drawRRect(
-            RRect.fromRectAndRadius(rect, const Radius.circular(2)),
-            Paint()..color = (s >= numSegments * 0.88) ? Colors.white : segColor,
-          );
+          peakPath.addRRect(rrect);
         } else {
-          // 未点亮的暗底 LED
-          canvas.drawRRect(
-            RRect.fromRectAndRadius(rect, const Radius.circular(2)),
-            Paint()..color = ledOff,
-          );
+          unlitPath.addRRect(rrect);
         }
       }
 
-      // 底部频率标牌
-      if (b < freqs.length) {
-        final tp = TextPainter(
-          text: TextSpan(
-            text: freqs[b],
-            style: const TextStyle(color: HifiTheme.textMuted, fontSize: 10, fontWeight: FontWeight.bold),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
+      // 绘制预缓存的底部频率标牌 (零运行时 text layout 开销)
+      if (b < _cachedFreqPainters.length) {
+        final tp = _cachedFreqPainters[b];
         tp.paint(canvas, Offset(bx + (barW - tp.width) * 0.5, size.height - 14.0));
       }
     }
+
+    // 批量提交 GPU 绘制
+    canvas.drawPath(unlitPath, Paint()..color = ledOff);
+    canvas.drawPath(greenPath, Paint()..color = greenColor);
+    canvas.drawPath(amberPath, Paint()..color = amberColor);
+    canvas.drawPath(redPath, Paint()..color = ledRed);
+    canvas.drawPath(peakPath, Paint()..color = Colors.white);
   }
 
   @override
