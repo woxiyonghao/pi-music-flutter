@@ -55,7 +55,7 @@ class PlaybackControlsWidget extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.skip_previous_rounded, size: 32),
               color: HifiTheme.textPrimary,
-              onPressed: () {},
+              onPressed: () => service.previous(),
             ),
             const SizedBox(width: 16),
             Container(
@@ -84,7 +84,7 @@ class PlaybackControlsWidget extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.skip_next_rounded, size: 32),
               color: HifiTheme.textPrimary,
-              onPressed: () {},
+              onPressed: () => service.next(),
             ),
           ],
         ),
