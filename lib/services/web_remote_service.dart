@@ -29,7 +29,9 @@ class WebRemoteService extends ChangeNotifier {
   Timer? _broadcastTimer;
 
   WebRemoteService._() {
-    _initLocalIp();
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      _initLocalIp();
+    }
   }
 
   Future<void> _initLocalIp() async {

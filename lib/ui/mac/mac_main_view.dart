@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../models/sidebar_tab.dart';
@@ -60,9 +61,11 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
     );
 
     // 启动 1 秒级空闲检测定时器 (对齐 C++ Application.cpp:583-597)
-    _idleCheckTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _checkIdleFullscreen();
-    });
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      _idleCheckTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        _checkIdleFullscreen();
+      });
+    }
   }
 
   @override

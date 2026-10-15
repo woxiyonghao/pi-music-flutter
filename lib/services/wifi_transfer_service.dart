@@ -58,7 +58,9 @@ class WifiTransferService extends ChangeNotifier {
   int get completedCount => _uploadedFiles.length;
 
   WifiTransferService._() {
-    _initDefaults();
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      _initDefaults();
+    }
   }
 
   Future<void> _initDefaults() async {
