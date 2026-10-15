@@ -168,14 +168,14 @@ class HifiAudioBindings {
   // 对外安全调用封装
   bool init() => _isLoaded ? _init() : true;
   bool openAndPlay(String path) {
-    if (!_isLoaded) return false;
+    if (!_isLoaded) return true;
     final nativePath = path.toNativeUtf8();
     final res = _openAndPlay(nativePath);
     calloc.free(nativePath);
     return res;
   }
   bool openAndPlaySection(String path, double startSec, double endSec) {
-    if (!_isLoaded) return false;
+    if (!_isLoaded) return true;
     final nativePath = path.toNativeUtf8();
     final res = _openAndPlaySection(nativePath, startSec, endSec);
     calloc.free(nativePath);

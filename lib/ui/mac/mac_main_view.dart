@@ -370,6 +370,17 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                             onChanged: (newType) {
                                               if (newType != null) {
                                                 ThemeService.instance.setBackgroundVisualMode(newType.index);
+                                                int sIdx = 0;
+                                                switch (newType) {
+                                                  case VisualizerType.mcIntosh: sIdx = 1; break;
+                                                  case VisualizerType.accuphase: sIdx = 2; break;
+                                                  case VisualizerType.tapeReel: sIdx = 3; break;
+                                                  case VisualizerType.siriWave: sIdx = 4; break;
+                                                  case VisualizerType.bubbles: sIdx = 5; break;
+                                                  case VisualizerType.glassClock: sIdx = 6; break;
+                                                  default: sIdx = 0; break;
+                                                }
+                                                db.setSetting('setting_idle_screensaver_theme', sIdx.toString());
                                               }
                                             },
                                           ),

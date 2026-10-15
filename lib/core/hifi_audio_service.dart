@@ -28,6 +28,8 @@ class HifiAudioService extends ChangeNotifier {
   PlaybackState get state => _state;
 
   Timer? _ticker;
+  bool _hasStartedActivePlayback = false;
+  int _playInitiatedEpoch = 0;
 
   final ValueNotifier<int?> currentTrackIdNotifier = ValueNotifier<int?>(null);
   final ValueNotifier<Track?> currentTrackNotifier = ValueNotifier<Track?>(null);
@@ -65,8 +67,14 @@ class HifiAudioService extends ChangeNotifier {
         isPlayingNotifier.value = isPlaying;
       }
 
-      // 检查曲目是否自然播放结束 (包含 CUE 分轨区间播完)
-      if (_state.isPlaying && !isPlaying && !_state.isPaused) {
+      if (isPlaying) {
+        _hasStartedActivePlayback = true;
+      }
+
+      // 检查曲目是否自然播放结束 (只有在曾真正开始播放过、且当前已停止、且非用户暂停时判定，防止启动期间竞态判定)
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (_hasStartedActivePlayback && !isPlaying && !_state.isPaused && (now - _playInitiatedEpoch > 1200)) {
+        _hasStartedActivePlayback = false;
         _state = PlaybackState(
           isPlaying: false,
           isPaused: false,
@@ -119,7 +127,8 @@ class HifiAudioService extends ChangeNotifier {
     _currentTrack = track;
     currentTrackIdNotifier.value = track.id;
     currentTrackNotifier.value = track;
-    isPlayingNotifier.value = true;
+    _hasStartedActivePlayback = false;
+    _playInitiatedEpoch = DateTime.now().millisecondsSinceEpoch;
 
     if (queue != null && index != null) {
       _playlistQueue = List.from(queue);
@@ -131,6 +140,32 @@ class HifiAudioService extends ChangeNotifier {
       _currentIndex = _playlistQueue.indexOf(track);
     }
 
+    final success = track.isCueTrack && track.endTimeSec > track.startTimeSec
+        ? _bindings.openAndPlaySection(track.filepath, track.startTimeSec, track.endTimeSec)
+        : _bindings.openAndPlay(track.filepath);
+
+    if (!success) {
+      debugPrint('[HifiAudioService] 打开音频文件失败: ${track.filepath}');
+      _state = PlaybackState(
+        isPlaying: false,
+        isPaused: false,
+        isBitPerfect: false,
+        currentTime: 0.0,
+        duration: track.durationSec.toDouble(),
+        progress: 0.0,
+        volume: _state.volume,
+        isMuted: _state.isMuted,
+        playMode: _playMode,
+        activeDeviceName: 'Apple Direct',
+        activeSampleRate: track.sampleRate,
+        spectrumLevels: List.filled(12, 0.0),
+      );
+      isPlayingNotifier.value = false;
+      notifyListeners();
+      return;
+    }
+
+    isPlayingNotifier.value = true;
     _state = PlaybackState(
       isPlaying: true,
       isPaused: false,
@@ -146,24 +181,24 @@ class HifiAudioService extends ChangeNotifier {
       spectrumLevels: _state.spectrumLevels,
     );
     notifyListeners();
-
-    // 延迟到事件循环下一轮执行 C++ 解码与声卡 I/O，确保当前 UI 帧 60fps 零卡顿即时响应
-    Future(() async {
-      if (track.isCueTrack && track.endTimeSec > track.startTimeSec) {
-        _bindings.openAndPlaySection(track.filepath, track.startTimeSec, track.endTimeSec);
-      } else {
-        _bindings.openAndPlay(track.filepath);
-      }
-    });
   }
 
   void togglePlayPause() {
-    if (_currentTrack == null && _playlistQueue.isNotEmpty) {
-      playTrack(_playlistQueue.first);
+    if (_currentTrack == null) {
+      if (_playlistQueue.isNotEmpty) {
+        playTrack(_playlistQueue.first);
+      }
       return;
     }
+
+    // 若底层音频引擎当前处于空闲停止状态，直接重新发起播放
+    if (_bindings.isIdle() || (!_bindings.isPlaying() && !_bindings.isPaused())) {
+      playTrack(_currentTrack!);
+      return;
+    }
+
     _bindings.toggle();
-    final nowPlaying = !_state.isPlaying;
+    final nowPlaying = _bindings.isPlaying();
     isPlayingNotifier.value = nowPlaying;
     _state = PlaybackState(
       isPlaying: nowPlaying,
@@ -183,6 +218,10 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void play() {
+    if (_currentTrack != null && (_bindings.isIdle() || (!_bindings.isPlaying() && !_bindings.isPaused()))) {
+      playTrack(_currentTrack!);
+      return;
+    }
     _bindings.play();
     isPlayingNotifier.value = true;
     notifyListeners();
