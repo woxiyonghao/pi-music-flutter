@@ -52,6 +52,20 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
     }
   }
 
+  void _openWebUrl(String url) async {
+    if (!WebRemoteService.instance.isRunning) {
+      await WebRemoteService.instance.start();
+    }
+    _openUrl(url);
+  }
+
+  void _openWifiUrl(String url) async {
+    if (!WifiTransferService.instance.isRunning) {
+      await WifiTransferService.instance.start();
+    }
+    _openUrl(url);
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -251,7 +265,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
                   // 遥控访问网址 (支持点击一键在浏览器打开)
                   InkWell(
-                    onTap: () => _openUrl(webUrl),
+                    onTap: () => _openWebUrl(webUrl),
                     borderRadius: BorderRadius.circular(4.0),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2.0),
@@ -454,7 +468,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                       final url = targetIp.startsWith('http')
                           ? targetIp
                           : 'http://$targetIp:8088';
-                      _openUrl(url);
+                      _openWebUrl(url);
                     }
                   },
                   borderRadius: BorderRadius.circular(6.0),
@@ -583,7 +597,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
                   // 传歌网址 (支持点击一键在浏览器打开)
                   InkWell(
-                    onTap: () => _openUrl(wifiUrl),
+                    onTap: () => _openWifiUrl(wifiUrl),
                     borderRadius: BorderRadius.circular(4.0),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2.0),

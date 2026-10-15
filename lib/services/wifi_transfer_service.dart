@@ -166,15 +166,18 @@ class WifiTransferService extends ChangeNotifier {
 
     final path = request.uri.path;
 
-    // 1. GET / 或 /index.html: 返回 H5 拖拽传歌网页
-    if (request.method == 'GET' && (path == '/' || path == '/index.html')) {
+    // 1. GET / 或 /index.html: 返回 H5 拖拽传歌网页 (同时兼容 HEAD 请求)
+    if ((request.method == 'GET' || request.method == 'HEAD') &&
+        (path == '/' || path == '/index.html')) {
       final platformLabel = Platform.isMacOS
           ? 'Mac'
           : (Platform.isLinux ? '树莓派' : 'HiFi主机');
       final html = wifiTransferHtml.replaceAll('{{PLATFORM}}', platformLabel);
 
       request.response.headers.contentType = ContentType.html;
-      request.response.write(html);
+      if (request.method == 'GET') {
+        request.response.write(html);
+      }
       await request.response.close();
       return;
     }

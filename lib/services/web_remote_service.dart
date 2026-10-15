@@ -158,10 +158,13 @@ class WebRemoteService extends ChangeNotifier {
 
     final path = request.uri.path;
 
-    // 1. GET / 或 /index.html: 返回内嵌 H5 SPA 控制中心
-    if (request.method == 'GET' && (path == '/' || path == '/index.html')) {
+    // 1. GET / 或 /index.html: 返回内嵌 H5 SPA 控制中心 (同时兼容 HEAD 请求)
+    if ((request.method == 'GET' || request.method == 'HEAD') &&
+        (path == '/' || path == '/index.html')) {
       request.response.headers.contentType = ContentType.html;
-      request.response.write(webRemoteHtml);
+      if (request.method == 'GET') {
+        request.response.write(webRemoteHtml);
+      }
       await request.response.close();
       return;
     }
