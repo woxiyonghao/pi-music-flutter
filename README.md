@@ -75,8 +75,9 @@ hide_player_flutter/
 │   └── audio_engine/                # 100% 继承自原项目的发烧音频内核
 │
 └── doc/                             # 架构设计与平台部署指南
-    ├── architecture.md
-    └── development_guide.md
+    ├── architecture.md              # 深度架构设计与无锁 FFI 直连机制
+    ├── development_guide.md         # 开发环境与全平台构建指南
+    └── pi_development_handover.md   # 树莓派 5 专属台机布局与开发交接权威记录
 ```
 
 ---
