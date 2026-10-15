@@ -361,14 +361,18 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
           ),
           const SizedBox(height: 12.0),
 
-          // 卡片横向滚动行
+          // 卡片横向滚动行 (支持鼠标全指针拖拽与状态保持)
           SizedBox(
             height: 220.0,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: tracks.length,
-              separatorBuilder: (context, _) => const SizedBox(width: 16.0),
+            child: ScrollConfiguration(
+              behavior: const MouseDraggableScrollBehavior(),
+              child: ListView.separated(
+                key: PageStorageKey('mac_scan_format_${fmt.name}'),
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: tracks.length,
+                separatorBuilder: (context, _) => const SizedBox(width: 16.0),
+
               itemBuilder: (context, index) {
                 final track = tracks[index];
                 final isPlaying = currentPlaying != null && currentPlaying.matches(track);
@@ -397,6 +401,8 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
               },
             ),
           ),
+        ),
+
         ],
       ),
     );

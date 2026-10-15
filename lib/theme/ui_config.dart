@@ -1,5 +1,22 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/theme_service.dart';
+
+/// 全局发烧级触控与鼠标全指引平滑拖拽滚动行为
+/// 解决 macOS / Windows / Linux 桌面与 Raspberry Pi 触控/鼠标环境下无法通过鼠标按住横向/纵向拖拽拉动列表的问题
+class MouseDraggableScrollBehavior extends MaterialScrollBehavior {
+  const MouseDraggableScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.invertedStylus,
+    PointerDeviceKind.unknown,
+  };
+}
 
 /// 全局 UI 视觉与样式配置中心 (1:1 严格对齐 C++ UIConfig.hpp)
 class UIConfig {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'core/platform_helper.dart';
 import 'services/web_remote_service.dart';
 import 'theme/hifi_theme.dart';
+import 'theme/ui_config.dart';
 import 'ui/iphone/iphone_main_view.dart';
 import 'ui/android/android_main_view.dart';
 import 'ui/pi/pi_main_view.dart';
@@ -36,6 +37,7 @@ class _HiFiPlayerAppState extends State<HiFiPlayerApp> {
       title: 'MyHiFi Player',
       debugShowCheckedModeBanner: false,
       theme: HifiTheme.darkTheme,
+      scrollBehavior: const MouseDraggableScrollBehavior(),
       home: LayoutBuilder(
         builder: (context, constraints) {
           final detected = PlatformHelper.detect(constraints.maxWidth, constraints.maxHeight);
