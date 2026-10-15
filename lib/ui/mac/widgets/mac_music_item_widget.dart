@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../core/hifi_audio_service.dart';
 import '../../../models/track.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
@@ -32,6 +33,13 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
   bool _isHovered = false;
   late final AnimationController _rotationController;
 
+  bool get _isCurrentlyPlaying {
+    final current = HifiAudioService.instance.currentTrack;
+    final isEnginePlaying = HifiAudioService.instance.isPlayingNotifier.value;
+    final matches = current != null && current.matches(widget.track);
+    return (matches && isEnginePlaying) || widget.isPlaying;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -39,25 +47,41 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
       vsync: this,
       duration: const Duration(seconds: 4),
     );
-    if (widget.isPlaying) {
+
+    HifiAudioService.instance.currentTrackNotifier.addListener(_onPlaybackChanged);
+    HifiAudioService.instance.isPlayingNotifier.addListener(_onPlaybackChanged);
+
+    if (_isCurrentlyPlaying) {
       _rotationController.repeat();
     }
+  }
+
+  void _onPlaybackChanged() {
+    if (!mounted) return;
+    final active = _isCurrentlyPlaying;
+    if (active || _isHovered) {
+      if (!_rotationController.isAnimating) _rotationController.repeat();
+    } else {
+      if (_rotationController.isAnimating) _rotationController.stop();
+    }
+    setState(() {});
   }
 
   @override
   void didUpdateWidget(covariant MacMusicItemWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isPlaying != oldWidget.isPlaying) {
-      if (widget.isPlaying || _isHovered) {
-        if (!_rotationController.isAnimating) _rotationController.repeat();
-      } else {
-        _rotationController.stop();
-      }
+    final active = _isCurrentlyPlaying;
+    if (active || _isHovered) {
+      if (!_rotationController.isAnimating) _rotationController.repeat();
+    } else {
+      if (_rotationController.isAnimating) _rotationController.stop();
     }
   }
 
   @override
   void dispose() {
+    HifiAudioService.instance.currentTrackNotifier.removeListener(_onPlaybackChanged);
+    HifiAudioService.instance.isPlayingNotifier.removeListener(_onPlaybackChanged);
     _rotationController.dispose();
     super.dispose();
   }
@@ -66,16 +90,17 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
     setState(() {
       _isHovered = hovered;
     });
-    if (hovered || widget.isPlaying) {
+    if (hovered || _isCurrentlyPlaying) {
       if (!_rotationController.isAnimating) _rotationController.repeat();
     } else {
-      _rotationController.stop();
+      if (_rotationController.isAnimating) _rotationController.stop();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final accent = ThemeService.instance.accentColor;
+    final isPlaying = _isCurrentlyPlaying;
     const cardW = 150.0;
     const cardH = 220.0;
 
@@ -96,14 +121,14 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
                 width: cardW,
                 height: cardW,
                 decoration: BoxDecoration(
-                  color: _isHovered
+                  color: (_isHovered || isPlaying)
                       ? const Color.fromRGBO(36, 44, 58, 0.95)
                       : const Color.fromRGBO(22, 26, 36, 0.95),
                   borderRadius: BorderRadius.circular(8.0),
                   border: Border.all(
                     color: widget.isEditMode && widget.isSelected
                         ? accent
-                        : (_isHovered
+                        : ((_isHovered || isPlaying)
                             ? const Color.fromRGBO(255, 255, 255, 0.25)
                             : const Color.fromRGBO(255, 255, 255, 0.08)),
                     width: (widget.isEditMode && widget.isSelected) ? 2.0 : 1.0,
@@ -120,7 +145,7 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
                           return CustomPaint(
                             painter: _VinylCdPainter(
                               radius: _isHovered ? 45.0 : 40.0,
-                              color: (_isHovered || widget.isPlaying)
+                              color: (_isHovered || isPlaying)
                                   ? accent
                                   : const Color.fromRGBO(215, 222, 235, 0.65),
                               rotationRad: _rotationController.value * 2 * math.pi,
@@ -129,6 +154,7 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
                         },
                       ),
                     ),
+
 
                     // 悬停态中心播放三角按钮 (1:1 严格同心对齐黑胶唱片中心 cd_center = (cardW / 2, 66.0))
                     if (_isHovered && !widget.isEditMode)
@@ -255,9 +281,10 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
-                  color: _isHovered ? accent : UIConfig.textActive,
+                  color: (_isHovered || isPlaying) ? accent : UIConfig.textActive,
                 ),
               ),
+
               const SizedBox(height: 1.0),
 
               // 艺术家

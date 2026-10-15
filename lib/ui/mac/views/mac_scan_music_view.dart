@@ -123,8 +123,13 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: ThemeService.instance,
+      listenable: Listenable.merge([
+        ThemeService.instance,
+        HifiAudioService.instance.currentTrackNotifier,
+        HifiAudioService.instance.isPlayingNotifier,
+      ]),
       builder: (context, _) {
+
         final theme = ThemeService.instance;
         final accent = theme.accentColor;
 
@@ -236,6 +241,7 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
   Widget _buildCompletedState(Color accent) {
     final allTracks = MusicDatabaseService.instance.tracks;
     final currentPlayingTrack = HifiAudioService.instance.currentTrack;
+    final isEnginePlaying = HifiAudioService.instance.isPlayingNotifier.value;
 
     // 按格式分流曲目
     final Map<AudioFormat, List<Track>> formatBuckets = {};
@@ -315,6 +321,7 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
                     fmt: fmt,
                     tracks: formatBuckets[fmt]!,
                     currentPlaying: currentPlayingTrack,
+                    isEnginePlaying: isEnginePlaying,
                     accent: accent,
                   ),
               const SizedBox(height: 20.0),
@@ -329,6 +336,7 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
     required AudioFormat fmt,
     required List<Track> tracks,
     required Track? currentPlaying,
+    required bool isEnginePlaying,
     required Color accent,
   }) {
     final meta = formatMeta[fmt] ?? {
@@ -375,7 +383,9 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
 
               itemBuilder: (context, index) {
                 final track = tracks[index];
-                final isPlaying = currentPlaying != null && currentPlaying.matches(track);
+                final isPlaying = currentPlaying != null &&
+                    currentPlaying.matches(track) &&
+                    isEnginePlaying;
                 final isSelected = _selectedTrackIds.contains(track.id);
 
                 return MacMusicItemWidget(
@@ -384,6 +394,7 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
                   isEditMode: _isEditMode,
                   isSelected: isSelected,
                   isPlaying: isPlaying,
+
                   onTap: () {
                     if (_isEditMode) {
                       setState(() {

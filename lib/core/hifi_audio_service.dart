@@ -30,6 +30,7 @@ class HifiAudioService extends ChangeNotifier {
   Timer? _ticker;
 
   final ValueNotifier<int?> currentTrackIdNotifier = ValueNotifier<int?>(null);
+  final ValueNotifier<Track?> currentTrackNotifier = ValueNotifier<Track?>(null);
   final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
 
   HifiAudioService._() {
@@ -117,6 +118,7 @@ class HifiAudioService extends ChangeNotifier {
   void playTrack(Track track, [List<Track>? queue, int? index]) {
     _currentTrack = track;
     currentTrackIdNotifier.value = track.id;
+    currentTrackNotifier.value = track;
     isPlayingNotifier.value = true;
 
     if (queue != null && index != null) {
@@ -162,6 +164,7 @@ class HifiAudioService extends ChangeNotifier {
     }
     _bindings.toggle();
     final nowPlaying = !_state.isPlaying;
+    isPlayingNotifier.value = nowPlaying;
     _state = PlaybackState(
       isPlaying: nowPlaying,
       isPaused: !nowPlaying,
@@ -181,11 +184,13 @@ class HifiAudioService extends ChangeNotifier {
 
   void play() {
     _bindings.play();
+    isPlayingNotifier.value = true;
     notifyListeners();
   }
 
   void pause() {
     _bindings.pause();
+    isPlayingNotifier.value = false;
     notifyListeners();
   }
 
