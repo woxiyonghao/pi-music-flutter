@@ -163,7 +163,7 @@ class MacSidebarWidget extends StatelessWidget {
                     boxShadow: isDacConnected
                         ? [
                             BoxShadow(
-                              color: UIConfig.dacConnected.withOpacity(0.55),
+                              color: UIConfig.dacConnected.withValues(alpha: 0.55),
                               blurRadius: 5.5,
                               spreadRadius: 2.0,
                             ),

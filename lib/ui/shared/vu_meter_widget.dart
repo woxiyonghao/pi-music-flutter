@@ -23,10 +23,10 @@ class VuMeterWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: HifiTheme.mcIntoshMeterBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: HifiTheme.mcIntoshBlue.withOpacity(0.5), width: 1.5),
+        border: Border.all(color: HifiTheme.mcIntoshBlue.withValues(alpha: 0.5), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: HifiTheme.mcIntoshBlue.withOpacity(0.25),
+            color: HifiTheme.mcIntoshBlue.withValues(alpha: 0.25),
             blurRadius: 24,
             spreadRadius: 2,
           ),
@@ -64,7 +64,7 @@ class _SingleMeterPainter extends CustomPainter {
 
     // 1. 绘制弧形刻度背景
     final arcPaint = Paint()
-      ..color = HifiTheme.mcIntoshGlow.withOpacity(0.4)
+      ..color = HifiTheme.mcIntoshGlow.withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
 
@@ -81,7 +81,7 @@ class _SingleMeterPainter extends CustomPainter {
 
     // 2. 刻度线
     final tickPaint = Paint()
-      ..color = HifiTheme.mcIntoshGlow.withOpacity(0.7)
+      ..color = HifiTheme.mcIntoshGlow.withValues(alpha: 0.7)
       ..strokeWidth = 1.5;
 
     final redTickPaint = Paint()
@@ -124,7 +124,7 @@ class _SingleMeterPainter extends CustomPainter {
 
     // 指针微弱投影
     final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.6)
+      ..color = Colors.black.withValues(alpha: 0.6)
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;
     canvas.drawLine(center + const Offset(1, 2), needleTip + const Offset(1, 2), shadowPaint);
@@ -140,7 +140,7 @@ class _SingleMeterPainter extends CustomPainter {
       text: TextSpan(
         text: label,
         style: TextStyle(
-          color: HifiTheme.mcIntoshGlow.withOpacity(0.8),
+          color: HifiTheme.mcIntoshGlow.withValues(alpha: 0.8),
           fontSize: 10,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.2,

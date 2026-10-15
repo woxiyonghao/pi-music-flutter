@@ -106,9 +106,9 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Column(
+              const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
                     '图形均衡器',
                     style: TextStyle(
@@ -582,7 +582,7 @@ class _FaderPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
-    final railTop = 10.0;
+    const railTop = 10.0;
     final railBot = size.height - 10.0;
     final railH = railBot - railTop;
     final railMid = (railTop + railBot) / 2;

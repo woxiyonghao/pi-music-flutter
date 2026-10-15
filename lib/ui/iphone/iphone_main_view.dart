@@ -48,8 +48,8 @@ class IphoneMainView extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: state.isBitPerfect
-                                ? HifiTheme.mcIntoshBlue.withOpacity(0.3)
-                                : Colors.grey.withOpacity(0.2),
+                                ? HifiTheme.mcIntoshBlue.withValues(alpha: 0.3)
+                                : Colors.grey.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
                               color: state.isBitPerfect ? HifiTheme.mcIntoshGlow : Colors.grey,

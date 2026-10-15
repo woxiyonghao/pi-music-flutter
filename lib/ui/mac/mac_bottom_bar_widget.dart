@@ -62,7 +62,6 @@ class MacBottomBarWidget extends StatelessWidget {
         modeIcon = Icons.east_rounded;
         break;
       case PlayMode.loopList:
-      default:
         modeIcon = Icons.repeat_rounded;
         break;
     }

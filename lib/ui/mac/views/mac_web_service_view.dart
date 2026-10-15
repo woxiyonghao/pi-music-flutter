@@ -269,10 +269,10 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
       _buildCard(
         child: Row(
           children: [
-            Expanded(
+            const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text('在线遥控设备', style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted)),
                   SizedBox(height: 6.0),
                   Text('0 台设备', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold, color: UIConfig.textActive)),
@@ -283,10 +283,10 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
             ),
             Container(width: 1.0, height: 50.0, color: const Color.fromRGBO(255, 255, 255, 0.08)),
             const SizedBox(width: 20.0),
-            Expanded(
+            const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text('当前同步在播曲目', style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted)),
                   SizedBox(height: 6.0),
                   Text('暂未载入曲目 - 未知', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: UIConfig.textActive)),
@@ -297,10 +297,10 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
             ),
             Container(width: 1.0, height: 50.0, color: const Color.fromRGBO(255, 255, 255, 0.08)),
             const SizedBox(width: 20.0),
-            Expanded(
+            const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text('旧手机防休眠模式', style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted)),
                   SizedBox(height: 6.0),
                   Text('已开启 (屏幕常亮)', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: Color(0xFF10B981))),
@@ -394,9 +394,9 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
       // 卡片 4：变废为宝实战秘籍
       _buildCard(
-        child: Column(
+        child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               '【旧手机当数播实战秘籍】变废为宝打造发烧纯音转盘',
               style: TextStyle(
@@ -520,9 +520,9 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
       // 卡片 2：实时传输看板
       _buildCard(
-        child: Column(
+        child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               '实时传输看板',
               style: TextStyle(
@@ -548,9 +548,9 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
       // 卡片 3：本次传输清单
       _buildCard(
-        child: Column(
+        child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Text(
               '本次传输清单 (已自动入库: 0 首)',
               style: TextStyle(

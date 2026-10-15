@@ -55,7 +55,7 @@ class MusicDatabaseService extends ChangeNotifier {
       final db = _openDb();
       final stmt = db.prepare('SELECT value FROM app_settings WHERE key = ?;');
       final ResultSet res = stmt.select([key]);
-      stmt.dispose();
+      stmt.close();
       String val = defaultValue;
       if (res.isNotEmpty) {
         val = (res.first['value'] as String? ?? defaultValue).trim();
@@ -65,7 +65,7 @@ class MusicDatabaseService extends ChangeNotifier {
           val = val.substring(1, val.length - 1).trim();
         }
       }
-      db.dispose();
+      db.close();
       return val;
     } catch (e) {
       debugPrint('[MusicDatabaseService] getSetting error for $key: $e');
@@ -83,8 +83,8 @@ class MusicDatabaseService extends ChangeNotifier {
       final db = _openDb();
       final stmt = db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?);');
       stmt.execute([key, value]);
-      stmt.dispose();
-      db.dispose();
+      stmt.close();
+      db.close();
       return true;
     } catch (e) {
       debugPrint('[MusicDatabaseService] setSetting error for $key: $e');
@@ -150,7 +150,7 @@ class MusicDatabaseService extends ChangeNotifier {
           }
         } catch (_) {}
 
-        db.dispose();
+        db.close();
 
         if (loaded.isNotEmpty) {
           _tracks = loaded;

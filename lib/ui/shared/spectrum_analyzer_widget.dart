@@ -18,7 +18,7 @@ class SpectrumAnalyzerWidget extends StatelessWidget {
       height: height,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: HifiTheme.cardBackground.withOpacity(0.5),
+        color: HifiTheme.cardBackground.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: HifiTheme.cardBorder, width: 1.0),
       ),
@@ -52,7 +52,7 @@ class SpectrumAnalyzerWidget extends StatelessWidget {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: HifiTheme.mcIntoshGlow.withOpacity(0.3 * level),
+                      color: HifiTheme.mcIntoshGlow.withValues(alpha: 0.3 * level),
                       blurRadius: 6,
                     ),
                   ],

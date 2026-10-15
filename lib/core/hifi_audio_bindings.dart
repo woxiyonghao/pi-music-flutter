@@ -72,6 +72,8 @@ class HifiAudioBindings {
   late final _HifiAudioBoolDart _isMuted;
   late final _HifiAudioBoolDart _isBitPerfect;
   late final _HifiAudioGetSpectrumDart _getSpectrumLevels;
+  late final _HifiAudioGetSampleRateDart _getSampleRate;
+  late final _HifiAudioGetDeviceNameDart _getDeviceName;
 
   // 内存复用：12 频段频谱指针 (避免每帧内存分配与 GC 压力)
   late final Pointer<Float> _spectrumBuffer;
@@ -144,6 +146,8 @@ class HifiAudioBindings {
       _isMuted = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>('hifi_audio_is_muted');
       _isBitPerfect = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>('hifi_audio_is_bit_perfect');
       _getSpectrumLevels = _lib.lookupFunction<_HifiAudioGetSpectrumC, _HifiAudioGetSpectrumDart>('hifi_audio_get_spectrum_levels');
+      _getSampleRate = _lib.lookupFunction<_HifiAudioGetSampleRateC, _HifiAudioGetSampleRateDart>('hifi_audio_get_sample_rate');
+      _getDeviceName = _lib.lookupFunction<_HifiAudioGetDeviceNameC, _HifiAudioGetDeviceNameDart>('hifi_audio_get_device_name');
 
       _isLoaded = true;
     } catch (e) {
@@ -200,7 +204,18 @@ class HifiAudioBindings {
     return List.generate(12, (i) => _spectrumBuffer[i]);
   }
 
+  int getSampleRate() => _isLoaded ? _getSampleRate() : 192000;
+
+  String getDeviceName() {
+    if (!_isLoaded) return 'Apple Direct';
+    final buf = calloc<Uint8>(256);
+    _getDeviceName(buf.cast<Utf8>(), 256);
+    final name = buf.cast<Utf8>().toDartString();
+    calloc.free(buf);
+    return name.isNotEmpty ? name : 'Apple Direct';
+  }
+
   void dispose() {
-    // 单例全局常驻，无需提前释放以防止悬挂指针
+    calloc.free(_spectrumBuffer);
   }
 }

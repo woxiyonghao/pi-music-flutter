@@ -751,7 +751,7 @@ class McIntoshMeterPainter extends CustomPainter {
     canvas.drawCircle(center, 13.0, ringPaint);
 
     // 顶层镀铬紧固轴心
-    final chromeGrad = const RadialGradient(
+    const chromeGrad = RadialGradient(
       center: Alignment(-0.3, -0.3),
       colors: [Color(0xFFE2E8F0), Color(0xFF64748B), Color(0xFF1E293B)],
       stops: [0.0, 0.6, 1.0],

@@ -51,9 +51,9 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. 卡片标头：主标题与副描述
-          Text(
+          const Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: UIConfig.fontMedium,
               fontWeight: FontWeight.bold,
               color: UIConfig.textActive,
@@ -110,7 +110,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
         decoration: BoxDecoration(
           color: isActive
-              ? UIConfig.accent.withOpacity(0.28)
+              ? UIConfig.accent.withValues(alpha: 0.28)
               : const Color.fromRGBO(28, 34, 46, 0.70),
           borderRadius: BorderRadius.circular(7.0),
           border: Border.all(
@@ -346,10 +346,10 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 5.0, vertical: 1.0),
                     decoration: BoxDecoration(
-                      color: UIConfig.accent.withOpacity(0.18),
+                      color: UIConfig.accent.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(3.0),
                       border: Border.all(
-                        color: UIConfig.accent.withOpacity(0.55),
+                        color: UIConfig.accent.withValues(alpha: 0.55),
                         width: 1.0,
                       ),
                     ),

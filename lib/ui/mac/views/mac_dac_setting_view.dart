@@ -159,7 +159,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: _selectedChip == i
-                            ? accent.withOpacity(0.28)
+                            ? accent.withValues(alpha: 0.28)
                             : const Color.fromRGBO(255, 255, 255, 0.04),
                         borderRadius: BorderRadius.circular(7.0),
                         border: Border.all(
@@ -212,7 +212,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                         color: accent,
                         boxShadow: [
                           BoxShadow(
-                            color: accent.withOpacity(0.7),
+                            color: accent.withValues(alpha: 0.7),
                             blurRadius: 4.0,
                           ),
                         ],
@@ -241,7 +241,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                     padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 5.0),
                     decoration: BoxDecoration(
                       color: _exclusiveMode
-                          ? accent.withOpacity(0.25)
+                          ? accent.withValues(alpha: 0.25)
                           : const Color.fromRGBO(255, 255, 255, 0.05),
                       borderRadius: BorderRadius.circular(6.0),
                       border: Border.all(
@@ -900,7 +900,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: selectedIndex == i
-                            ? accent.withOpacity(0.28)
+                            ? accent.withValues(alpha: 0.28)
                             : const Color.fromRGBO(255, 255, 255, 0.04),
                         borderRadius: BorderRadius.circular(6.0),
                         border: Border.all(
@@ -950,7 +950,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
         decoration: BoxDecoration(
           color: isCurrent
-              ? accent.withOpacity(0.18)
+              ? accent.withValues(alpha: 0.18)
               : const Color.fromRGBO(255, 255, 255, 0.03),
           borderRadius: BorderRadius.circular(6.0),
           border: Border.all(

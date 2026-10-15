@@ -66,7 +66,7 @@ class PlaybackControlsWidget extends StatelessWidget {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: HifiTheme.mcIntoshBlue.withOpacity(0.5),
+                    color: HifiTheme.mcIntoshBlue.withValues(alpha: 0.5),
                     blurRadius: 16,
                   ),
                 ],

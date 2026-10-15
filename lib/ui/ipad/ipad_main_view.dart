@@ -115,9 +115,9 @@ class IpadMainView extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
-        color: active ? HifiTheme.mcIntoshBlue.withOpacity(0.2) : Colors.transparent,
+        color: active ? HifiTheme.mcIntoshBlue.withValues(alpha: 0.2) : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
-        border: active ? Border.all(color: HifiTheme.mcIntoshGlow.withOpacity(0.4)) : null,
+        border: active ? Border.all(color: HifiTheme.mcIntoshGlow.withValues(alpha: 0.4)) : null,
       ),
       child: ListTile(
         leading: Icon(icon, color: active ? HifiTheme.mcIntoshGlow : HifiTheme.textMuted),

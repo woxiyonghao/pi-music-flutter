@@ -35,10 +35,10 @@ class GlassContainer extends StatelessWidget {
           child: Container(
             padding: padding,
             decoration: BoxDecoration(
-              color: backgroundColor ?? HifiTheme.cardBackground.withOpacity(0.65),
+              color: backgroundColor ?? HifiTheme.cardBackground.withValues(alpha: 0.65),
               borderRadius: BorderRadius.circular(borderRadius),
               border: Border.all(
-                color: HifiTheme.cardBorder.withOpacity(0.7),
+                color: HifiTheme.cardBorder.withValues(alpha: 0.7),
                 width: 1.0,
               ),
             ),

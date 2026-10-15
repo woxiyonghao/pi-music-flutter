@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/ui_config.dart';
 import 'music_database_service.dart';
 
 /// 预设主题实体 (1:1 严格对齐 C++ ThemeManager::ThemePresetInfo)
@@ -206,9 +205,9 @@ class ThemeService extends ChangeNotifier {
 
     final db = MusicDatabaseService.instance;
     db.setSetting('theme_id', '4');
-    db.setSetting('theme_custom_r', (_accentColor.red / 255.0).toStringAsFixed(4));
-    db.setSetting('theme_custom_g', (_accentColor.green / 255.0).toStringAsFixed(4));
-    db.setSetting('theme_custom_b', (_accentColor.blue / 255.0).toStringAsFixed(4));
+    db.setSetting('theme_custom_r', _accentColor.r.toStringAsFixed(4));
+    db.setSetting('theme_custom_g', _accentColor.g.toStringAsFixed(4));
+    db.setSetting('theme_custom_b', _accentColor.b.toStringAsFixed(4));
 
     notifyListeners();
   }

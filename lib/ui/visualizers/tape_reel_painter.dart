@@ -39,7 +39,7 @@ class TapeReelPainter extends CustomPainter {
     final bgPaint = Paint()..color = chassisBg;
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
 
-    final padding = 16.0;
+    const padding = 16.0;
     final w = size.width - padding * 2;
     final h = size.height - padding * 2;
     if (w <= 100 || h <= 100) return;

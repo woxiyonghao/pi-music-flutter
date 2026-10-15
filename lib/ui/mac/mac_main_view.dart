@@ -431,11 +431,11 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
           },
         ),
         // 3: equalizer
-        MacEqualizerView(),
+        const MacEqualizerView(),
         // 4: msebTuning
-        MacMagicTuningView(),
+        const MacMagicTuningView(),
         // 5: dacSettings
-        MacDACSettingView(),
+        const MacDACSettingView(),
         // 6: themeSettings
         MacThemeSettingView(
           currentVisualizer: activeVisualizer,
@@ -444,13 +444,13 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
           },
         ),
         // 7: systemSettings
-        MacSystemSettingsView(),
+        const MacSystemSettingsView(),
         // 8: webService
         const MacWebServiceView(isWifiTransfer: false),
         // 9: wifiTransfer
         const MacWebServiceView(isWifiTransfer: true),
         // 10: terminal
-        MacSystemSettingsView(),
+        const MacSystemSettingsView(),
       ],
     );
   }
@@ -462,7 +462,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
         GestureDetector(
           onTap: _closeCreatePlaylistModal,
           behavior: HitTestBehavior.opaque,
-          child: Container(color: Colors.black.withOpacity(0.45)),
+          child: Container(color: Colors.black.withValues(alpha: 0.45)),
         ),
 
         // 居中 380x200 磨砂模态对话框 (对齐 Application.cpp::renderCreatePlaylistModal)
