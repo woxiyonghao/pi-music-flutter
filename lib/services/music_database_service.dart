@@ -58,7 +58,12 @@ class MusicDatabaseService extends ChangeNotifier {
       stmt.dispose();
       String val = defaultValue;
       if (res.isNotEmpty) {
-        val = res.first['value'] as String? ?? defaultValue;
+        val = (res.first['value'] as String? ?? defaultValue).trim();
+        while (val.length >= 2 &&
+            ((val.startsWith("'") && val.endsWith("'")) ||
+             (val.startsWith('"') && val.endsWith('"')))) {
+          val = val.substring(1, val.length - 1).trim();
+        }
       }
       db.dispose();
       return val;

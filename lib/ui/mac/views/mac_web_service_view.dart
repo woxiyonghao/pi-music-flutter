@@ -37,73 +37,83 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = ThemeService.instance.accentColor;
+    return ListenableBuilder(
+      listenable: ThemeService.instance,
+      builder: (context, _) {
+        final accent = ThemeService.instance.accentColor;
 
-    return GlassCard(
-      borderRadius: UIConfig.containerRounding,
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 顶部标题与子模块切换药丸
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
+        return GlassCard(
+          borderRadius: UIConfig.containerRounding,
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 顶部标题与子模块切换药丸
               Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Text(
-                    'Web 服务',
-                    style: TextStyle(
-                      fontSize: UIConfig.fontMedium,
-                      fontWeight: FontWeight.bold,
-                      color: UIConfig.textActive,
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        const Text(
+                          'Web 服务',
+                          style: TextStyle(
+                            fontSize: UIConfig.fontMedium,
+                            fontWeight: FontWeight.bold,
+                            color: UIConfig.textActive,
+                          ),
+                        ),
+                        const SizedBox(width: 12.0),
+                        Expanded(
+                          child: Text(
+                            _activeSubModule == 0
+                                ? '当前设备: macOS Desktop · 支持旧手机/平板当数播主机 · 双向毫秒级遥控'
+                                : '同一局域网下电脑或手机免线拖拽传输 · 即传即播 · 自动扫描入库',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              fontSize: UIConfig.fontSmall,
+                              color: UIConfig.textMuted,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 12.0),
-                  Text(
-                    _activeSubModule == 0
-                        ? '当前设备: macOS Desktop · 支持旧手机/平板当数播主机 · 双向毫秒级遥控'
-                        : '同一局域网下电脑或手机免线拖拽传输 · 即传即播 · 自动扫描入库',
-                    style: const TextStyle(
-                      fontSize: UIConfig.fontSmall,
-                      color: UIConfig.textMuted,
+                  const SizedBox(width: 16.0),
+
+                  // 顶部子模块药丸切换组
+                  Container(
+                    padding: const EdgeInsets.all(2.0),
+                    decoration: BoxDecoration(
+                      color: const Color.fromRGBO(20, 26, 36, 0.8),
+                      borderRadius: BorderRadius.circular(8.0),
+                      border: Border.all(
+                        color: const Color.fromRGBO(255, 255, 255, 0.1),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        _buildSubModulePill(
+                          index: 0,
+                          label: 'Web 远程控制',
+                          isActive: _activeSubModule == 0,
+                          accent: accent,
+                        ),
+                        _buildSubModulePill(
+                          index: 1,
+                          label: 'WiFi 局域网传歌',
+                          isActive: _activeSubModule == 1,
+                          accent: accent,
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-
-              // 顶部子模块药丸切换组
-              Container(
-                padding: const EdgeInsets.all(2.0),
-                decoration: BoxDecoration(
-                  color: const Color.fromRGBO(20, 26, 36, 0.8),
-                  borderRadius: BorderRadius.circular(8.0),
-                  border: Border.all(
-                    color: const Color.fromRGBO(255, 255, 255, 0.1),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    _buildSubModulePill(
-                      index: 0,
-                      label: 'Web 远程控制',
-                      isActive: _activeSubModule == 0,
-                      accent: accent,
-                    ),
-                    _buildSubModulePill(
-                      index: 1,
-                      label: 'WiFi 局域网传歌',
-                      isActive: _activeSubModule == 1,
-                      accent: accent,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 16.0),
 
           // 核心内容区
@@ -119,6 +129,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
         ],
       ),
     );
+  },
+);
   }
 
   Widget _buildSubModulePill({
@@ -162,61 +174,64 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 7.0,
-                      height: 7.0,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _isWebServerRunning
-                            ? const Color(0xFF34C759)
-                            : UIConfig.textMuted,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 7.0,
+                        height: 7.0,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _isWebServerRunning
+                              ? const Color(0xFF34C759)
+                              : UIConfig.textMuted,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8.0),
-                    Text(
-                      _isWebServerRunning
-                          ? '【本机数播服务运行中】 4 线程 8088 端口在线'
-                          : '【本机数播服务已停止】 0 线程 0 端口开销',
-                      style: const TextStyle(
-                        fontSize: UIConfig.fontRegular,
-                        fontWeight: FontWeight.w600,
-                        color: UIConfig.textActive,
+                      const SizedBox(width: 8.0),
+                      Text(
+                        _isWebServerRunning
+                            ? '【本机数播服务运行中】 4 线程 8088 端口在线'
+                            : '【本机数播服务已停止】 0 线程 0 端口开销',
+                        style: const TextStyle(
+                          fontSize: UIConfig.fontRegular,
+                          fontWeight: FontWeight.w600,
+                          color: UIConfig.textActive,
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 8.0),
+                  const Text(
+                    '遥控访问网址: http://192.168.0.100:8088',
+                    style: TextStyle(
+                      fontSize: UIConfig.fontSmall,
+                      color: Color(0xFF64B5F6),
+                      fontFamily: 'monospace',
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8.0),
-                const Text(
-                  '遥控访问网址: http://192.168.0.100:8088',
-                  style: TextStyle(
-                    fontSize: UIConfig.fontSmall,
-                    color: Color(0xFF64B5F6),
-                    fontFamily: 'monospace',
                   ),
-                ),
-                const SizedBox(height: 4.0),
-                const Text(
-                  'WebSocket 通道: ws://192.168.0.100:8088/ws · 网络: 有线直连 (Ethernet)',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: UIConfig.textMuted,
+                  const SizedBox(height: 4.0),
+                  const Text(
+                    'WebSocket 通道: ws://192.168.0.100:8088/ws · 网络: 有线直连 (Ethernet)',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: UIConfig.textMuted,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 3.0),
-                const Text(
-                  '提示: 仅在开启服务后才占用系统端口和后台线程，平时开启 0 损耗',
-                  style: TextStyle(
-                    fontSize: 11.0,
-                    color: UIConfig.textMuted,
+                  const SizedBox(height: 3.0),
+                  const Text(
+                    '提示: 仅在开启服务后才占用系统端口和后台线程，平时开启 0 损耗',
+                    style: TextStyle(
+                      fontSize: 11.0,
+                      color: UIConfig.textMuted,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+            const SizedBox(width: 16.0),
             InkWell(
               onTap: () => setState(() => _isWebServerRunning = !_isWebServerRunning),
               borderRadius: BorderRadius.circular(6.0),
@@ -420,53 +435,56 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 7.0,
-                      height: 7.0,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _isWifiServerRunning
-                            ? const Color(0xFF34C759)
-                            : UIConfig.textMuted,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 7.0,
+                        height: 7.0,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _isWifiServerRunning
+                              ? const Color(0xFF34C759)
+                              : UIConfig.textMuted,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8.0),
-                    Text(
-                      _isWifiServerRunning
-                          ? '无线传歌服务正在运行中'
-                          : '无线传歌服务已停止',
-                      style: const TextStyle(
-                        fontSize: UIConfig.fontRegular,
-                        fontWeight: FontWeight.w600,
-                        color: UIConfig.textActive,
+                      const SizedBox(width: 8.0),
+                      Text(
+                        _isWifiServerRunning
+                            ? '无线传歌服务正在运行中'
+                            : '无线传歌服务已停止',
+                        style: const TextStyle(
+                          fontSize: UIConfig.fontRegular,
+                          fontWeight: FontWeight.w600,
+                          color: UIConfig.textActive,
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 8.0),
+                  const Text(
+                    '传歌网址: http://192.168.0.100:8080',
+                    style: TextStyle(
+                      fontSize: UIConfig.fontSmall,
+                      color: Color(0xFF64B5F6),
+                      fontFamily: 'monospace',
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8.0),
-                const Text(
-                  '传歌网址: http://192.168.0.100:8080',
-                  style: TextStyle(
-                    fontSize: UIConfig.fontSmall,
-                    color: Color(0xFF64B5F6),
-                    fontFamily: 'monospace',
                   ),
-                ),
-                const SizedBox(height: 4.0),
-                const Text(
-                  'Wi-Fi: 有线直连 (Ethernet) · 存储: /Users/mk10',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: UIConfig.textMuted,
+                  const SizedBox(height: 4.0),
+                  const Text(
+                    'Wi-Fi: 有线直连 (Ethernet) · 存储: /Users/mk10',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: UIConfig.textMuted,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+            const SizedBox(width: 16.0),
             InkWell(
               onTap: () => setState(() => _isWifiServerRunning = !_isWifiServerRunning),
               borderRadius: BorderRadius.circular(6.0),
