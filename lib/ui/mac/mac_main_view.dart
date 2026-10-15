@@ -183,12 +183,9 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                   onPointerDown: (_) => _onUserActivity(),
                   onPointerMove: (_) => _onUserActivity(),
                   onPointerSignal: (_) => _onUserActivity(),
-                  child: GestureDetector(
-                    onDoubleTap: _toggleFullscreen,
-                    behavior: HitTestBehavior.translucent,
-                    child: AnimatedBuilder(
-                      animation: _fullscreenAnim,
-                      builder: (context, _) {
+                  child: AnimatedBuilder(
+                    animation: _fullscreenAnim,
+                    builder: (context, _) {
                         final progress = _fullscreenAnim.value;
 
                         // C++ Application.cpp:802-803 ease_t 三次方极速缓动因子
@@ -395,8 +392,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                       },
                     ),
                   ),
-                ),
-              );
+                );
             },
           ),
         );

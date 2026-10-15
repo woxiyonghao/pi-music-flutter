@@ -55,11 +55,9 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
   // 动画时间
   double _animTime = 0.0;
   double _lastTimestamp = 0.0;
-  bool _isSettled = false;
 
   void _onPlayStateChanged() {
     if (mounted) {
-      _isSettled = false;
       if (!_ticker.isTicking) {
         _lastTimestamp = 0.0;
         _ticker.start();
@@ -145,7 +143,6 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           _rightAngle = McIntoshMeterPainter.minAngle;
           _accuphaseValL = 0.0;
           _accuphaseValR = 0.0;
-          _isSettled = true;
           _ticker.stop(); // 彻底停止 Ticker，释放 OS VSync，CPU 直降至 0.0%
         }
       }
@@ -155,8 +152,6 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
 
     if (state.isPlaying || !isMeterMode) {
       _ticker.start();
-    } else {
-      _isSettled = true;
     }
   }
 
@@ -164,7 +159,6 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
   void didUpdateWidget(covariant VisualizerStageWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.activeType != oldWidget.activeType && widget.activeType != null) {
-      _isSettled = false;
       _currentType = widget.activeType!;
       if (!_ticker.isTicking) {
         _lastTimestamp = 0.0;
