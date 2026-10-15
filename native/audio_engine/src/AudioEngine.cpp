@@ -382,11 +382,9 @@ void AudioEngine::play() {
 }
 
 void AudioEngine::pause() {
-    if (is_playing_.load(std::memory_order_acquire)) {
-        is_paused_.store(true, std::memory_order_release);
-        is_playing_.store(false, std::memory_order_release);
-        if (sink_) sink_->pause();
-    }
+    is_paused_.store(true, std::memory_order_release);
+    is_playing_.store(false, std::memory_order_release);
+    if (sink_) sink_->pause();
 }
 
 void AudioEngine::togglePlayPause() {
@@ -446,6 +444,9 @@ void AudioEngine::seek(double target_seconds) {
         ring_buffer_.reset();
         if (sink_) {
             sink_->flush();
+            if (!is_playing_.load(std::memory_order_acquire)) {
+                sink_->pause();
+            }
         }
         constexpr size_t SEEK_PREBUFFER = 32768;
         uint32_t rate = (current_spec_.sample_rate > 0) ? current_spec_.sample_rate : 44100;
@@ -1189,6 +1190,9 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
         if (!eof_reported_.exchange(true, std::memory_order_acq_rel)) {
             std::cout << "[AudioEngine] onSinkDataNeeded: EOF and buffer drained, triggering eof_callback" << std::endl;
             is_playing_.store(false, std::memory_order_release);
+            if (sink_) {
+                sink_->pause();
+            }
             if (eof_callback_) {
                 eof_callback_();
             }

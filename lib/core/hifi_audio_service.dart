@@ -75,22 +75,6 @@ class HifiAudioService extends ChangeNotifier {
       final now = DateTime.now().millisecondsSinceEpoch;
       if (_hasStartedActivePlayback && !isPlaying && !_state.isPaused && (now - _playInitiatedEpoch > 1200)) {
         _hasStartedActivePlayback = false;
-        _state = PlaybackState(
-          isPlaying: false,
-          isPaused: false,
-          isBitPerfect: isBitPerfect,
-          currentTime: 0.0,
-          duration: duration,
-          progress: 0.0,
-          volume: volume,
-          isMuted: isMuted,
-          playMode: _playMode,
-          activeDeviceName: 'Apple Direct',
-          activeSampleRate: _currentTrack?.sampleRate ?? 192000,
-          spectrumLevels: List.filled(12, 0.0),
-        );
-        isPlayingNotifier.value = false;
-        notifyListeners();
         next();
         return;
       }
@@ -233,6 +217,28 @@ class HifiAudioService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void stop() {
+    _bindings.stop();
+    _bindings.seek(0.0);
+    _hasStartedActivePlayback = false;
+    isPlayingNotifier.value = false;
+    _state = PlaybackState(
+      isPlaying: false,
+      isPaused: false,
+      isBitPerfect: _state.isBitPerfect,
+      currentTime: 0.0,
+      duration: _state.duration,
+      progress: 0.0,
+      volume: _state.volume,
+      isMuted: _state.isMuted,
+      playMode: _playMode,
+      activeDeviceName: _state.activeDeviceName,
+      activeSampleRate: _state.activeSampleRate,
+      spectrumLevels: List.filled(12, 0.0),
+    );
+    notifyListeners();
+  }
+
   void previous() {
     if (_playlistQueue.isEmpty) return;
     if (_state.currentTime > 3.0) {
@@ -244,15 +250,16 @@ class HifiAudioService extends ChangeNotifier {
     } else {
       _currentIndex = _playlistQueue.length - 1;
     }
-    playTrack(_playlistQueue[_currentIndex]);
+    playTrack(_playlistQueue[_currentIndex], _playlistQueue, _currentIndex);
   }
 
   void next() {
     if (_playlistQueue.isEmpty) return;
     switch (_playMode) {
       case PlayMode.loopSingle:
-        seek(0.0);
-        play();
+        if (_currentTrack != null) {
+          playTrack(_currentTrack!, _playlistQueue, _currentIndex);
+        }
         return;
       case PlayMode.shuffle:
         if (_playlistQueue.length > 1) {
@@ -267,8 +274,8 @@ class HifiAudioService extends ChangeNotifier {
         if (_currentIndex < _playlistQueue.length - 1) {
           _currentIndex++;
         } else {
-          pause();
-          seek(0.0);
+          // 顺序播放到列表末尾，彻底停止
+          stop();
           return;
         }
         break;
@@ -276,7 +283,7 @@ class HifiAudioService extends ChangeNotifier {
         _currentIndex = (_currentIndex + 1) % _playlistQueue.length;
         break;
     }
-    playTrack(_playlistQueue[_currentIndex]);
+    playTrack(_playlistQueue[_currentIndex], _playlistQueue, _currentIndex);
   }
 
   void addToQueue(Track track) {

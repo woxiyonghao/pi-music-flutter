@@ -210,6 +210,8 @@ class WebRemoteService extends ChangeNotifier {
         audio.play();
       } else if (path == '/api/pause') {
         audio.pause();
+      } else if (path == '/api/stop') {
+        audio.stop();
       } else if (path == '/api/toggle') {
         audio.togglePlayPause();
       } else if (path == '/api/next') {
