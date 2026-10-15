@@ -103,12 +103,7 @@ class SiriOrbPainter extends CustomPainter {
       ..color = accentColor.withValues(alpha: 0.14);
     canvas.drawCircle(center, orbRadius, tintPaint);
 
-    // [2] 菲涅尔球体自然柔化微外沿 (极纤细 0.8px，柔和融于背景，绝非突兀的大线框)
-    final fresnelPaint = Paint()
-      ..color = accentColor.withValues(alpha: 0.35)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8;
-    canvas.drawCircle(center, orbRadius, fresnelPaint);
+    // [2] 无任何外层线框 (严格消除最外层 wireframe 线框，由玻璃底色与漫射辉光自然界定边缘)
 
     // [3] 左上角 3D 玻璃镜面弧度高光 (Specular Glass Crescent Highlight)
     final hlCenter = Offset(center.dx - orbRadius * 0.38, center.dy - orbRadius * 0.38);
