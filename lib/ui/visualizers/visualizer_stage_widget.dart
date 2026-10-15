@@ -11,6 +11,7 @@ import 'tape_reel_painter.dart';
 import 'led_spectrum_painter.dart';
 import 'neon_waveform_painter.dart';
 import 'siri_orb_painter.dart';
+import 'siri_wave_painter.dart';
 import 'audio_bubbles_painter.dart';
 import 'cyber_grid_painter.dart';
 import 'glass_clock_painter.dart';
@@ -105,7 +106,7 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
   @override
   void initState() {
     super.initState();
-    _currentType = widget.initialType;
+    _currentType = widget.activeType ?? widget.initialType;
 
     _ticker = createTicker((elapsed) {
       final t = elapsed.inMicroseconds / 1000000.0;
@@ -115,6 +116,16 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
       _updatePhysics(dt);
       setState(() {});
     })..start();
+  }
+
+  @override
+  void didUpdateWidget(covariant VisualizerStageWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.activeType != oldWidget.activeType && widget.activeType != null) {
+      setState(() {
+        _currentType = widget.activeType!;
+      });
+    }
   }
 
   void _updatePhysics(double dt) {
@@ -265,11 +276,19 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           peakHold: _peakHold,
         );
         break;
-      case VisualizerType.neonWave:
       case VisualizerType.siriWave:
+        painter = SiriWavePainter(
+          spectrumLevels: state.spectrumLevels,
+          animTime: _animTime,
+          isPlaying: state.isPlaying,
+        );
+        break;
+      case VisualizerType.neonWave:
         painter = NeonWaveformPainter(
           levels: state.spectrumLevels,
           animTime: _animTime,
+          accentColor: ThemeService.instance.accentColor,
+          isPlaying: state.isPlaying,
         );
         break;
       case VisualizerType.cyberGrid:
@@ -310,6 +329,8 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
         painter = SiriOrbPainter(
           energy: avgEnergy,
           animTime: _animTime,
+          accentColor: ThemeService.instance.accentColor,
+          isPlaying: state.isPlaying,
         );
         break;
       case VisualizerType.pureBlack:

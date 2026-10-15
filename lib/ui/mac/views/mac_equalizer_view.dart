@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
@@ -33,11 +34,39 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
   late List<double> _bandGains = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.5, 4.5, 6.0, 6.0];
   bool _isEnabled = true;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  void _loadSettings() {
+    final db = MusicDatabaseService.instance;
+    _isEnabled = db.getSetting('eq_enabled', '1') == '1';
+    _selectedPreset = int.tryParse(db.getSetting('eq_selected_preset', '6'))?.clamp(0, presets.length - 1) ?? 6;
+
+    final defaultGains = presets[_selectedPreset]['gains'] as List<double>;
+    _bandGains = List<double>.generate(10, (i) {
+      final savedStr = db.getSetting('eq_band_$i', defaultGains[i].toString());
+      return double.tryParse(savedStr)?.clamp(-12.0, 12.0) ?? defaultGains[i];
+    });
+  }
+
+  void _saveSettings() {
+    final db = MusicDatabaseService.instance;
+    db.setSetting('eq_enabled', _isEnabled ? '1' : '0');
+    db.setSetting('eq_selected_preset', _selectedPreset.toString());
+    for (int i = 0; i < 10; i++) {
+      db.setSetting('eq_band_$i', _bandGains[i].toStringAsFixed(1));
+    }
+  }
+
   void _applyPreset(int index) {
     setState(() {
       _selectedPreset = index;
       _bandGains = List<double>.from(presets[index]['gains'] as List);
       _isEnabled = index != 0;
+      _saveSettings();
     });
   }
 
@@ -46,6 +75,7 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
       _selectedPreset = 0;
       _bandGains = List.filled(10, 0.0);
       _isEnabled = false;
+      _saveSettings();
     });
   }
 
@@ -54,6 +84,7 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
       _bandGains[index] = gain.clamp(-12.0, 12.0);
       _selectedPreset = presets.length - 1; // 标记为自定义
       if (!_isEnabled) _isEnabled = true;
+      _saveSettings();
     });
   }
 
@@ -126,7 +157,12 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
 
                   // EQ 激活/旁路胶囊按钮
                   InkWell(
-                    onTap: () => setState(() => _isEnabled = !_isEnabled),
+                    onTap: () {
+                      setState(() {
+                        _isEnabled = !_isEnabled;
+                        _saveSettings();
+                      });
+                    },
                     borderRadius: BorderRadius.circular(14.0),
                     child: Container(
                       height: 28.0,
@@ -235,6 +271,7 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
                   if (i > 0) const SizedBox(width: 8.0),
                   Expanded(
                     child: _MixerFaderColumn(
+                      key: ValueKey('eq_${i}_${accent.toARGB32()}'),
                       index: i,
                       label: bandLabels[i],
                       gain: _bandGains[i],
@@ -454,6 +491,7 @@ class _MixerFaderColumn extends StatelessWidget {
   final ValueChanged<double> onGainChanged;
 
   const _MixerFaderColumn({
+    super.key,
     required this.index,
     required this.label,
     required this.gain,

@@ -212,12 +212,28 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                         final opacity = (1.0 - easeT).clamp(0.0, 1.0);
                         final isFullyFullscreen = progress >= 0.999;
 
+                        final screensaverThemeIdx = int.tryParse(db.getSetting('setting_idle_screensaver_theme', '0')) ?? 0;
+                        final VisualizerType effectiveVisualizer;
+                        if (progress > 0.6 && screensaverThemeIdx > 0) {
+                          switch (screensaverThemeIdx) {
+                            case 1: effectiveVisualizer = VisualizerType.mcIntosh; break;
+                            case 2: effectiveVisualizer = VisualizerType.accuphase; break;
+                            case 3: effectiveVisualizer = VisualizerType.tapeReel; break;
+                            case 4: effectiveVisualizer = VisualizerType.siriWave; break;
+                            case 5: effectiveVisualizer = VisualizerType.bubbles; break;
+                            case 6: effectiveVisualizer = VisualizerType.glassClock; break;
+                            default: effectiveVisualizer = activeVisualizer; break;
+                          }
+                        } else {
+                          effectiveVisualizer = activeVisualizer;
+                        }
+
                         return Stack(
                           fit: StackFit.expand,
                           children: [
                             // 1. 全景底层背景与音乐律动动效 (麦景图湖蓝 / 金嗓子香槟金 / 开盘机 / 48列频谱)
                             MacBackgroundWidget(
-                              visualizerType: activeVisualizer,
+                              visualizerType: effectiveVisualizer,
                               fullscreenProgress: progress,
                             ),
 
@@ -306,7 +322,65 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                 ),
                               ),
 
-                            // 5. 顶层新建播放列表模态弹窗
+                             // 5. 全屏沉浸模式悬浮工具条 (动效切换 + 退出全屏)
+                            if (progress > 0.05)
+                              Positioned(
+                                top: 16.0,
+                                right: 16.0,
+                                child: Opacity(
+                                  opacity: progress.clamp(0.0, 1.0),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+                                    decoration: BoxDecoration(
+                                      color: const Color.fromRGBO(14, 18, 26, 0.82),
+                                      borderRadius: BorderRadius.circular(20.0),
+                                      border: Border.all(
+                                        color: const Color.fromRGBO(255, 255, 255, 0.12),
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.4),
+                                          blurRadius: 10.0,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        DropdownButtonHideUnderline(
+                                          child: DropdownButton<VisualizerType>(
+                                            value: effectiveVisualizer,
+                                            dropdownColor: const Color(0xFF161B24),
+                                            icon: Icon(Icons.style_rounded, size: 16, color: UIConfig.accent),
+                                            style: const TextStyle(fontSize: 11, color: UIConfig.textActive, fontWeight: FontWeight.bold),
+                                            items: VisualizerType.values.map((type) {
+                                              return DropdownMenuItem<VisualizerType>(
+                                                value: type,
+                                                child: Text(type.displayName),
+                                              );
+                                            }).toList(),
+                                            onChanged: (newType) {
+                                              if (newType != null) {
+                                                ThemeService.instance.setBackgroundVisualMode(newType.index);
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8.0),
+                                        IconButton(
+                                          icon: const Icon(Icons.fullscreen_exit_rounded, size: 18, color: UIConfig.iconNormal),
+                                          padding: EdgeInsets.zero,
+                                          constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                                          tooltip: '退出全屏',
+                                          onPressed: _exitFullscreenIdle,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                            // 6. 顶层新建播放列表模态弹窗
                             if (_showCreatePlaylistModal) _buildCreatePlaylistModal(),
                           ],
                         );

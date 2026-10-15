@@ -1,111 +1,167 @@
-import 'dart:math';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-/// 极光赛博重低音波形瀑布 (Neon Waveform)
+/// 电光霓虹声波绘制器 (1:1 严格对齐 C++ NeonWaveformRenderer.cpp)
+/// 呈现 48 列柔和全屏全频漫射光柱阴影、水平全景霓虹氛围带与高频密集抗锯齿电光脉冲核心
 class NeonWaveformPainter extends CustomPainter {
   final List<double> levels; // 12 频段数据
   final double animTime;     // 随时间演进的相位
+  final Color accentColor;
+  final bool isPlaying;
 
-  static const Color cyan = Color(0xFF00F0FF);
-  static const Color purple = Color(0xFFBD00FF);
-  static const Color pink = Color(0xFFFF007F);
-
-  NeonWaveformPainter({
+  const NeonWaveformPainter({
     required this.levels,
     required this.animTime,
+    this.accentColor = const Color(0xFF00F0FF),
+    this.isPlaying = true,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. 深空黑底板
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), Paint()..color = const Color(0xFF05070B));
+    // 1. 发烧深空纯净底板
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = const Color(0xFF060911),
+    );
 
-    final centerY = size.height * 0.50;
+    final centerY = size.height * 0.48;
+    final nBands = levels.isNotEmpty ? math.min(levels.length, 16) : 0;
 
-    // 提取低频能量和高频能量
-    final bassEnergy = levels.isNotEmpty ? (levels[0] + (levels.length > 1 ? levels[1] : 0.0)) * 0.5 : 0.0;
-    final trebleEnergy = levels.length > 8 ? levels[8] : 0.0;
+    // 平滑插值频段能量
+    double totalEnergy = 0.0;
+    if (isPlaying && levels.isNotEmpty) {
+      for (int i = 0; i < nBands; ++i) {
+        totalEnergy += levels[i];
+      }
+    }
+    final avgEnergy = nBands > 0 ? (totalEnergy / nBands).clamp(0.0, 1.0) : 0.0;
 
-    // 2. 背景层：暗态垂直多频段漫射光柱 (Radiant Pillars)
-    const numBars = 36;
+    // 2. 背景层：暗态垂直多频段漫射光柱阴影 (48列连续平滑插值，彻底根除左侧聚集突兀感)
+    const numBars = 48;
     final barSpacing = size.width / numBars;
-    final barW = barSpacing * 0.65;
+    final barW = barSpacing * 0.72;
 
-    for (int i = 0; i < numBars; i++) {
+    for (int i = 0; i < numBars; ++i) {
       final normI = i / (numBars - 1);
-      final bandIdx = (normI * (levels.isEmpty ? 1 : levels.length - 1)).clamp(0, levels.length - 1).toInt();
-      final lvl = levels.isNotEmpty ? levels[bandIdx] : 0.0;
+      final bandPos = normI * math.max(1, nBands - 1);
+      final idx0 = bandPos.floor().clamp(0, nBands - 1);
+      final idx1 = math.min(idx0 + 1, nBands - 1);
+      final frac = bandPos - idx0;
 
-      final barH = 10.0 + lvl * (size.height * 0.38);
+      final lvl0 = (isPlaying && levels.isNotEmpty) ? levels[idx0] : 0.0;
+      final lvl1 = (isPlaying && levels.isNotEmpty) ? levels[idx1] : 0.0;
+      final bandLvl = (lvl0 * (1.0 - frac) + lvl1 * frac).clamp(0.0, 1.0);
+
+      final barH = 12.0 + bandLvl * (size.height * 0.32);
       final bx = i * barSpacing + (barSpacing - barW) * 0.5;
+
+      // 柔和羽化渐变 (无硬直角边缘)
+      final shadowAlpha = (0.05 + bandLvl * 0.28).clamp(0.0, 0.35);
 
       final pillarShader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          cyan.withValues(alpha: 0.0),
-          cyan.withValues(alpha: 0.25 * lvl),
-          cyan.withValues(alpha: 0.0),
+          accentColor.withValues(alpha: 0.0),
+          accentColor.withValues(alpha: shadowAlpha),
+          accentColor.withValues(alpha: 0.0),
         ],
       ).createShader(Rect.fromLTWH(bx, centerY - barH, barW, barH * 2));
 
-      canvas.drawRect(
-        Rect.fromLTWH(bx, centerY - barH, barW, barH * 2),
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(bx, centerY - barH, barW, barH * 2),
+          Radius.circular(barW * 0.5),
+        ),
         Paint()..shader = pillarShader,
       );
     }
 
-    // 3. 多重谐波霓虹流体波形
-    _drawHarmonicWave(canvas, size, centerY, animTime, 1.0, 40.0 * (1.0 + bassEnergy * 2.0), cyan, 2.5);
-    _drawHarmonicWave(canvas, size, centerY, animTime * 1.3 + pi * 0.5, 2.0, 28.0 * (1.0 + trebleEnergy * 2.5), purple, 2.0);
-    _drawHarmonicWave(canvas, size, centerY, animTime * 0.7 + pi, 0.5, 55.0 * (0.8 + bassEnergy * 1.5), pink, 1.8);
-  }
+    // 3. 中间层：水平全景霓虹氛围漫射微光带
+    final auraAlpha = (0.08 + avgEnergy * 0.22).clamp(0.0, 0.32);
+    final auraShader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        accentColor.withValues(alpha: 0.0),
+        accentColor.withValues(alpha: auraAlpha),
+        accentColor.withValues(alpha: 0.0),
+      ],
+    ).createShader(Rect.fromLTWH(0, centerY - 65.0, size.width, 130.0));
 
-  void _drawHarmonicWave(
-    Canvas canvas,
-    Size size,
-    double centerY,
-    double phase,
-    double freqMultiplier,
-    double amplitude,
-    Color waveColor,
-    double strokeWidth,
-  ) {
-    final path = Path();
-    const steps = 120;
-    final dx = size.width / steps;
+    canvas.drawRect(
+      Rect.fromLTWH(0, centerY - 65.0, size.width, 130.0),
+      Paint()..shader = auraShader,
+    );
 
-    for (int i = 0; i <= steps; i++) {
-      final x = i * dx;
-      final normX = i / steps;
+    // 4. 前景层：电光霓虹脉冲波浪核心 (高频密集抗锯齿多道光带)
+    const wavePts = 280;
+    final pts = <Offset>[];
 
-      // 窗函数加权 (两侧衰减至 0，避免突兀截断)
-      final envelope = sin(normX * pi);
+    for (int k = 0; k < wavePts; ++k) {
+      final normX = k / (wavePts - 1);
+      final x = normX * size.width;
 
-      final y = centerY +
-          sin(normX * 4 * pi * freqMultiplier + phase) * amplitude * envelope +
-          cos(normX * 8 * pi * freqMultiplier - phase * 0.5) * (amplitude * 0.3) * envelope;
+      final bandPos = normX * math.max(1, nBands - 1);
+      final b0 = bandPos.floor().clamp(0, nBands - 1);
+      final b1 = math.min(b0 + 1, nBands - 1);
+      final f = bandPos - b0;
+      final lvl0 = (isPlaying && levels.isNotEmpty) ? levels[b0] : 0.0;
+      final lvl1 = (isPlaying && levels.isNotEmpty) ? levels[b1] : 0.0;
+      final e = lvl0 * (1.0 - f) + lvl1 * f;
 
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
+      // 快速高频锐利音频震荡波
+      final highPulse = math.sin(normX * 80.0 - animTime * 3.5) * 0.45 +
+          math.cos(normX * 140.0 + animTime * 4.8) * 0.25;
+
+      // 柔和低频大起伏基波
+      final baseWave = math.sin(normX * 6.28 * 2.2 + animTime * 1.5) * 0.75 +
+          math.sin(normX * 6.28 * 4.5 - animTime * 2.0) * 0.35;
+
+      // 两侧边缘高斯平滑衰减
+      final edgeFade = math.sin(normX * math.pi);
+      final amp = (10.0 + e * 65.0) * edgeFade;
+      final y = centerY + (baseWave + highPulse * (0.3 + e * 0.7)) * amp;
+
+      pts.add(Offset(x, y));
     }
 
-    // 外发光层
-    final glowPaint = Paint()
-      ..color = waveColor.withValues(alpha: 0.45)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth * 2.5;
-    canvas.drawPath(path, glowPaint);
+    if (pts.length > 1) {
+      final wavePath = Path()..moveTo(pts[0].dx, pts[0].dy);
+      for (int i = 1; i < pts.length; ++i) {
+        wavePath.lineTo(pts[i].dx, pts[i].dy);
+      }
 
-    // 核心高亮线
-    final corePaint = Paint()
-      ..color = waveColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
-    canvas.drawPath(path, corePaint);
+      // [光带 1: 最外层弥散大光晕]
+      canvas.drawPath(
+        wavePath,
+        Paint()
+          ..color = accentColor.withValues(alpha: 0.18)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 10.0
+          ..strokeCap = StrokeCap.round,
+      );
+
+      // [光带 2: 次级高饱和霓虹晕]
+      canvas.drawPath(
+        wavePath,
+        Paint()
+          ..color = accentColor.withValues(alpha: 0.45)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4.0
+          ..strokeCap = StrokeCap.round,
+      );
+
+      // [光带 3: 核心极致纤细高亮白芯]
+      canvas.drawPath(
+        wavePath,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.92)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.6
+          ..strokeCap = StrokeCap.round,
+      );
+    }
   }
 
   @override

@@ -36,6 +36,12 @@ typedef _HifiAudioSetMutedDart = void Function(bool);
 typedef _HifiAudioGetSpectrumC = Void Function(Pointer<Float>);
 typedef _HifiAudioGetSpectrumDart = void Function(Pointer<Float>);
 
+typedef _HifiAudioGetSampleRateC = Uint32 Function();
+typedef _HifiAudioGetSampleRateDart = int Function();
+
+typedef _HifiAudioGetDeviceNameC = Void Function(Pointer<Utf8>, Int32);
+typedef _HifiAudioGetDeviceNameDart = void Function(Pointer<Utf8>, int);
+
 /// FFI 绑定底层 C++ audio_engine
 class HifiAudioBindings {
   static HifiAudioBindings? _instance;

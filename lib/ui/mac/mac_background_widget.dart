@@ -42,7 +42,10 @@ class MacBackgroundWidget extends StatelessWidget {
             else if (visualizerType != VisualizerType.pureBlack)
               Opacity(
                 opacity: (0.85 + 0.15 * fullscreenProgress).clamp(0.0, 1.0),
-                child: VisualizerStageWidget(activeType: visualizerType),
+                child: VisualizerStageWidget(
+                  key: ValueKey(visualizerType),
+                  activeType: visualizerType,
+                ),
               ),
           ],
         );

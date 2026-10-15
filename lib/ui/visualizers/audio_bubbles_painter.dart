@@ -82,11 +82,7 @@ class AudioBubblesPainter extends CustomPainter {
       canvas.drawRect(glowRect, glowPaint);
     }
 
-    // 3. 逐个绘制 5 重液态透光气泡
-    final r = accentColor.r;
-    final g = accentColor.g;
-    final b = accentColor.b;
-
+    // 3. 逐个绘制拟真 3D 液态透光气泡
     for (final bubble in bubbles) {
       final drawX = bubble.x + math.sin(bubble.vxPhase) * bubble.vxAmp;
       final drawY = bubble.y;
@@ -97,50 +93,83 @@ class AudioBubblesPainter extends CustomPainter {
 
       final center = Offset(drawX, drawY);
 
-      // [层级 1] 柔和外层漫反射辉光
-      final glowA = (bubble.alpha * 0.35).clamp(0.0, 1.0);
+      // [层级 1] 柔和外层漫反射辉光 (采用径向渐变，高帧率纯 GPU 渲染)
+      final glowA = (bubble.alpha * 0.28).clamp(0.0, 1.0);
+      final glowRect = Rect.fromCircle(center: center, radius: rad * 1.4);
       final glowPaint = Paint()
-        ..color = Color.fromRGBO((r * 255).round(), (g * 255).round(), (b * 255).round(), glowA)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, rad * 0.45);
-      canvas.drawCircle(center, rad * 1.35, glowPaint);
+        ..shader = RadialGradient(
+          colors: [
+            accentColor.withValues(alpha: glowA),
+            accentColor.withValues(alpha: 0.0),
+          ],
+          stops: const [0.65, 1.0],
+        ).createShader(glowRect);
+      canvas.drawCircle(center, rad * 1.4, glowPaint);
 
-      // [层级 2] 半透明液态玻璃主体 (径向渐变，中心通透，边缘微蓄光)
+      // [层级 2] 半透明液态玻璃主体 (径向渐变：中心通透暗深，边缘微蓄光)
       final bodyRect = Rect.fromCircle(center: center, radius: rad);
       final bodyPaint = Paint()
         ..shader = RadialGradient(
+          center: const Alignment(-0.25, -0.25),
           colors: [
-            Color.fromRGBO((r * 255).round(), (g * 255).round(), (b * 255).round(), (bubble.alpha * 0.15).clamp(0.0, 1.0)),
-            Color.fromRGBO((r * 255).round(), (g * 255).round(), (b * 255).round(), (bubble.alpha * 0.55).clamp(0.0, 1.0)),
+            accentColor.withValues(alpha: (bubble.alpha * 0.06).clamp(0.0, 1.0)),
+            accentColor.withValues(alpha: (bubble.alpha * 0.22).clamp(0.0, 1.0)),
+            accentColor.withValues(alpha: (bubble.alpha * 0.65).clamp(0.0, 1.0)),
           ],
-          stops: const [0.4, 1.0],
+          stops: const [0.0, 0.68, 1.0],
         ).createShader(bodyRect);
       canvas.drawCircle(center, rad, bodyPaint);
 
-      // [层级 3] 微光边缘轮廓线 (液态透镜边缘)
-      final rimA = (bubble.alpha * 0.75).clamp(0.0, 1.0);
+      // [层级 3] 色散虹彩边缘 (Thin-Film Iridescence Rim)
       final rimPaint = Paint()
-        ..color = Color.fromRGBO((r * 255).round(), (g * 255).round(), (b * 255).round(), rimA)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2;
+        ..strokeWidth = 1.3
+        ..shader = SweepGradient(
+          startAngle: 0.0,
+          endAngle: math.pi * 2,
+          colors: [
+            accentColor.withValues(alpha: (bubble.alpha * 0.85).clamp(0.0, 1.0)),
+            const Color(0xFF67E8F9).withValues(alpha: (bubble.alpha * 0.70).clamp(0.0, 1.0)), // 青玉色散
+            const Color(0xFFE879F9).withValues(alpha: (bubble.alpha * 0.65).clamp(0.0, 1.0)), // 洋红偏振
+            accentColor.withValues(alpha: (bubble.alpha * 0.85).clamp(0.0, 1.0)),
+          ],
+          stops: const [0.0, 0.35, 0.75, 1.0],
+        ).createShader(bodyRect);
       canvas.drawCircle(center, rad, rimPaint);
 
-      // [层级 4] 左上角高光反光 (Crescent Specular Highlight)
-      final hlCenter = Offset(drawX - rad * 0.32, drawY - rad * 0.32);
-      final hlRad = rad * 0.28;
-      final hlA = (bubble.alpha * (0.85 + treble * 0.15)).clamp(0.0, 1.0);
-      final hlPaint = Paint()
-        ..color = Color.fromRGBO(255, 255, 255, hlA)
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(hlCenter, hlRad, hlPaint);
+      // [层级 4] 左上角新月形弧形高光 (Crescent Specular Arc - 杜绝死板实心圆点)
+      if (rad > 6.0) {
+        final arcRadius = rad * 0.76;
+        final arcRect = Rect.fromCircle(center: center, radius: arcRadius);
+        final specularA = (bubble.alpha * (0.80 + treble * 0.20)).clamp(0.0, 1.0);
+        final specularPaint = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = (rad * 0.12).clamp(1.5, 4.0)
+          ..color = Colors.white.withValues(alpha: specularA);
+        // 在 -140° 到 -80° 绘制一段优雅的高光新月弧线
+        canvas.drawArc(arcRect, -math.pi * 0.78, math.pi * 0.38, false, specularPaint);
 
-      // [层级 5] 右下角微弱次级反光 (Secondary Rim Sheen)
-      final subCenter = Offset(drawX + rad * 0.35, drawY + rad * 0.35);
-      final subRad = rad * 0.16;
-      final subA = (bubble.alpha * (0.35 + mid * 0.20)).clamp(0.0, 1.0);
-      final subPaint = Paint()
-        ..color = Color.fromRGBO(255, 255, 255, subA)
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(subCenter, subRad, subPaint);
+        // 弧线内侧极细晶亮高光核
+        final coreGlintPaint = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = (rad * 0.06).clamp(1.0, 2.0)
+          ..color = Colors.white.withValues(alpha: (specularA * 0.95).clamp(0.0, 1.0));
+        canvas.drawArc(arcRect, -math.pi * 0.66, math.pi * 0.18, false, coreGlintPaint);
+      }
+
+      // [层级 5] 右下角柔和次级焦散反光 (Secondary Caustic Sheen)
+      if (rad > 10.0) {
+        final subArcRect = Rect.fromCircle(center: center, radius: rad * 0.82);
+        final subA = (bubble.alpha * (0.30 + mid * 0.25)).clamp(0.0, 0.7);
+        final subPaint = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = 1.4
+          ..color = Colors.white.withValues(alpha: subA);
+        canvas.drawArc(subArcRect, math.pi * 0.24, math.pi * 0.28, false, subPaint);
+      }
     }
   }
 

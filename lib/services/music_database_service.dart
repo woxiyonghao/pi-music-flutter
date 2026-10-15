@@ -28,6 +28,16 @@ class MusicDatabaseService extends ChangeNotifier {
     return defaultPath;
   }
 
+  Database _openDb() {
+    final db = sqlite3.open(_databasePath);
+    try {
+      db.execute('PRAGMA busy_timeout = 3000;');
+      db.execute('PRAGMA journal_mode = WAL;');
+    } catch (_) {}
+    _ensureSettingsTable(db);
+    return db;
+  }
+
   void _ensureSettingsTable(Database db) {
     db.execute('''
       CREATE TABLE IF NOT EXISTS app_settings (
@@ -42,8 +52,7 @@ class MusicDatabaseService extends ChangeNotifier {
     final dbFile = File(_databasePath);
     if (!dbFile.existsSync()) return defaultValue;
     try {
-      final db = sqlite3.open(_databasePath);
-      _ensureSettingsTable(db);
+      final db = _openDb();
       final stmt = db.prepare('SELECT value FROM app_settings WHERE key = ?;');
       final ResultSet res = stmt.select([key]);
       stmt.dispose();
@@ -66,8 +75,7 @@ class MusicDatabaseService extends ChangeNotifier {
       if (!dbFile.parent.existsSync()) {
         dbFile.parent.createSync(recursive: true);
       }
-      final db = sqlite3.open(_databasePath);
-      _ensureSettingsTable(db);
+      final db = _openDb();
       final stmt = db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?);');
       stmt.execute([key, value]);
       stmt.dispose();
@@ -83,7 +91,7 @@ class MusicDatabaseService extends ChangeNotifier {
     final dbFile = File(_databasePath);
     if (dbFile.existsSync()) {
       try {
-        final db = sqlite3.open(_databasePath);
+        final db = _openDb();
         final ResultSet results = db.select(
           'SELECT id, title, artist, album, file_path, format, sample_rate, bit_depth, '
           'duration_sec, is_cue_track, start_time_sec, end_time_sec, cue_path, track_number '

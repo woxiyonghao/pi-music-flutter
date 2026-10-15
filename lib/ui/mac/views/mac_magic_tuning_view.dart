@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
@@ -28,8 +29,6 @@ class MacMagicTuningView extends StatefulWidget {
 }
 
 class _MacMagicTuningViewState extends State<MacMagicTuningView> {
-  bool _isEnabled = true;
-
   static const List<MSEBParamDef> params = [
     MSEBParamDef(
       title: '声音冷暖',
@@ -103,12 +102,31 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
     ),
   ];
 
-  late final List<double> _values = [1.3, 2.4, 1.9, 1.7, 1.7, 0.6, 0.0, 0.0, 0.0, 0.0];
+  late bool _isEnabled;
+  late final List<double> _values = List.filled(10, 0.0);
+
+  @override
+  void initState() {
+    super.initState();
+    final db = MusicDatabaseService.instance;
+    _isEnabled = db.getSetting('mseb_enabled', '1') == '1';
+
+    const defaultVals = [1.3, 2.4, 1.9, 1.7, 1.7, 0.6, 0.0, 0.0, 0.0, 0.0];
+    for (int i = 0; i < 10; i++) {
+      final savedStr = db.getSetting('mseb_val_$i', defaultVals[i].toString());
+      _values[i] = double.tryParse(savedStr)?.clamp(-10.0, 10.0) ?? defaultVals[i];
+    }
+  }
+
+  void _saveVal(int i, double v) {
+    MusicDatabaseService.instance.setSetting('mseb_val_$i', v.toStringAsFixed(1));
+  }
 
   void _resetAll() {
     setState(() {
       for (int i = 0; i < _values.length; i++) {
         _values[i] = 0.0;
+        _saveVal(i, 0.0);
       }
     });
   }
@@ -142,7 +160,12 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
                 children: [
                   // 开关胶囊按钮
                   InkWell(
-                    onTap: () => setState(() => _isEnabled = !_isEnabled),
+                    onTap: () {
+                      setState(() {
+                        _isEnabled = !_isEnabled;
+                        MusicDatabaseService.instance.setSetting('mseb_enabled', _isEnabled ? '1' : '0');
+                      });
+                    },
                     borderRadius: BorderRadius.circular(6.0),
                     child: Container(
                       height: 28.0,
@@ -317,11 +340,13 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
               // 双向中心滑轨
               Expanded(
                 child: _MSEBBipolarSlider(
+                  key: ValueKey('mseb_${index}_${accent.toARGB32()}'),
                   value: val,
                   accentColor: accent,
                   onChanged: (newVal) {
                     setState(() {
                       _values[index] = newVal;
+                      _saveVal(index, newVal);
                     });
                   },
                 ),
@@ -372,6 +397,7 @@ class _MSEBBipolarSlider extends StatelessWidget {
   final ValueChanged<double> onChanged;
 
   const _MSEBBipolarSlider({
+    super.key,
     required this.value,
     required this.accentColor,
     required this.onChanged,
