@@ -42,17 +42,30 @@ static void my_application_activate(GApplication* application) {
     }
   }
 #endif
-  if (use_header_bar) {
+  gboolean is_pi_kiosk = FALSE;
+  const char* kiosk_env = getenv("PI_KIOSK");
+  const char* fs_env = getenv("PI_FULLSCREEN");
+  if ((kiosk_env && strcmp(kiosk_env, "1") == 0) ||
+      (fs_env && strcmp(fs_env, "1") == 0)) {
+    is_pi_kiosk = TRUE;
+  }
+
+  if (use_header_bar && !is_pi_kiosk) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "hide_player_flutter");
+    gtk_header_bar_set_title(header_bar, "MyHiFi Player");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "hide_player_flutter");
+    gtk_window_set_title(window, "MyHiFi Player");
   }
 
-  gtk_window_set_default_size(window, 1280, 720);
+  // 专为树莓派 7 寸发烧触控屏 (1024x600) 设为默认分辨率
+  gtk_window_set_default_size(window, 1024, 600);
+
+  if (is_pi_kiosk) {
+    gtk_window_fullscreen(window);
+  }
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(

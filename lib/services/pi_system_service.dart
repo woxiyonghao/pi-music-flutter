@@ -101,6 +101,37 @@ class PiSystemService extends ChangeNotifier {
     return 'red'; // 高温警示
   }
 
+  /// 动态探测树莓派 Linux 系统物理挂载的 ALSA 声卡 (/proc/asound/cards)
+  List<Map<String, dynamic>> getDetectedAlsaDevices() {
+    final list = <Map<String, dynamic>>[];
+    if (Platform.isLinux) {
+      try {
+        final cardsFile = File('/proc/asound/cards');
+        if (cardsFile.existsSync()) {
+          final lines = cardsFile.readAsLinesSync();
+          final reg = RegExp(r'^\s*(\d+)\s+\[([^\]]+)\]:\s+([^-]+)\s*-\s*(.+)$');
+          for (final line in lines) {
+            final match = reg.firstMatch(line);
+            if (match != null) {
+              final cardNum = match.group(1)!;
+              final shortName = match.group(2)!.trim();
+              final longName = match.group(4)!.trim();
+              list.add({
+                'name': longName.isNotEmpty ? longName : shortName,
+                'card': 'hw:$cardNum,0',
+                'desc': '物理硬件声卡直通 · Card $cardNum',
+                'chipIndex': 0,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[PiSystemService] 探测 ALSA 声卡失败: $e');
+      }
+    }
+    return list;
+  }
+
   @override
   void dispose() {
     _monitorTimer?.cancel();

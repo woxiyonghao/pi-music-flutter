@@ -41,6 +41,11 @@ flutter pub get
 echo "🚀 [3/3] 打包 Linux 发行版本 (flutter build linux --release)..."
 if [[ "$OSTYPE" == "linux"* ]]; then
     flutter build linux --release
+    mkdir -p "${PROJECT_DIR}/build/linux/arm64/release/bundle/lib"
+    if [ -f "${PROJECT_DIR}/native/build/libhifi_audio_ffi.so" ]; then
+        cp -f "${PROJECT_DIR}/native/build/libhifi_audio_ffi.so" "${PROJECT_DIR}/build/linux/arm64/release/bundle/lib/"
+        echo "✅ 已打包 libhifi_audio_ffi.so 到 bundle/lib/"
+    fi
     echo ""
     echo "🎉 ========================================================================"
     echo "✅ 树莓派 5 发行版构建完成！"

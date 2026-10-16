@@ -3,6 +3,7 @@ import '../../../services/pi_system_service.dart';
 import '../../../services/web_remote_service.dart';
 import '../../../services/wifi_transfer_service.dart';
 import '../../../services/dac_setting_service.dart';
+import '../../../services/ota_update_service.dart';
 import '../../../theme/hifi_theme.dart';
 import '../../common/glass_card.dart';
 
@@ -17,6 +18,16 @@ class PiHardwareSettingsDrawer extends StatefulWidget {
 }
 
 class _PiHardwareSettingsDrawerState extends State<PiHardwareSettingsDrawer> {
+  List<Map<String, dynamic>> get _combinedAlsaOptions {
+    final detected = PiSystemService.instance.getDetectedAlsaDevices();
+    if (detected.isNotEmpty) {
+      final existingCards = detected.map((e) => e['card']).toSet();
+      final defaults = _alsaOptions.where((e) => !existingCards.contains(e['card'])).toList();
+      return [...detected, ...defaults];
+    }
+    return _alsaOptions;
+  }
+
   final List<Map<String, dynamic>> _alsaOptions = [
     {
       'name': 'AK4191 + AK4499EX',
@@ -249,7 +260,7 @@ class _PiHardwareSettingsDrawerState extends State<PiHardwareSettingsDrawer> {
                                   ),
                                   const SizedBox(height: 8),
 
-                                  ..._alsaOptions.map((item) {
+                                  ..._combinedAlsaOptions.map((item) {
                                     final isSelected = piSys.dacDeviceName == item['name'];
 
                                     return Padding(
@@ -681,6 +692,121 @@ class _PiHardwareSettingsDrawerState extends State<PiHardwareSettingsDrawer> {
                                           ),
                                         ),
                                       ],
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 8),
+
+                                  // 服务卡片 3：系统固件 OTA 在线升级
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.04),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: HifiTheme.cardBorder),
+                                    ),
+                                    child: ListenableBuilder(
+                                      listenable: OtaUpdateService.instance,
+                                      builder: (context, _) {
+                                        final ota = OtaUpdateService.instance;
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.system_update_alt_rounded, color: HifiTheme.neonCyan, size: 16),
+                                                const SizedBox(width: 6),
+                                                const Expanded(
+                                                  child: Text(
+                                                    '系统固件 OTA 在线升级 (Git)',
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: HifiTheme.textPrimary,
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: ota.status == OtaStatus.updateAvailable
+                                                        ? Colors.orangeAccent.withValues(alpha: 0.2)
+                                                        : Colors.white.withValues(alpha: 0.05),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    ota.status == OtaStatus.checking
+                                                        ? '检查中...'
+                                                        : (ota.status == OtaStatus.updateAvailable
+                                                            ? '可升级 (${ota.pendingCommitCount}个更新)'
+                                                            : (ota.status == OtaStatus.upToDate ? '已是最新' : '就绪')),
+                                                    style: TextStyle(
+                                                      color: ota.status == OtaStatus.updateAvailable ? Colors.orangeAccent : HifiTheme.textMuted,
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              '分支: ${ota.currentBranch} · 版本: ${ota.currentCommit.length > 7 ? ota.currentCommit.substring(0, 7) : ota.currentCommit}',
+                                              style: const TextStyle(
+                                                color: HifiTheme.textMuted,
+                                                fontSize: 10.5,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            SizedBox(
+                                              width: double.infinity,
+                                              height: 36,
+                                              child: Material(
+                                                color: ota.status == OtaStatus.updateAvailable
+                                                    ? HifiTheme.neonCyan.withValues(alpha: 0.2)
+                                                    : Colors.white.withValues(alpha: 0.06),
+                                                borderRadius: BorderRadius.circular(8),
+                                                child: InkWell(
+                                                  onTap: ota.status == OtaStatus.checking || ota.status == OtaStatus.updating
+                                                      ? null
+                                                      : () async {
+                                                          if (ota.status == OtaStatus.updateAvailable) {
+                                                            await ota.executeUpdate();
+                                                          } else {
+                                                            await ota.checkForUpdates();
+                                                          }
+                                                        },
+                                                  borderRadius: BorderRadius.circular(8),
+                                                  child: Container(
+                                                    alignment: Alignment.center,
+                                                    decoration: BoxDecoration(
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      border: Border.all(
+                                                        color: ota.status == OtaStatus.updateAvailable
+                                                            ? HifiTheme.neonCyan
+                                                            : HifiTheme.cardBorder,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      ota.status == OtaStatus.checking
+                                                          ? '正在检查远程更新...'
+                                                          : (ota.status == OtaStatus.updating
+                                                              ? '正在拉取代码升级...'
+                                                              : (ota.status == OtaStatus.updateAvailable ? '⚡ 立即一键升级固件' : '检查在线固件更新')),
+                                                      style: TextStyle(
+                                                        color: ota.status == OtaStatus.updateAvailable ? HifiTheme.neonCyan : HifiTheme.textPrimary,
+                                                        fontSize: 11.5,
+                                                        fontWeight: FontWeight.bold,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
                                     ),
                                   ),
                                 ],

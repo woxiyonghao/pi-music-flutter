@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/hifi_audio_service.dart';
 import '../../services/pi_system_service.dart';
 import '../../services/theme_service.dart';
@@ -152,7 +153,43 @@ class _PiMainViewState extends State<PiMainView> {
             ? VisualizerType.values[themeService.backgroundVisualMode]
             : VisualizerType.mcIntosh;
 
-        return Listener(
+        return Focus(
+          autofocus: true,
+          onKeyEvent: (node, event) {
+            if (event is! KeyDownEvent) return KeyEventResult.ignored;
+            _onUserActivity();
+            final key = event.logicalKey;
+            if (key == LogicalKeyboardKey.space || key == LogicalKeyboardKey.mediaPlayPause) {
+              audioService.togglePlayPause();
+              return KeyEventResult.handled;
+            } else if (key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.mediaTrackNext) {
+              audioService.next();
+              return KeyEventResult.handled;
+            } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.mediaTrackPrevious) {
+              audioService.previous();
+              return KeyEventResult.handled;
+            } else if (key == LogicalKeyboardKey.arrowUp) {
+              final newVol = (audioService.state.volume + 0.05).clamp(0.0, 1.0);
+              audioService.setVolume(newVol);
+              _triggerVolumeHud(newVol);
+              return KeyEventResult.handled;
+            } else if (key == LogicalKeyboardKey.arrowDown) {
+              final newVol = (audioService.state.volume - 0.05).clamp(0.0, 1.0);
+              audioService.setVolume(newVol);
+              _triggerVolumeHud(newVol);
+              return KeyEventResult.handled;
+            } else if (key == LogicalKeyboardKey.keyM) {
+              audioService.toggleMute();
+              return KeyEventResult.handled;
+            } else if (key == LogicalKeyboardKey.escape) {
+              if (_activeDrawer != _PiDrawerType.none) {
+                setState(() => _activeDrawer = _PiDrawerType.none);
+                return KeyEventResult.handled;
+              }
+            }
+            return KeyEventResult.ignored;
+          },
+          child: Listener(
           onPointerDown: (_) => _onUserActivity(),
           child: Scaffold(
             backgroundColor: HifiTheme.background,
@@ -248,7 +285,7 @@ class _PiMainViewState extends State<PiMainView> {
               ],
             ),
           ),
-        );
+        ));
       },
     );
   }

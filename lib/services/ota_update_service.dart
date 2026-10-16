@@ -252,6 +252,20 @@ class OtaUpdateService extends ChangeNotifier {
           notifyListeners();
           return false;
         }
+      } else if (Platform.isLinux) {
+        final buildRes = await Process.run(
+          'flutter',
+          ['build', 'linux', '--release'],
+          workingDirectory: root,
+        ).timeout(const Duration(minutes: 5));
+
+        if (buildRes.exitCode != 0) {
+          _status = OtaStatus.failed;
+          _errorMessage = '编译构建失败: ${buildRes.stderr.toString().trim()}';
+          _progressMessage = '';
+          notifyListeners();
+          return false;
+        }
       }
 
       await initLocalVersionInfo();

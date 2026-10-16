@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=MyHiFi Player
+Comment=Waveshare 7-inch QLED 1024x600 High-Fidelity Audio Turntable
+Exec=/home/pi/hide_player_flutter/build/linux/arm64/release/bundle/hide_player_flutter
+Terminal=false
+StartupNotify=false
+Categories=AudioVideo;Audio;Player;

@@ -126,11 +126,16 @@ class HifiAudioBindings {
           'Contents/Frameworks/libhifi_audio_ffi.dylib',
         ]);
       } else if (Platform.isLinux) {
-        // Linux / 树莓派 5
+        // Linux / 树莓派 5: 优先搜寻 bundle/lib、可执行程序同级与本地构建目录
+        final execPath = Platform.resolvedExecutable;
+        final execDir = File(execPath).parent.path;
         _lib = _tryOpen([
+          '$execDir/lib/libhifi_audio_ffi.so',
+          '$execDir/libhifi_audio_ffi.so',
           'libhifi_audio_ffi.so',
           'native/build/libhifi_audio_ffi.so',
           './libhifi_audio_ffi.so',
+          '/usr/local/lib/libhifi_audio_ffi.so',
         ]);
       } else if (Platform.isAndroid) {
         _lib = DynamicLibrary.open('libhifi_audio_ffi.so');
