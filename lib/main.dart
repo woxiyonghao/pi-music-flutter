@@ -49,6 +49,15 @@ class _HiFiPlayerAppState extends State<HiFiPlayerApp> {
       debugShowCheckedModeBanner: false,
       theme: HifiTheme.darkTheme,
       scrollBehavior: const MouseDraggableScrollBehavior(),
+      builder: (context, child) {
+        if (Platform.isLinux || Platform.environment['PI_KIOSK'] == '1') {
+          return MouseRegion(
+            cursor: SystemMouseCursors.none,
+            child: child ?? const SizedBox.shrink(),
+          );
+        }
+        return child ?? const SizedBox.shrink();
+      },
       home: LayoutBuilder(
         builder: (context, constraints) {
           final detected = PlatformHelper.detect(constraints.maxWidth, constraints.maxHeight);

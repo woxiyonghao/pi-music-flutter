@@ -86,6 +86,25 @@ static void my_application_activate(GApplication* application) {
                            self);
   gtk_widget_realize(GTK_WIDGET(view));
 
+  if (is_pi_kiosk) {
+    GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(view));
+    GdkCursor* blank_cursor = gdk_cursor_new_for_display(display, GDK_BLANK_CURSOR);
+    if (!blank_cursor) {
+      blank_cursor = gdk_cursor_new_from_name(display, "none");
+    }
+    if (blank_cursor) {
+      GdkWindow* gdk_win = gtk_widget_get_window(GTK_WIDGET(window));
+      if (gdk_win) {
+        gdk_window_set_cursor(gdk_win, blank_cursor);
+      }
+      GdkWindow* view_win = gtk_widget_get_window(GTK_WIDGET(view));
+      if (view_win) {
+        gdk_window_set_cursor(view_win, blank_cursor);
+      }
+      g_object_unref(blank_cursor);
+    }
+  }
+
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
 
   gtk_widget_grab_focus(GTK_WIDGET(view));

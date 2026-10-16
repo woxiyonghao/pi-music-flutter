@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 /// HiFi 发烧纯音视觉主题规范
@@ -32,7 +33,15 @@ class HifiTheme {
         secondary: neonCyan,
         surface: cardBackground,
       ),
-      fontFamily: 'SF Pro Display',
+      fontFamily: (Platform.isMacOS || Platform.isIOS) ? 'SF Pro Display' : 'WenQuanYi Micro Hei',
+      fontFamilyFallback: const [
+        'WenQuanYi Micro Hei',
+        'WenQuanYi Zen Hei',
+        'Noto Sans CJK SC',
+        'PingFang SC',
+        'Microsoft YaHei',
+        'sans-serif',
+      ],
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -41,3 +50,4 @@ class HifiTheme {
     );
   }
 }
+
