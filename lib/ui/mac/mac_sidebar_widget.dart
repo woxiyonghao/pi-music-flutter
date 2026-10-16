@@ -12,6 +12,7 @@ class MacSidebarWidget extends StatelessWidget {
   final List<Playlist> playlists;
   final String dacName;
   final bool isDacConnected;
+  final String? temperatureText;
   final ValueChanged<SidebarTab> onTabSelected;
   final ValueChanged<int> onPlaylistSelected;
   final VoidCallback onCreatePlaylist;
@@ -24,6 +25,7 @@ class MacSidebarWidget extends StatelessWidget {
     required this.playlists,
     this.dacName = 'Apple Direct',
     this.isDacConnected = true,
+    this.temperatureText,
     required this.onTabSelected,
     required this.onPlaylistSelected,
     required this.onCreatePlaylist,
@@ -186,6 +188,24 @@ class MacSidebarWidget extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (temperatureText != null) ...[
+                  const SizedBox(width: 4.0),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 2.0),
+                    decoration: BoxDecoration(
+                      color: const Color.fromRGBO(255, 255, 255, 0.08),
+                      borderRadius: BorderRadius.circular(4.0),
+                    ),
+                    child: Text(
+                      temperatureText!,
+                      style: const TextStyle(
+                        fontSize: 10.0,
+                        color: Color(0xFF38BDF8),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

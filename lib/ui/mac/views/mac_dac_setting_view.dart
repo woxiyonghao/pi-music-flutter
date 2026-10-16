@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../services/music_database_service.dart';
+import '../../../services/pi_system_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
@@ -15,8 +17,8 @@ class MacDACSettingView extends StatefulWidget {
 class _MacDACSettingViewState extends State<MacDACSettingView> {
   int _selectedChip = 0; // 0: Apple 直通, 1: ES9038PRO, 2: AK4499EX, 3: CS43198, 4: R-2R 纯电阻, 5: ROHM 34301
 
-  static const List<String> chips = [
-    'Apple 直通',
+  static List<String> get chips => [
+    Platform.isLinux ? 'ALSA 直通' : (Platform.isIOS ? 'iOS 直通' : 'Apple 直通'),
     'ES9038PRO',
     'AK4499EX',
     'CS43198',
@@ -378,27 +380,63 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         ),
         const SizedBox(height: 12.0),
         _buildSectionCard(
-          title: 'CoreAudio 音频输出设备拓扑 (实时枚举)',
+          title: Platform.isLinux
+              ? 'ALSA 物理硬件声卡拓扑 (实时探测)'
+              : 'CoreAudio 音频输出设备拓扑 (实时枚举)',
           children: [
-            _buildDeviceRow(
-              index: 0,
-              name: 'LS27B61x',
-              arch: '架构: AppleHDA',
-              isBuiltIn: true,
-              isCurrent: _selectedDeviceIndex == 0,
-              onTap: () => setState(() => _selectedDeviceIndex = 0),
-              accent: accent,
-            ),
-            const SizedBox(height: 6.0),
-            _buildDeviceRow(
-              index: 1,
-              name: 'Mac mini扬声器',
-              arch: '架构: AppleHDA',
-              isBuiltIn: true,
-              isCurrent: _selectedDeviceIndex == 1,
-              onTap: () => setState(() => _selectedDeviceIndex = 1),
-              accent: accent,
-            ),
+            if (Platform.isLinux) ...[
+              for (int i = 0; i < (PiSystemService.instance.getDetectedAlsaDevices().isNotEmpty ? PiSystemService.instance.getDetectedAlsaDevices().length : 4); i++) ...[
+                if (i > 0) const SizedBox(height: 6.0),
+                Builder(
+                  builder: (context) {
+                    final detected = PiSystemService.instance.getDetectedAlsaDevices();
+                    final item = detected.isNotEmpty
+                        ? detected[i]
+                        : [
+                            {'name': 'AK4191 + AK4499EX', 'card': 'hw:0,0 (I2S Master Clock)'},
+                            {'name': 'HiFiBerry DAC+ Pro (PCM5122)', 'card': 'hw:1,0 (I2S)'},
+                            {'name': 'USB Audio Class 2.0 DAC', 'card': 'hw:2,0 (USB Asynchronous)'},
+                            {'name': 'ALSA System Default', 'card': 'default'},
+                          ][i];
+                    final name = item['name'] as String? ?? 'ALSA Card';
+                    final card = item['card'] as String? ?? '';
+                    final isCurrent = _selectedDeviceIndex == i;
+                    return _buildDeviceRow(
+                      index: i,
+                      name: name,
+                      arch: '通道: $card',
+                      isBuiltIn: i == 0,
+                      isCurrent: isCurrent,
+                      onTap: () {
+                        setState(() => _selectedDeviceIndex = i);
+                        PiSystemService.instance.setDacDevice(name, card);
+                      },
+                      accent: accent,
+                    );
+                  },
+                ),
+              ],
+            ] else ...[
+              _buildDeviceRow(
+                index: 0,
+                name: 'LS27B61x',
+                arch: '架构: AppleHDA',
+                isBuiltIn: true,
+                isCurrent: _selectedDeviceIndex == 0,
+                onTap: () => setState(() => _selectedDeviceIndex = 0),
+                accent: accent,
+              ),
+              const SizedBox(height: 6.0),
+              _buildDeviceRow(
+                index: 1,
+                name: 'Mac mini扬声器',
+                arch: '架构: AppleHDA',
+                isBuiltIn: true,
+                isCurrent: _selectedDeviceIndex == 1,
+                onTap: () => setState(() => _selectedDeviceIndex = 1),
+                accent: accent,
+              ),
+            ],
           ],
         ),
       ],

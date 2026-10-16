@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../models/sidebar_tab.dart';
 import '../../services/music_database_service.dart';
+import '../../services/pi_system_service.dart';
 import '../../services/theme_service.dart';
 import '../../theme/ui_config.dart';
 import '../common/glass_card.dart';
@@ -24,7 +25,9 @@ import 'views/mac_web_service_view.dart';
 /// 具备：空闲时间全屏屏保检测 (15s/30s/1m/5m/永不)、四角板块平滑滑出动效 (0.4s 缓动插值)、
 /// 双击或点击胶囊栏无缝切换沉浸表头模式与鼠标活动自适应唤醒
 class MacMainView extends StatefulWidget {
-  const MacMainView({super.key});
+  final String? overrideDacName;
+
+  const MacMainView({super.key, this.overrideDacName});
 
   @override
   State<MacMainView> createState() => _MacMainViewState();
@@ -165,13 +168,33 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([MusicDatabaseService.instance, ThemeService.instance]),
+      listenable: Listenable.merge([
+        MusicDatabaseService.instance,
+        ThemeService.instance,
+        PiSystemService.instance,
+      ]),
       builder: (context, _) {
         final theme = ThemeService.instance;
+        final piSys = PiSystemService.instance;
         final activeVisualizer = VisualizerType.values[theme.backgroundVisualMode.clamp(0, VisualizerType.values.length - 1)];
         final db = MusicDatabaseService.instance;
         final tracks = db.tracks;
         final playlists = db.playlists;
+
+        final String activeDacName;
+        if (widget.overrideDacName != null && widget.overrideDacName!.isNotEmpty) {
+          activeDacName = widget.overrideDacName!;
+        } else if (Platform.isLinux) {
+          activeDacName = piSys.dacDeviceName.isNotEmpty ? piSys.dacDeviceName : 'ALSA Direct';
+        } else if (Platform.isIOS) {
+          activeDacName = 'iPad Direct';
+        } else {
+          activeDacName = 'Apple Direct';
+        }
+
+        final String? tempText = (Platform.isLinux || piSys.socTemperature > 0)
+            ? '${piSys.socTemperature.toStringAsFixed(1)}°C'
+            : null;
 
         return Scaffold(
           backgroundColor: UIConfig.mainStageBg,
@@ -257,8 +280,9 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                           currentTab: _currentTab,
                                           selectedPlaylistId: _selectedPlaylistId,
                                           playlists: playlists,
-                                          dacName: 'Apple Direct',
+                                          dacName: activeDacName,
                                           isDacConnected: true,
+                                          temperatureText: tempText,
                                           onTabSelected: (tab) {
                                             setState(() {
                                               _currentTab = tab;
@@ -578,3 +602,8 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
     );
   }
 }
+
+/// 跨端全景横屏发烧主视窗 (统一 Master-Detail 架构)
+/// 专为 iPad、Mac、树莓派 7 寸 (1024×600) 与 Windows 宽屏台机形态量身定制
+/// 1:1 对齐 C++ 全景发烧架构，实现多端视觉风格与交互逻辑完全统一
+typedef LandscapeMainView = MacMainView;
