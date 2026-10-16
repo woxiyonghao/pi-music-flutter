@@ -1,16 +1,20 @@
 [Unit]
-Description=MyHiFi Player High-Fidelity Audio Turntable
-After=network.target sound.target
+Description=MyHiFi Player High-Fidelity Audio Turntable (Cage Wayland Kiosk)
+After=systemd-user-sessions.service sound.target network.target
 
 [Service]
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/hide_player_flutter
-Environment=DISPLAY=:0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=PI_KIOSK=1
-ExecStart=/home/pi/hide_player_flutter/build/linux/arm64/release/bundle/hide_player_flutter
+ExecStart=/usr/bin/cage -s -- /home/pi/hide_player_flutter/build/linux/arm64/release/bundle/hide_player_flutter
 Restart=always
-RestartSec=3
+RestartSec=2
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+TTYPath=/dev/tty7
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target
