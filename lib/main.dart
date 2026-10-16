@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'core/app_paths.dart';
 import 'core/platform_helper.dart';
 import 'services/web_remote_service.dart';
+import 'services/wifi_transfer_service.dart';
 import 'theme/hifi_theme.dart';
 import 'theme/ui_config.dart';
 import 'ui/iphone/iphone_main_view.dart';
@@ -11,13 +13,15 @@ import 'ui/ipad/ipad_main_view.dart';
 import 'ui/mac/mac_main_view.dart';
 import 'ui/window/window_main_view.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppPaths.init();
   runApp(const HiFiPlayerApp());
 
-  // 1:1 对齐 C++ Application.cpp，启动后台 Web 远程遥控中枢
+  // 1:1 对齐 C++ Application.cpp，启动后台 Web 远程遥控与无线传歌中枢
   if (!Platform.environment.containsKey('FLUTTER_TEST')) {
     WebRemoteService.instance.start(port: 8088);
+    WifiTransferService.instance.start(port: 8080);
   }
 }
 

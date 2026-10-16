@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../models/track.dart';
 import '../../../services/music_database_service.dart';
+import '../../../services/web_remote_service.dart';
 import '../../../theme/hifi_theme.dart';
 import '../../common/glass_card.dart';
 
@@ -23,6 +24,9 @@ class _PiMusicLibraryDrawerState extends State<PiMusicLibraryDrawer> {
   String _filterQuery = '';
   String _activeTag = 'ALL'; // ALL, DSD, HIRES, CUE
 
+  bool _isScanning = false;
+  String? _scanMessage;
+
   final List<String> _alphabet = [
     '#', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
     'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'
@@ -33,6 +37,37 @@ class _PiMusicLibraryDrawerState extends State<PiMusicLibraryDrawer> {
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _scanMusic() async {
+    if (_isScanning) return;
+    setState(() {
+      _isScanning = true;
+      _scanMessage = '正在检索全盘与移动存储音频...';
+    });
+    try {
+      final count = await MusicDatabaseService.instance.scanLibrary();
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+          _scanMessage = '扫描完成！已入库 $count 首曲目';
+        });
+        Future.delayed(const Duration(seconds: 4), () {
+          if (mounted) {
+            setState(() {
+              _scanMessage = null;
+            });
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isScanning = false;
+          _scanMessage = '扫描异常: $e';
+        });
+      }
+    }
   }
 
   List<Track> _getFilteredTracks(List<Track> allTracks) {
@@ -150,23 +185,73 @@ class _PiMusicLibraryDrawerState extends State<PiMusicLibraryDrawer> {
                       ],
                     ),
 
-                    const SizedBox(width: 20),
+                    const SizedBox(width: 14),
 
-                    // 快速过滤器 Tag Pills
-                    _buildFilterPill('ALL', '全部'),
-                    const SizedBox(width: 8),
-                    _buildFilterPill('DSD', 'DSD 母带'),
-                    const SizedBox(width: 8),
-                    _buildFilterPill('HIRES', 'Hi-Res 192k'),
-                    const SizedBox(width: 8),
-                    _buildFilterPill('CUE', 'CUE 分轨'),
+                    // 中间操作区：快速过滤器 + 扫描按键 (横向自适应)
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildFilterPill('ALL', '全部'),
+                            const SizedBox(width: 6),
+                            _buildFilterPill('DSD', 'DSD 母带'),
+                            const SizedBox(width: 6),
+                            _buildFilterPill('HIRES', 'Hi-Res 192k'),
+                            const SizedBox(width: 6),
+                            _buildFilterPill('CUE', 'CUE 分轨'),
+                            const SizedBox(width: 10),
 
-                    const Spacer(),
+                            // 扫描全盘 / U 盘大按键
+                            GestureDetector(
+                              onTap: _isScanning ? null : _scanMusic,
+                              behavior: HitTestBehavior.opaque,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: _isScanning
+                                      ? HifiTheme.mcIntoshBlue.withValues(alpha: 0.3)
+                                      : HifiTheme.mcIntoshBlue.withValues(alpha: 0.75),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: HifiTheme.mcIntoshGlow),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_isScanning)
+                                      const SizedBox(
+                                        width: 13,
+                                        height: 13,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      )
+                                    else
+                                      const Icon(Icons.sync_rounded, color: Colors.white, size: 15),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      _isScanning ? '正在扫描...' : '扫描曲库/U盘',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 12),
 
                     // 搜索框
                     SizedBox(
-                      width: 200,
-                      height: 40,
+                      width: 180,
+                      height: 38,
                       child: TextField(
                         controller: _searchController,
                         style: const TextStyle(color: Colors.white, fontSize: 13),
@@ -211,7 +296,29 @@ class _PiMusicLibraryDrawerState extends State<PiMusicLibraryDrawer> {
                   ],
                 ),
 
-                const Divider(color: HifiTheme.cardBorder, height: 20),
+                if (_scanMessage != null)
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: HifiTheme.mcIntoshBlue.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: HifiTheme.mcIntoshGlow.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.info_outline_rounded, color: HifiTheme.mcIntoshGlow, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          _scanMessage!,
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                const Divider(color: HifiTheme.cardBorder, height: 18),
 
                 // 2. 主列表区域与右侧字母索引条
                 Expanded(
@@ -220,12 +327,7 @@ class _PiMusicLibraryDrawerState extends State<PiMusicLibraryDrawer> {
                       // 左侧大字号曲目滚动列表
                       Expanded(
                         child: filteredTracks.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  '未找到匹配曲目',
-                                  style: TextStyle(color: HifiTheme.textMuted, fontSize: 15),
-                                ),
-                              )
+                            ? _buildEmptyState(allTracks.isEmpty)
                             : ListView.builder(
                                 controller: _scrollController,
                                 itemCount: filteredTracks.length,
@@ -422,6 +524,72 @@ class _PiMusicLibraryDrawerState extends State<PiMusicLibraryDrawer> {
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool isCompletelyEmpty) {
+    if (!isCompletelyEmpty) {
+      return Center(
+        child: Text(
+          '未找到与 "$_filterQuery" 匹配的曲目',
+          style: const TextStyle(color: HifiTheme.textMuted, fontSize: 15),
+        ),
+      );
+    }
+
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 480),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: HifiTheme.cardBorder),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.album_rounded, size: 50, color: HifiTheme.mcIntoshGlow),
+            const SizedBox(height: 10),
+            const Text(
+              '树莓派曲库暂无音乐',
+              style: TextStyle(
+                color: HifiTheme.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '支持将存有音乐的 U 盘插入树莓派 USB 接口，\n或在同一局域网用电脑浏览器访问 http://${WebRemoteService.instance.localIp}:8080 无线传歌',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: HifiTheme.textMuted,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _isScanning ? null : _scanMusic,
+              icon: _isScanning
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.travel_explore_rounded, size: 18),
+              label: Text(_isScanning ? '正在扫描...' : '立即扫描本地与 U 盘音乐'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: HifiTheme.mcIntoshBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+            ),
+          ],
         ),
       ),
     );

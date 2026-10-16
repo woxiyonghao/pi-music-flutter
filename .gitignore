@@ -34,6 +34,7 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+build-ios/
 
 # Symbol processing related
 app.*.symbols

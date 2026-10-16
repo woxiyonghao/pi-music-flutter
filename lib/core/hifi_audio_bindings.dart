@@ -42,6 +42,18 @@ typedef _HifiAudioGetSampleRateDart = int Function();
 typedef _HifiAudioGetDeviceNameC = Void Function(Pointer<Utf8>, Int32);
 typedef _HifiAudioGetDeviceNameDart = void Function(Pointer<Utf8>, int);
 
+typedef _HifiAudioSetEqEnabledC = Void Function(Bool);
+typedef _HifiAudioSetEqEnabledDart = void Function(bool);
+
+typedef _HifiAudioIsEqEnabledC = Bool Function();
+typedef _HifiAudioIsEqEnabledDart = bool Function();
+
+typedef _HifiAudioSetEqBandsC = Void Function(Pointer<Float>);
+typedef _HifiAudioSetEqBandsDart = void Function(Pointer<Float>);
+
+typedef _HifiAudioGetEqBandsC = Void Function(Pointer<Float>);
+typedef _HifiAudioGetEqBandsDart = void Function(Pointer<Float>);
+
 /// FFI 绑定底层 C++ audio_engine
 class HifiAudioBindings {
   static HifiAudioBindings? _instance;
@@ -74,14 +86,22 @@ class HifiAudioBindings {
   late final _HifiAudioGetSpectrumDart _getSpectrumLevels;
   late final _HifiAudioGetSampleRateDart _getSampleRate;
   late final _HifiAudioGetDeviceNameDart _getDeviceName;
+  late final _HifiAudioSetEqEnabledDart _setEqEnabled;
+  late final _HifiAudioIsEqEnabledDart _isEqEnabled;
+  late final _HifiAudioSetEqBandsDart _setEqBands;
+  late final _HifiAudioGetEqBandsDart _getEqBands;
 
-  // 内存复用：12 频段频谱指针 (避免每帧内存分配与 GC 压力)
+  // 内存复用：12 频段频谱指针与 10 频段 EQ 指针 (避免每帧内存分配与 GC 压力)
   late final Pointer<Float> _spectrumBuffer;
+  late final Pointer<Float> _eqBuffer;
 
   HifiAudioBindings._() {
     _spectrumBuffer = calloc<Float>(12);
+    _eqBuffer = calloc<Float>(10);
     _loadLibrary();
   }
+
+  String loadError = '';
 
   void _loadLibrary() {
     try {
@@ -148,10 +168,14 @@ class HifiAudioBindings {
       _getSpectrumLevels = _lib.lookupFunction<_HifiAudioGetSpectrumC, _HifiAudioGetSpectrumDart>('hifi_audio_get_spectrum_levels');
       _getSampleRate = _lib.lookupFunction<_HifiAudioGetSampleRateC, _HifiAudioGetSampleRateDart>('hifi_audio_get_sample_rate');
       _getDeviceName = _lib.lookupFunction<_HifiAudioGetDeviceNameC, _HifiAudioGetDeviceNameDart>('hifi_audio_get_device_name');
+      _setEqEnabled = _lib.lookupFunction<_HifiAudioSetEqEnabledC, _HifiAudioSetEqEnabledDart>('hifi_audio_set_eq_enabled');
+      _isEqEnabled = _lib.lookupFunction<_HifiAudioIsEqEnabledC, _HifiAudioIsEqEnabledDart>('hifi_audio_is_eq_enabled');
+      _setEqBands = _lib.lookupFunction<_HifiAudioSetEqBandsC, _HifiAudioSetEqBandsDart>('hifi_audio_set_eq_bands');
+      _getEqBands = _lib.lookupFunction<_HifiAudioGetEqBandsC, _HifiAudioGetEqBandsDart>('hifi_audio_get_eq_bands');
 
       _isLoaded = true;
-    } catch (e) {
-      // 库未编译时的模拟降级模式
+    } catch (e, stack) {
+      loadError = 'LOOKUP_ERROR: $e\n$stack';
       _isLoaded = false;
     }
   }
@@ -168,14 +192,14 @@ class HifiAudioBindings {
   // 对外安全调用封装
   bool init() => _isLoaded ? _init() : true;
   bool openAndPlay(String path) {
-    if (!_isLoaded) return true;
+    if (!_isLoaded) return false;
     final nativePath = path.toNativeUtf8();
     final res = _openAndPlay(nativePath);
     calloc.free(nativePath);
     return res;
   }
   bool openAndPlaySection(String path, double startSec, double endSec) {
-    if (!_isLoaded) return true;
+    if (!_isLoaded) return false;
     final nativePath = path.toNativeUtf8();
     final res = _openAndPlaySection(nativePath, startSec, endSec);
     calloc.free(nativePath);
@@ -215,7 +239,28 @@ class HifiAudioBindings {
     return name.isNotEmpty ? name : 'Apple Direct';
   }
 
+  void setEqEnabled(bool enabled) {
+    if (_isLoaded) _setEqEnabled(enabled);
+  }
+
+  bool isEqEnabled() => _isLoaded ? _isEqEnabled() : false;
+
+  void setEqBands(List<double> gains) {
+    if (!_isLoaded || gains.length != 10) return;
+    for (int i = 0; i < 10; i++) {
+      _eqBuffer[i] = gains[i];
+    }
+    _setEqBands(_eqBuffer);
+  }
+
+  List<double> getEqBands() {
+    if (!_isLoaded) return List.filled(10, 0.0);
+    _getEqBands(_eqBuffer);
+    return List.generate(10, (i) => _eqBuffer[i]);
+  }
+
   void dispose() {
     calloc.free(_spectrumBuffer);
+    calloc.free(_eqBuffer);
   }
 }

@@ -283,8 +283,8 @@ class WifiTransferService extends ChangeNotifier {
       _uploadedFiles.insert(0, record);
       notifyListeners();
 
-      // 核心发烧特性：即传即入库！自动触发 MusicDatabaseService 重新加载曲库
-      MusicDatabaseService.instance.loadLibrary();
+      // 核心发烧特性：即传即入库！自动触发 MusicDatabaseService 全盘扫描新曲目
+      await MusicDatabaseService.instance.scanLibrary();
 
       debugPrint('[WifiTransferService] 文件上传成功: $filename ($totalBytes bytes) -> ${finalFile.path}');
 
