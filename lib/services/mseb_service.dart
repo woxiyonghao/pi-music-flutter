@@ -33,6 +33,10 @@ class MsebService extends ChangeNotifier {
   void setParam(int index, double value) {
     if (index < 0 || index >= 10) return;
     _values[index] = value.clamp(-10.0, 10.0);
+    if (value.abs() > 0.05 && !_isEnabled) {
+      _isEnabled = true;
+      MusicDatabaseService.instance.setSetting('mseb_enabled', '1');
+    }
     MusicDatabaseService.instance.setSetting('mseb_val_$index', _values[index].toStringAsFixed(1));
     notifyListeners();
   }

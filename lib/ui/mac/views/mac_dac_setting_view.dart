@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../../services/music_database_service.dart';
+import '../../../services/dac_setting_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
@@ -81,58 +81,79 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
   void initState() {
     super.initState();
     _loadSettings();
+    DacSettingService.instance.addListener(_onDacServiceChanged);
+  }
+
+  @override
+  void dispose() {
+    DacSettingService.instance.removeListener(_onDacServiceChanged);
+    super.dispose();
+  }
+
+  void _onDacServiceChanged() {
+    if (!mounted) return;
+    setState(() {
+      _loadSettings();
+    });
   }
 
   void _loadSettings() {
-    final db = MusicDatabaseService.instance;
-    _selectedChip = int.tryParse(db.getSetting('setting_dac_selected_chip', '0'))?.clamp(0, 5) ?? 0;
+    final dac = DacSettingService.instance;
+    _selectedChip = dac.selectedChip;
 
     // Apple Direct
-    _appleExclusiveFlow = int.tryParse(db.getSetting('setting_dac_apple_exclusive', '0'))?.clamp(0, 1) ?? 0;
+    _appleExclusiveFlow = dac.getParam('apple_exclusive', 0).clamp(0, 1);
     _exclusiveMode = (_appleExclusiveFlow == 0);
-    _appleSampleRateTrack = int.tryParse(db.getSetting('setting_dac_apple_sample_rate', '0'))?.clamp(0, 2) ?? 0;
-    _appleImpedanceDrive = int.tryParse(db.getSetting('setting_dac_apple_drive', '0'))?.clamp(0, 2) ?? 0;
-    _appleBitDepth = int.tryParse(db.getSetting('setting_dac_apple_bit_depth', '0'))?.clamp(0, 1) ?? 0;
-    _selectedDeviceIndex = int.tryParse(db.getSetting('setting_dac_selected_device', '0'))?.clamp(0, _devices.length - 1) ?? 0;
+    _appleSampleRateTrack = dac.getParam('apple_sample_rate', 0).clamp(0, 2);
+    _appleImpedanceDrive = dac.getParam('apple_drive', 0).clamp(0, 2);
+    _appleBitDepth = dac.getParam('apple_bit_depth', 0).clamp(0, 1);
+    _selectedDeviceIndex = dac.getParam('selected_device', 0).clamp(0, _devices.length - 1);
 
     // ESS Sabre
-    _essPcmFilter = int.tryParse(db.getSetting('setting_dac_pcm_filter', '0'))?.clamp(0, 6) ?? 0;
-    _essDsdBypass = int.tryParse(db.getSetting('setting_dac_dsd_bypass', '0'))?.clamp(0, 1) ?? 0;
-    _essDsdCutoff = int.tryParse(db.getSetting('setting_dac_dsd_cutoff', '0'))?.clamp(0, 3) ?? 0;
-    _essPcmDpll = int.tryParse(db.getSetting('setting_dac_pcm_dpll', '1'))?.clamp(0, 2) ?? 1;
-    _essThdComp = int.tryParse(db.getSetting('setting_dac_thd_comp', '0'))?.clamp(0, 2) ?? 0;
-    _essChannelMode = int.tryParse(db.getSetting('setting_dac_mono_mode', '0'))?.clamp(0, 1) ?? 0;
-    _essPhaseInvert = int.tryParse(db.getSetting('setting_dac_phase', '0'))?.clamp(0, 1) ?? 0;
+    _essPcmFilter = dac.getParam('pcm_filter', 0).clamp(0, 6);
+    _essDsdBypass = dac.getParam('dsd_bypass', 0).clamp(0, 1);
+    _essDsdCutoff = dac.getParam('dsd_cutoff', 0).clamp(0, 3);
+    _essPcmDpll = dac.getParam('pcm_dpll', 1).clamp(0, 2);
+    _essThdComp = dac.getParam('thd_comp', 0).clamp(0, 2);
+    _essChannelMode = dac.getParam('mono_mode', 0).clamp(0, 1);
+    _essPhaseInvert = dac.getParam('phase', 0).clamp(0, 1);
 
     // AKM
-    _akmFilter = int.tryParse(db.getSetting('setting_dac_akm_filter', '0'))?.clamp(0, 5) ?? 0;
-    _akmColor = int.tryParse(db.getSetting('setting_dac_akm_color', '0'))?.clamp(0, 3) ?? 0;
-    _akmDsd = int.tryParse(db.getSetting('setting_dac_akm_dsd', '0'))?.clamp(0, 1) ?? 0;
-    _akmExdf = int.tryParse(db.getSetting('setting_dac_akm_exdf', '0'))?.clamp(0, 1) ?? 0;
+    _akmFilter = dac.getParam('akm_filter', 0).clamp(0, 5);
+    _akmColor = dac.getParam('akm_color', 0).clamp(0, 3);
+    _akmDsd = dac.getParam('akm_dsd', 0).clamp(0, 1);
+    _akmExdf = dac.getParam('akm_exdf', 0).clamp(0, 1);
 
     // Cirrus Logic
-    _csFilter = int.tryParse(db.getSetting('setting_dac_cs_filter', '0'))?.clamp(0, 4) ?? 0;
-    _csDsd = int.tryParse(db.getSetting('setting_dac_cs_dsd', '0'))?.clamp(0, 1) ?? 0;
-    _csDrive = int.tryParse(db.getSetting('setting_dac_cs_drive', '0'))?.clamp(0, 1) ?? 0;
-    _csImpedance = int.tryParse(db.getSetting('setting_dac_cs_impedance', '0'))?.clamp(0, 1) ?? 0;
+    _csFilter = dac.getParam('cs_filter', 0).clamp(0, 4);
+    _csDsd = dac.getParam('cs_dsd', 0).clamp(0, 1);
+    _csDrive = dac.getParam('cs_drive', 0).clamp(0, 1);
+    _csImpedance = dac.getParam('cs_impedance', 0).clamp(0, 1);
 
     // R-2R
-    _r2rMode = int.tryParse(db.getSetting('setting_dac_r2r_mode', '0'))?.clamp(0, 2) ?? 0;
-    _r2rDsd = int.tryParse(db.getSetting('setting_dac_r2r_dsd', '0'))?.clamp(0, 1) ?? 0;
-    _r2rClock = int.tryParse(db.getSetting('setting_dac_r2r_clock', '0'))?.clamp(0, 1) ?? 0;
-    _r2rPhase = int.tryParse(db.getSetting('setting_dac_r2r_phase', '0'))?.clamp(0, 1) ?? 0;
+    _r2rMode = dac.getParam('r2r_mode', 0).clamp(0, 2);
+    _r2rDsd = dac.getParam('r2r_dsd', 0).clamp(0, 1);
+    _r2rClock = dac.getParam('r2r_clock', 0).clamp(0, 1);
+    _r2rPhase = dac.getParam('r2r_phase', 0).clamp(0, 1);
 
     // ROHM
-    _rohmFilter = int.tryParse(db.getSetting('setting_dac_rohm_filter', '0'))?.clamp(0, 1) ?? 0;
-    _rohmClock = int.tryParse(db.getSetting('setting_dac_rohm_clock', '0'))?.clamp(0, 2) ?? 0;
-    _rohmDsd = int.tryParse(db.getSetting('setting_dac_rohm_dsd', '0'))?.clamp(0, 1) ?? 0;
+    _rohmFilter = dac.getParam('rohm_filter', 0).clamp(0, 1);
+    _rohmClock = dac.getParam('rohm_clock', 0).clamp(0, 2);
+    _rohmDsd = dac.getParam('rohm_dsd', 0).clamp(0, 1);
   }
 
   void _onChipSelected(int index) {
     setState(() {
       _selectedChip = index;
     });
-    MusicDatabaseService.instance.setSetting('setting_dac_selected_chip', index.toString());
+    DacSettingService.instance.setChip(index);
+  }
+
+  void _setParam(String key, int val) {
+    setState(() {
+      DacSettingService.instance.setParam(key, val);
+      _loadSettings();
+    });
   }
 
   @override
@@ -245,11 +266,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
-                    setState(() {
-                      _exclusiveMode = !_exclusiveMode;
-                      _appleExclusiveFlow = _exclusiveMode ? 0 : 1;
-                    });
-                    MusicDatabaseService.instance.setSetting('setting_dac_apple_exclusive', _exclusiveMode ? '0' : '1');
+                    _setParam('apple_exclusive', _exclusiveMode ? 1 : 0);
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 5.0),
@@ -330,13 +347,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '硬件独占流',
               options: const ['Bit-Perfect 独占流', '系统混音共享'],
               selectedIndex: _appleExclusiveFlow,
-              onSelected: (idx) {
-                setState(() {
-                  _appleExclusiveFlow = idx;
-                  _exclusiveMode = (idx == 0);
-                });
-                MusicDatabaseService.instance.setSetting('setting_dac_apple_exclusive', idx.toString());
-              },
+              onSelected: (idx) => _setParam('apple_exclusive', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -344,10 +355,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '采样率追踪',
               options: const ['原生跟随母带 (44.1k-192k)', '锁定 96kHz', '锁定 192kHz'],
               selectedIndex: _appleSampleRateTrack,
-              onSelected: (idx) {
-                setState(() => _appleSampleRateTrack = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_apple_sample_rate', idx.toString());
-              },
+              onSelected: (idx) => _setParam('apple_sample_rate', idx),
               accent: accent,
             ),
           ],
@@ -364,10 +372,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                 '标准输出 (1.25Vrms)',
               ],
               selectedIndex: _appleImpedanceDrive,
-              onSelected: (idx) {
-                setState(() => _appleImpedanceDrive = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_apple_drive', idx.toString());
-              },
+              onSelected: (idx) => _setParam('apple_drive', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -375,10 +380,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '数据位深',
               options: const ['32-bit Float 浮点直通', '24-bit 整数定点'],
               selectedIndex: _appleBitDepth,
-              onSelected: (idx) {
-                setState(() => _appleBitDepth = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_apple_bit_depth', idx.toString());
-              },
+              onSelected: (idx) => _setParam('apple_bit_depth', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -406,10 +408,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                 arch: _devices[i]['arch']!,
                 tag: _devices[i]['tag']!,
                 isCurrent: _selectedDeviceIndex == i,
-                onTap: () {
-                  setState(() => _selectedDeviceIndex = i);
-                  MusicDatabaseService.instance.setSetting('setting_dac_selected_device', i.toString());
-                },
+                onTap: () => _setParam('selected_device', i),
                 accent: accent,
               ),
             ],
@@ -442,10 +441,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '滤波特性 (1)',
               options: const ['快速最小 (推荐)', '慢速最小', '快速线性', '慢速线性'],
               selectedIndex: _essPcmFilter < 4 ? _essPcmFilter : -1,
-              onSelected: (idx) {
-                setState(() => _essPcmFilter = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_pcm_filter', idx.toString());
-              },
+              onSelected: (idx) => _setParam('pcm_filter', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -453,11 +449,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '滤波特性 (2)',
               options: const ['变迹滤波', '砖墙滤波', '混合滤波'],
               selectedIndex: _essPcmFilter >= 4 ? (_essPcmFilter - 4) : -1,
-              onSelected: (idx) {
-                final realIdx = idx + 4;
-                setState(() => _essPcmFilter = realIdx);
-                MusicDatabaseService.instance.setSetting('setting_dac_pcm_filter', realIdx.toString());
-              },
+              onSelected: (idx) => _setParam('pcm_filter', idx + 4),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -475,10 +467,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: 'DSD 数据通路',
               options: const ['Direct 1-Bit 直通', 'FIR 模拟滤波'],
               selectedIndex: _essDsdBypass,
-              onSelected: (idx) {
-                setState(() => _essDsdBypass = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_dsd_bypass', idx.toString());
-              },
+              onSelected: (idx) => _setParam('dsd_bypass', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -486,10 +475,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: 'DSD 截止频率',
               options: const ['47.7kHz', '50kHz', '60kHz', '70kHz'],
               selectedIndex: _essDsdCutoff,
-              onSelected: (idx) {
-                setState(() => _essDsdCutoff = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_dsd_cutoff', idx.toString());
-              },
+              onSelected: (idx) => _setParam('dsd_cutoff', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -497,10 +483,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: 'DPLL 时钟锁定',
               options: const ['极窄带 (超低抖动)', '标准平衡 (推荐)', '宽带 (抗失锁)'],
               selectedIndex: _essPcmDpll,
-              onSelected: (idx) {
-                setState(() => _essPcmDpll = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_pcm_dpll', idx.toString());
-              },
+              onSelected: (idx) => _setParam('pcm_dpll', idx),
               accent: accent,
             ),
           ],
@@ -513,10 +496,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: 'THD 谐波补偿',
               options: const ['超低失真 (< -122dB)', '二次谐波 (胆味)', '关闭补偿'],
               selectedIndex: _essThdComp,
-              onSelected: (idx) {
-                setState(() => _essThdComp = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_thd_comp', idx.toString());
-              },
+              onSelected: (idx) => _setParam('thd_comp', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -524,10 +504,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '并联解码架构',
               options: const ['双芯片 8-Ch 并联 (140dB)', '双芯片立体声平衡'],
               selectedIndex: _essChannelMode,
-              onSelected: (idx) {
-                setState(() => _essChannelMode = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_mono_mode', idx.toString());
-              },
+              onSelected: (idx) => _setParam('mono_mode', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -535,10 +512,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '输出绝对相位',
               options: const ['绝对正相 (0°)', '极性反转 (180°)'],
               selectedIndex: _essPhaseInvert,
-              onSelected: (idx) {
-                setState(() => _essPhaseInvert = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_phase', idx.toString());
-              },
+              onSelected: (idx) => _setParam('phase', idx),
               accent: accent,
             ),
           ],
@@ -569,10 +543,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '滤波特性 (1)',
               options: const ['短延时锐滚降', '短延时慢滚降', '锐滚降'],
               selectedIndex: _akmFilter < 3 ? _akmFilter : -1,
-              onSelected: (idx) {
-                setState(() => _akmFilter = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_akm_filter', idx.toString());
-              },
+              onSelected: (idx) => _setParam('akm_filter', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -580,11 +551,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '滤波特性 (2)',
               options: const ['慢滚降', '超低群延迟', '低色散短延时'],
               selectedIndex: _akmFilter >= 3 ? (_akmFilter - 3) : -1,
-              onSelected: (idx) {
-                final realIdx = idx + 3;
-                setState(() => _akmFilter = realIdx);
-                MusicDatabaseService.instance.setSetting('setting_dac_akm_filter', realIdx.toString());
-              },
+              onSelected: (idx) => _setParam('akm_filter', idx + 3),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -602,10 +569,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '声音色彩风格',
               options: const ['风格1 (自然)', '风格2 (通透)', '风格3 (宽厚)', '风格4 (监听)'],
               selectedIndex: _akmColor,
-              onSelected: (idx) {
-                setState(() => _akmColor = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_akm_color', idx.toString());
-              },
+              onSelected: (idx) => _setParam('akm_color', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -613,10 +577,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: 'DSD 直通模式',
               options: const ['Direct 模式 (旁路调制)', 'Normal 滤波模式'],
               selectedIndex: _akmDsd,
-              onSelected: (idx) {
-                setState(() => _akmDsd = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_akm_dsd', idx.toString());
-              },
+              onSelected: (idx) => _setParam('akm_dsd', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -624,10 +585,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '数字滤波通路',
               options: const ['外部超采样直通 (EXDF)', '内部 AK4191EQ 处理'],
               selectedIndex: _akmExdf,
-              onSelected: (idx) {
-                setState(() => _akmExdf = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_akm_exdf', idx.toString());
-              },
+              onSelected: (idx) => _setParam('akm_exdf', idx),
               accent: accent,
             ),
           ],
@@ -657,10 +615,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '滤波特性 (1)',
               options: const ['快速线性', '慢速线性', '快速最小'],
               selectedIndex: _csFilter < 3 ? _csFilter : -1,
-              onSelected: (idx) {
-                setState(() => _csFilter = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_cs_filter', idx.toString());
-              },
+              onSelected: (idx) => _setParam('cs_filter', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -668,11 +623,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '滤波特性 (2)',
               options: const ['慢速最小', 'NOS 无过采样'],
               selectedIndex: _csFilter >= 3 ? (_csFilter - 3) : -1,
-              onSelected: (idx) {
-                final realIdx = idx + 3;
-                setState(() => _csFilter = realIdx);
-                MusicDatabaseService.instance.setSetting('setting_dac_cs_filter', realIdx.toString());
-              },
+              onSelected: (idx) => _setParam('cs_filter', idx + 3),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -690,10 +641,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: 'DSD 解码模式',
               options: const ['Direct DSD (直接转换)', 'DoP 硬件解调'],
               selectedIndex: _csDsd,
-              onSelected: (idx) {
-                setState(() => _csDsd = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_cs_dsd', idx.toString());
-              },
+              onSelected: (idx) => _setParam('cs_dsd', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -701,10 +649,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '模拟驱动模式',
               options: const ['高推力伪差分 (2Vrms)', '标准单端 (1Vrms)'],
               selectedIndex: _csDrive,
-              onSelected: (idx) {
-                setState(() => _csDrive = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_cs_drive', idx.toString());
-              },
+              onSelected: (idx) => _setParam('cs_drive', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -712,10 +657,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '阻抗探测模式',
               options: const ['自适应匹配 (16Ω~600Ω)', '高阻监听优先'],
               selectedIndex: _csImpedance,
-              onSelected: (idx) {
-                setState(() => _csImpedance = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_cs_impedance', idx.toString());
-              },
+              onSelected: (idx) => _setParam('cs_impedance', idx),
               accent: accent,
             ),
           ],
@@ -737,10 +679,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '过采样模式',
               options: const ['NOS 纯无过采样 (方波原生)', 'OS 线性相位超采样', 'OS 最小相位超采样'],
               selectedIndex: _r2rMode,
-              onSelected: (idx) {
-                setState(() => _r2rMode = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_r2r_mode', idx.toString());
-              },
+              onSelected: (idx) => _setParam('r2r_mode', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -748,10 +687,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: 'DSD 网络模式',
               options: const ['独立 1-Bit 电阻网络转换', '转换为 24-bit 阶梯解码'],
               selectedIndex: _r2rDsd,
-              onSelected: (idx) {
-                setState(() => _r2rDsd = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_r2r_dsd', idx.toString());
-              },
+              onSelected: (idx) => _setParam('r2r_dsd', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -769,10 +705,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '时钟重整机制',
               options: const ['飞秒 FIFO 本地时钟重整', '直接跟随输入源时钟'],
               selectedIndex: _r2rClock,
-              onSelected: (idx) {
-                setState(() => _r2rClock = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_r2r_clock', idx.toString());
-              },
+              onSelected: (idx) => _setParam('r2r_clock', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -780,10 +713,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '模拟信号极性',
               options: const ['绝对正相 (0°)', '极性反转 (180°)'],
               selectedIndex: _r2rPhase,
-              onSelected: (idx) {
-                setState(() => _r2rPhase = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_r2r_phase', idx.toString());
-              },
+              onSelected: (idx) => _setParam('r2r_phase', idx),
               accent: accent,
             ),
           ],
@@ -805,10 +735,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '声音微调滤波',
               options: const ['Sharp Roll-Off (高解析宏大声场)', 'Slow Roll-Off (浓郁宽松自然感)'],
               selectedIndex: _rohmFilter,
-              onSelected: (idx) {
-                setState(() => _rohmFilter = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_rohm_filter', idx.toString());
-              },
+              onSelected: (idx) => _setParam('rohm_filter', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -816,10 +743,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: '调制器采样率',
               options: const ['智能倍频自适应', '锁定 64x fs', '锁定 128x fs'],
               selectedIndex: _rohmClock,
-              onSelected: (idx) {
-                setState(() => _rohmClock = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_rohm_clock', idx.toString());
-              },
+              onSelected: (idx) => _setParam('rohm_clock', idx),
               accent: accent,
             ),
             const SizedBox(height: 10.0),
@@ -837,10 +761,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               label: 'DSD 处理通道',
               options: const ['Direct Path 纯模拟通道', '标准多级滤波处理'],
               selectedIndex: _rohmDsd,
-              onSelected: (idx) {
-                setState(() => _rohmDsd = idx);
-                MusicDatabaseService.instance.setSetting('setting_dac_rohm_dsd', idx.toString());
-              },
+              onSelected: (idx) => _setParam('rohm_dsd', idx),
               accent: accent,
             ),
           ],

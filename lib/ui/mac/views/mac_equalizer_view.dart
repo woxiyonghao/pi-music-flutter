@@ -57,8 +57,27 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
       setState(() {
         _isEnabled = audio.eqEnabled;
         _bandGains = List<double>.from(audio.eqBands);
+        _matchOrUpdatePreset();
       });
     }
+  }
+
+  void _matchOrUpdatePreset() {
+    for (int i = 0; i < presets.length - 1; i++) {
+      final pGains = (presets[i]['gains'] as List).map((e) => (e as num).toDouble()).toList();
+      bool match = true;
+      for (int b = 0; b < 10; b++) {
+        if ((_bandGains[b] - pGains[b]).abs() > 0.05) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        _selectedPreset = i;
+        return;
+      }
+    }
+    _selectedPreset = presets.length - 1; // 自定义
   }
 
   void _loadSettings() {
@@ -67,22 +86,23 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
     _bandGains = List<double>.from(audio.eqBands);
 
     final db = MusicDatabaseService.instance;
-    _selectedPreset = int.tryParse(db.getSetting('eq_selected_preset', '0'))?.clamp(0, presets.length - 1) ?? 0;
+    final savedPreset = int.tryParse(db.getSetting('eq_selected_preset', '-1'));
+    if (savedPreset != null && savedPreset >= 0 && savedPreset < presets.length) {
+      _selectedPreset = savedPreset;
+    } else {
+      _matchOrUpdatePreset();
+    }
   }
 
   void _saveSettings() {
-    final audio = HifiAudioService.instance;
-    audio.setEqEnabled(_isEnabled);
-    audio.setEqBands(_bandGains);
-    final db = MusicDatabaseService.instance;
-    db.setSetting('eq_selected_preset', _selectedPreset.toString());
+    HifiAudioService.instance.setEqAndBands(_isEnabled, _bandGains, selectedPreset: _selectedPreset);
     WebRemoteService.instance.broadcastState();
   }
 
   void _applyPreset(int index) {
     setState(() {
       _selectedPreset = index;
-      _bandGains = List<double>.from(presets[index]['gains'] as List);
+      _bandGains = List<double>.from((presets[index]['gains'] as List).map((e) => (e as num).toDouble()));
       _isEnabled = index != 0;
       _saveSettings();
     });
@@ -520,11 +540,13 @@ class _MixerFaderColumn extends StatelessWidget {
   });
 
   void _handleTouch(Offset localPos, double railH) {
-    // 0dB 在 railH / 2
-    final railMid = railH / 2;
-    final norm = ((railMid - localPos.dy) / (railH / 2)).clamp(-1.0, 1.0);
+    const pad = 10.0;
+    final usableH = railH - pad * 2;
+    if (usableH <= 0) return;
+    final clampedY = (localPos.dy - pad).clamp(0.0, usableH);
+    final norm = 1.0 - (clampedY / (usableH / 2));
     var newGain = (norm * 12.0 * 10).round() / 10.0;
-    if (newGain.abs() < 0.15) newGain = 0.0;
+    if (newGain.abs() < 0.2) newGain = 0.0;
     onGainChanged(newGain);
   }
 
@@ -555,11 +577,14 @@ class _MixerFaderColumn extends StatelessWidget {
             final w = constraints.maxWidth;
 
             return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanStart: (d) => _handleTouch(d.localPosition, h),
               onPanDown: (d) => _handleTouch(d.localPosition, h),
               onPanUpdate: (d) => _handleTouch(d.localPosition, h),
+              onTapDown: (d) => _handleTouch(d.localPosition, h),
               onDoubleTap: () => onGainChanged(0.0),
               child: SizedBox(
-                width: w,
+                width: math.max(w, 36.0),
                 height: h,
                 child: CustomPaint(
                   painter: _FaderPainter(

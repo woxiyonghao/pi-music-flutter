@@ -7,6 +7,7 @@ import '../core/hifi_audio_bindings.dart';
 import '../core/hifi_audio_service.dart';
 import '../models/playback_state.dart';
 import '../models/track.dart';
+import 'dac_setting_service.dart';
 import 'mseb_service.dart';
 import 'music_database_service.dart';
 import 'theme_service.dart';
@@ -99,6 +100,7 @@ class WebRemoteService extends ChangeNotifier {
       );
 
       _startBroadcastTimer();
+      DacSettingService.instance.onBroadcastNeeded = broadcastDac;
       notifyListeners();
       return true;
     } catch (e) {
@@ -111,6 +113,7 @@ class WebRemoteService extends ChangeNotifier {
 
   /// 停止 Web 远程遥控服务
   Future<void> stop() async {
+    DacSettingService.instance.onBroadcastNeeded = null;
     _broadcastTimer?.cancel();
     _broadcastTimer = null;
 
@@ -489,6 +492,21 @@ class WebRemoteService extends ChangeNotifier {
             _broadcast(jsonEncode(_buildPlaylistsMap()));
           }
           break;
+        case 'set_dac_chip':
+          final chip = (cmd['chip'] as num?)?.toInt();
+          if (chip != null) {
+            DacSettingService.instance.setChip(chip);
+            broadcastDac();
+          }
+          break;
+        case 'set_dac_param':
+          final key = cmd['key'] as String?;
+          final val = ((cmd['val'] ?? cmd['value']) as num?)?.toInt();
+          if (key != null && val != null) {
+            DacSettingService.instance.setParam(key, val);
+            broadcastDac();
+          }
+          break;
       }
     } catch (e) {
       debugPrint('[WebRemoteService] 处理客户端指令失败: $e');
@@ -504,6 +522,11 @@ class WebRemoteService extends ChangeNotifier {
   void broadcastMseb() {
     if (_clients.isEmpty) return;
     _broadcast(jsonEncode(_buildMsebMap()));
+  }
+
+  void broadcastDac() {
+    if (_clients.isEmpty) return;
+    _broadcast(jsonEncode(_buildDacMap()));
   }
 
   void _broadcast(String message) {
@@ -601,19 +624,15 @@ class WebRemoteService extends ChangeNotifier {
   }
 
   Map<String, dynamic> _buildDacMap() {
+    final dac = DacSettingService.instance;
     return {
       'type': 'dac',
-      'has_external_dac': false,
-      'dac_name': '系统默认声卡 (Apple Direct)',
-      'active_output': '系统默认音频输出',
-      'selected_chip': 0,
-      'chip_name': 'Apple Direct',
-      'params': {
-        'apple_exclusive': 0,
-        'apple_sample_rate': 0,
-        'apple_drive': 0,
-        'apple_bit_depth': 0,
-      },
+      'has_external_dac': dac.hasExternalDac,
+      'dac_name': dac.dacName,
+      'active_output': dac.activeOutput,
+      'selected_chip': dac.selectedChip,
+      'chip_name': dac.dacName,
+      'params': dac.allParams,
     };
   }
 

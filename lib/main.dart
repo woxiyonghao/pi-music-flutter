@@ -5,7 +5,6 @@ import 'core/app_paths.dart';
 import 'core/platform_helper.dart';
 import 'services/music_database_service.dart';
 import 'services/web_remote_service.dart';
-import 'services/wifi_transfer_service.dart';
 import 'theme/hifi_theme.dart';
 import 'theme/ui_config.dart';
 import 'ui/iphone/iphone_main_view.dart';

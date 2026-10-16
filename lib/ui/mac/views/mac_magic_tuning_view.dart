@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../services/mseb_service.dart';
-import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/web_remote_service.dart';
 import '../../../theme/ui_config.dart';
@@ -143,9 +142,13 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
   }
 
   void _saveVal(int i, double v) {
-    MsebService.instance.setParam(i, v);
-    WebRemoteService.instance.broadcastMseb();
-    WebRemoteService.instance.broadcastState();
+    setState(() {
+      _values[i] = v;
+      MsebService.instance.setParam(i, v);
+      _isEnabled = MsebService.instance.isEnabled;
+      WebRemoteService.instance.broadcastMseb();
+      WebRemoteService.instance.broadcastState();
+    });
   }
 
   void _resetAll() {
@@ -446,19 +449,27 @@ class _MSEBBipolarSlider extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final w = constraints.maxWidth;
-      const h = 26.0;
+      const h = 32.0;
 
       return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (d) => _handleTouch(d.localPosition, w),
         onPanDown: (d) => _handleTouch(d.localPosition, w),
         onPanUpdate: (d) => _handleTouch(d.localPosition, w),
+        onTapDown: (d) => _handleTouch(d.localPosition, w),
         onDoubleTap: () => onChanged(0.0),
-        child: SizedBox(
+        child: Container(
           width: w,
           height: h,
-          child: CustomPaint(
-            painter: _MSEBSliderPainter(
-              value: value,
-              accentColor: accentColor,
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: w,
+            height: 26.0,
+            child: CustomPaint(
+              painter: _MSEBSliderPainter(
+                value: value,
+                accentColor: accentColor,
+              ),
             ),
           ),
         ),

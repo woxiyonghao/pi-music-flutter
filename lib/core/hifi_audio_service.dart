@@ -72,6 +72,24 @@ class HifiAudioService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setEqAndBands(bool enabled, List<double> bands, {int? selectedPreset}) {
+    _eqEnabled = enabled;
+    _bindings.setEqEnabled(enabled);
+    if (bands.length == 10) {
+      _eqBands = List.from(bands);
+      _bindings.setEqBands(_eqBands);
+    }
+    final db = MusicDatabaseService.instance;
+    db.setSetting('eq_enabled', enabled ? '1' : '0');
+    if (selectedPreset != null) {
+      db.setSetting('eq_selected_preset', selectedPreset.toString());
+    }
+    for (int i = 0; i < _eqBands.length; i++) {
+      db.setSetting('eq_band_$i', _eqBands[i].toStringAsFixed(1));
+    }
+    notifyListeners();
+  }
+
   void setEqBands(List<double> bands) {
     if (bands.length != 10) return;
     _eqBands = List.from(bands);
