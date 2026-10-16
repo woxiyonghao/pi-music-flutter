@@ -51,25 +51,22 @@ elseif(UNIX AND NOT APPLE)
     )
 endif()
 
-# 音频库全格式回归测试与解码健全性审计可执行工具
-add_executable(audit_audio_library
-    tests/audit_audio_library.cpp
-)
-
-target_include_directories(audit_audio_library PRIVATE
-    include
-    audio_engine/include
-    audio_engine/third_party
-)
-
-target_link_libraries(audit_audio_library PRIVATE
-    audio_engine
-    sqlite3
-    ${SDL2_LIBRARIES}
-)
-
 if(APPLE)
+    # 音频库全格式回归测试与解码健全性审计可执行工具 (依赖 AppleAudioDecoder)
+    add_executable(audit_audio_library
+        tests/audit_audio_library.cpp
+    )
+
+    target_include_directories(audit_audio_library PRIVATE
+        include
+        audio_engine/include
+        audio_engine/third_party
+    )
+
     target_link_libraries(audit_audio_library PRIVATE
+        audio_engine
+        sqlite3
+        ${SDL2_LIBRARIES}
         "-framework CoreAudio"
         "-framework AudioToolbox"
         "-framework CoreFoundation"

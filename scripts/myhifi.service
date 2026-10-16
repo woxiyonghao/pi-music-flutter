@@ -1,20 +1,23 @@
 [Unit]
 Description=MyHiFi Player High-Fidelity Audio Turntable (Cage Wayland Kiosk)
-After=systemd-user-sessions.service sound.target network.target
+After=systemd-user-sessions.service sound.target network.target seatd.service
+Wants=seatd.service
+Conflicts=getty@tty1.service
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/hide_player_flutter
+User=winheo
+WorkingDirectory=/home/winheo/pi-music-flutter
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=PI_KIOSK=1
-ExecStart=/usr/bin/cage -s -- /home/pi/hide_player_flutter/build/linux/arm64/release/bundle/hide_player_flutter
+Environment=LIBSEAT_BACKEND=seatd
+ExecStart=/usr/bin/cage -s -- /home/winheo/pi-music-flutter/build/linux/arm64/release/bundle/hide_player_flutter
 Restart=always
 RestartSec=2
 StandardInput=tty
 StandardOutput=journal
 StandardError=journal
-TTYPath=/dev/tty7
+TTYPath=/dev/tty1
 
 [Install]
 WantedBy=multi-user.target

@@ -80,6 +80,26 @@ class MusicDatabaseService extends ChangeNotifier {
         name TEXT NOT NULL
       );
     ''');
+
+    try {
+      final info = db.select('PRAGMA table_info(scanned_tracks);');
+      final existingCols = info.map((row) => row['name'] as String).toSet();
+      if (!existingCols.contains('is_cue_track')) {
+        db.execute('ALTER TABLE scanned_tracks ADD COLUMN is_cue_track INTEGER DEFAULT 0;');
+      }
+      if (!existingCols.contains('start_time_sec')) {
+        db.execute('ALTER TABLE scanned_tracks ADD COLUMN start_time_sec REAL DEFAULT 0.0;');
+      }
+      if (!existingCols.contains('end_time_sec')) {
+        db.execute('ALTER TABLE scanned_tracks ADD COLUMN end_time_sec REAL DEFAULT 0.0;');
+      }
+      if (!existingCols.contains('cue_path')) {
+        db.execute('ALTER TABLE scanned_tracks ADD COLUMN cue_path TEXT DEFAULT "";');
+      }
+      if (!existingCols.contains('track_number')) {
+        db.execute('ALTER TABLE scanned_tracks ADD COLUMN track_number INTEGER DEFAULT 0;');
+      }
+    } catch (_) {}
   }
 
   /// 获取持久化设置项 (1:1 对齐 C++ MusicDatabase::getSetting)
