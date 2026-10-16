@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
@@ -215,12 +216,202 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                   ],
                 ),
                 const SizedBox(height: 16.0),
+
+                // 板块三：系统电源与设备控制 (1:1 发烧台机物理操作中枢)
+                _buildPowerManagementCard(),
+                const SizedBox(height: 16.0),
               ],
             ),
           ),
         ],
       ),
     );
+      },
+    );
+  }
+
+  /// 渲染系统电源与设备控制卡片
+  Widget _buildPowerManagementCard() {
+    return _buildCardContainer(
+      title: '系统操作与电源控制',
+      children: [
+        const Text(
+          '安全关机将有序停止音频硬件直出、同步曲库缓存并切断系统供电，杜绝非正常断电引起的 SD 卡与 SSD 文件损坏。',
+          style: TextStyle(
+            fontSize: UIConfig.fontSmall,
+            color: UIConfig.textMuted,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 16.0),
+        Row(
+          children: [
+            // 1. 系统关机按钮
+            Expanded(
+              child: _buildActionButton(
+                label: '系统关机',
+                icon: Icons.power_settings_new_rounded,
+                color: const Color(0xFFEF4444),
+                onTap: () => _confirmAction(
+                  title: '确认系统关机？',
+                  content: '系统将安全保存所有数据并切断电源。关机后需重新插拔电源或按下电源键唤醒。',
+                  confirmText: '立刻关机',
+                  confirmColor: const Color(0xFFEF4444),
+                  onConfirm: () async {
+                    if (Platform.isLinux) {
+                      await Process.run('sudo', ['systemctl', 'poweroff']);
+                    } else if (Platform.isMacOS) {
+                      exit(0);
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 12.0),
+
+            // 2. 重启设备按钮
+            Expanded(
+              child: _buildActionButton(
+                label: '重启设备',
+                icon: Icons.restart_alt_rounded,
+                color: const Color(0xFFF59E0B),
+                onTap: () => _confirmAction(
+                  title: '确认重启系统？',
+                  content: '树莓派将在数秒内平滑重启并自动加载 HiFi 播放系统。',
+                  confirmText: '立刻重启',
+                  confirmColor: const Color(0xFFF59E0B),
+                  onConfirm: () async {
+                    if (Platform.isLinux) {
+                      await Process.run('sudo', ['systemctl', 'reboot']);
+                    } else if (Platform.isMacOS) {
+                      exit(0);
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 12.0),
+
+            // 3. 重启播放器服务
+            Expanded(
+              child: _buildActionButton(
+                label: '重启播放器',
+                icon: Icons.refresh_rounded,
+                color: ThemeService.instance.accentColor,
+                onTap: () => _confirmAction(
+                  title: '确认重启播放器服务？',
+                  content: '将即刻重启 MyHiFi 后台服务并重载所有音频流与 UI 视窗。',
+                  confirmText: '重启服务',
+                  confirmColor: ThemeService.instance.accentColor,
+                  onConfirm: () async {
+                    if (Platform.isLinux) {
+                      await Process.run('sudo', ['systemctl', 'restart', 'myhifi.service']);
+                    } else {
+                      exit(0);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8.0),
+        child: Container(
+          height: 38.0,
+          padding: const EdgeInsets.symmetric(horizontal: 10.0),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(
+              color: color.withValues(alpha: 0.55),
+              width: 1.0,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 17.0, color: color),
+              const SizedBox(width: 6.0),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.0,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmAction({
+    required String title,
+    required String content,
+    required String confirmText,
+    required Color confirmColor,
+    required Future<void> Function() onConfirm,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF161C26),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14.0),
+            side: const BorderSide(color: Color.fromRGBO(255, 255, 255, 0.15)),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15.0,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          content: Text(
+            content,
+            style: const TextStyle(
+              fontSize: 13.0,
+              color: UIConfig.textNormal,
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('取消', style: TextStyle(color: UIConfig.textMuted)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await onConfirm();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: confirmColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+              ),
+              child: Text(confirmText),
+            ),
+          ],
+        );
       },
     );
   }
@@ -257,7 +448,7 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
     );
   }
 
-  /// 纯平铺段选按钮行 (1:1 对齐 renderButtonGroup)
+  /// 纯平铺段选按钮行 (1:1 对齐 renderButtonGroup，支持多项智能自适应折行)
   Widget _buildButtonGroupRow({
     required String label,
     required List<String> options,
@@ -265,6 +456,62 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
     required ValueChanged<int> onSelected,
   }) {
     final accent = ThemeService.instance.accentColor;
+
+    if (options.length > 4) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: UIConfig.fontSmall,
+              color: UIConfig.textMuted,
+            ),
+          ),
+          const SizedBox(height: 8.0),
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 8.0,
+            children: [
+              for (int i = 0; i < options.length; i++)
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onSelected(i),
+                  child: Container(
+                    height: 28.0,
+                    padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selectedIndex == i
+                          ? accent.withValues(alpha: 0.28)
+                          : const Color.fromRGBO(255, 255, 255, 0.04),
+                      borderRadius: BorderRadius.circular(6.0),
+                      border: Border.all(
+                        color: selectedIndex == i
+                            ? accent
+                            : const Color.fromRGBO(255, 255, 255, 0.1),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Text(
+                      options[i],
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: selectedIndex == i
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                        color: selectedIndex == i
+                            ? UIConfig.textActive
+                            : UIConfig.textNormal,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      );
+    }
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,

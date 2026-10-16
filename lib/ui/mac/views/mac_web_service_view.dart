@@ -108,7 +108,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                         Expanded(
                           child: Text(
                             _activeSubModule == 0
-                                ? '当前设备: macOS Desktop · 支持旧手机/平板当数播主机 · 双向毫秒级遥控'
+                                ? '当前设备: ${Platform.isLinux ? "树莓派 5 发烧数播" : (Platform.isIOS ? "iPad 移动数播" : "macOS 桌面工作台")} · 支持手机扫码即时双向遥控'
                                 : '同一局域网下电脑或手机免线拖拽传输 · 即传即播 · 自动扫描入库',
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,

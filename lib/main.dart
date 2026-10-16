@@ -18,10 +18,9 @@ void main() async {
   await AppPaths.init();
   runApp(const HiFiPlayerApp());
 
-  // 1:1 对齐 C++ Application.cpp，启动后台 Web 远程遥控与无线传歌中枢
+  // 1:1 对齐 C++ Application.cpp，启动后台 Web 远程遥控服务 (默认开启 8088 端口遥控中枢，WiFi 传歌默认保持关闭)
   if (!Platform.environment.containsKey('FLUTTER_TEST')) {
     WebRemoteService.instance.start(port: 8088);
-    WifiTransferService.instance.start(port: 8080);
   }
 }
 

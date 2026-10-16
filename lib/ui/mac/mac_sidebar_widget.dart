@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../models/sidebar_tab.dart';
 import '../../models/track.dart';
@@ -129,14 +130,15 @@ class MacSidebarWidget extends StatelessWidget {
                         onTap: () => onPlaylistSelected(pl.id),
                       ),
 
-                    // 添加播放列表按钮
-                    _buildNavItem(
-                      tab: null,
-                      label: '添加播放列表',
-                      iconData: Icons.add_rounded,
-                      isSelected: false,
-                      onTap: onCreatePlaylist,
-                    ),
+                    // 添加播放列表按钮 (树莓派屏幕无软键盘故在端侧隐藏，保留在 Web 遥控中枢通过手机/电脑创建)
+                    if (!Platform.isLinux)
+                      _buildNavItem(
+                        tab: null,
+                        label: '添加播放列表',
+                        iconData: Icons.add_rounded,
+                        isSelected: false,
+                        onTap: onCreatePlaylist,
+                      ),
                   ],
                 ),
               ),

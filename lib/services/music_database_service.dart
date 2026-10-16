@@ -43,13 +43,30 @@ class MusicDatabaseService extends ChangeNotifier {
     return defaultPath;
   }
 
+  Database? _cachedDb;
+  bool _tableInitialized = false;
+  final Map<String, String> _settingsCache = {};
+
   Database _openDb() {
+    if (_cachedDb != null) {
+      return _cachedDb!;
+    }
+    final dbFile = File(_databasePath);
+    if (!dbFile.parent.existsSync()) {
+      try {
+        dbFile.parent.createSync(recursive: true);
+      } catch (_) {}
+    }
     final db = sqlite3.open(_databasePath);
     try {
       db.execute('PRAGMA busy_timeout = 3000;');
       db.execute('PRAGMA journal_mode = WAL;');
     } catch (_) {}
-    _ensureSettingsTable(db);
+    if (!_tableInitialized) {
+      _ensureSettingsTable(db);
+      _tableInitialized = true;
+    }
+    _cachedDb = db;
     return db;
   }
 
@@ -102,8 +119,11 @@ class MusicDatabaseService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// 获取持久化设置项 (1:1 对齐 C++ MusicDatabase::getSetting)
+  /// 获取持久化设置项 (1:1 对齐 C++ MusicDatabase::getSetting，内置内存热缓存与纳秒级直读)
   String getSetting(String key, String defaultValue) {
+    if (_settingsCache.containsKey(key)) {
+      return _settingsCache[key]!;
+    }
     final dbFile = File(_databasePath);
     if (!dbFile.existsSync()) return defaultValue;
     try {
@@ -120,7 +140,7 @@ class MusicDatabaseService extends ChangeNotifier {
           val = val.substring(1, val.length - 1).trim();
         }
       }
-      db.close();
+      _settingsCache[key] = val;
       return val;
     } catch (e) {
       debugPrint('[MusicDatabaseService] getSetting error for $key: $e');
@@ -130,19 +150,37 @@ class MusicDatabaseService extends ChangeNotifier {
 
   /// 保存持久化设置项 (1:1 对齐 C++ MusicDatabase::setSetting)
   bool setSetting(String key, String value) {
-    final dbFile = File(_databasePath);
+    _settingsCache[key] = value;
     try {
-      if (!dbFile.parent.existsSync()) {
-        dbFile.parent.createSync(recursive: true);
-      }
       final db = _openDb();
       final stmt = db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?);');
       stmt.execute([key, value]);
       stmt.close();
-      db.close();
       return true;
     } catch (e) {
       debugPrint('[MusicDatabaseService] setSetting error for $key: $e');
+      return false;
+    }
+  }
+
+  /// 批量持久化设置项 (单次事务提交，杜绝 SQLite 重复开关与锁冲突)
+  bool setSettings(Map<String, String> entries) {
+    if (entries.isEmpty) return true;
+    for (final e in entries.entries) {
+      _settingsCache[e.key] = e.value;
+    }
+    try {
+      final db = _openDb();
+      db.execute('BEGIN TRANSACTION;');
+      final stmt = db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?);');
+      for (final e in entries.entries) {
+        stmt.execute([e.key, e.value]);
+      }
+      stmt.close();
+      db.execute('COMMIT;');
+      return true;
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] setSettings batch error: $e');
       return false;
     }
   }
@@ -295,8 +333,6 @@ class MusicDatabaseService extends ChangeNotifier {
         }
       } catch (_) {}
 
-      db.close();
-
       _tracks = loaded;
       _playlists = plLoaded;
       notifyListeners();
@@ -314,7 +350,6 @@ class MusicDatabaseService extends ChangeNotifier {
       final db = _openDb();
       db.execute('DELETE FROM scanned_tracks;');
       db.execute('DELETE FROM playlists;');
-      db.close();
     } catch (_) {}
     _tracks = [];
     _playlists = [];
@@ -355,7 +390,6 @@ class MusicDatabaseService extends ChangeNotifier {
         stmt.close();
         db.execute('COMMIT;');
       }
-      db.close();
       loadLibrary();
       return true;
     } catch (e) {
@@ -577,7 +611,6 @@ class MusicDatabaseService extends ChangeNotifier {
       final stmt = db.prepare('INSERT OR REPLACE INTO playlists (id, name) VALUES (?, ?);');
       stmt.execute([newId, name.trim()]);
       stmt.close();
-      db.close();
     } catch (_) {}
     notifyListeners();
   }
@@ -589,7 +622,6 @@ class MusicDatabaseService extends ChangeNotifier {
       final stmt = db.prepare('DELETE FROM playlists WHERE id = ?;');
       stmt.execute([id]);
       stmt.close();
-      db.close();
     } catch (_) {}
     notifyListeners();
   }

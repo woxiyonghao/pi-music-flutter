@@ -11,6 +11,8 @@ WorkingDirectory=/home/winheo/pi-music-flutter
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=PI_KIOSK=1
 Environment=LIBSEAT_BACKEND=seatd
+Environment=PATH=/home/winheo/flutter/bin:/usr/local/bin:/usr/bin:/bin:/usr/games
+Environment=WLR_NO_HARDWARE_CURSORS=1
 Environment=XCURSOR_THEME=blank
 Environment=XCURSOR_SIZE=1
 ExecStart=/usr/bin/cage -s -- /home/winheo/pi-music-flutter/build/linux/arm64/release/bundle/hide_player_flutter

@@ -189,9 +189,10 @@ class ThemeService extends ChangeNotifier {
     _customSat = hsv.saturation;
     _customVal = hsv.value;
 
-    final db = MusicDatabaseService.instance;
-    db.setSetting('theme_id', preset.id.toString());
-    db.setSetting('bg_visual_mode', _backgroundVisualMode.toString());
+    MusicDatabaseService.instance.setSettings({
+      'theme_id': preset.id.toString(),
+      'bg_visual_mode': _backgroundVisualMode.toString(),
+    });
 
     notifyListeners();
   }
@@ -203,17 +204,19 @@ class ThemeService extends ChangeNotifier {
     _accentColor = HSVColor.fromAHSV(1.0, _customHue, _customSat, _customVal).toColor();
     _currentThemeId = 4; // 标记为自定义 (ThemeId::Custom = 4)
 
-    final db = MusicDatabaseService.instance;
-    db.setSetting('theme_id', '4');
-    db.setSetting('theme_custom_r', _accentColor.r.toStringAsFixed(4));
-    db.setSetting('theme_custom_g', _accentColor.g.toStringAsFixed(4));
-    db.setSetting('theme_custom_b', _accentColor.b.toStringAsFixed(4));
+    MusicDatabaseService.instance.setSettings({
+      'theme_id': '4',
+      'theme_custom_r': _accentColor.r.toStringAsFixed(4),
+      'theme_custom_g': _accentColor.g.toStringAsFixed(4),
+      'theme_custom_b': _accentColor.b.toStringAsFixed(4),
+    });
 
     notifyListeners();
   }
 
   void setBackgroundVisualMode(int mode) {
     if (mode >= 0 && mode < visualModeLabels.length) {
+      if (_backgroundVisualMode == mode) return;
       _backgroundVisualMode = mode;
       MusicDatabaseService.instance.setSetting('bg_visual_mode', mode.toString());
       notifyListeners();
@@ -221,7 +224,20 @@ class ThemeService extends ChangeNotifier {
   }
 
   void resetToDefault() {
-    setTheme(0);
-    setBackgroundVisualMode(0);
+    final preset = presets.first;
+    _currentThemeId = preset.id;
+    _accentColor = preset.accentColor;
+    _backgroundVisualMode = preset.defaultVisualMode;
+    final hsv = HSVColor.fromColor(_accentColor);
+    _customHue = hsv.hue;
+    _customSat = hsv.saturation;
+    _customVal = hsv.value;
+
+    MusicDatabaseService.instance.setSettings({
+      'theme_id': preset.id.toString(),
+      'bg_visual_mode': _backgroundVisualMode.toString(),
+    });
+
+    notifyListeners();
   }
 }

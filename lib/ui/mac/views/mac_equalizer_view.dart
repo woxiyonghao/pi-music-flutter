@@ -208,17 +208,20 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
           ),
           const SizedBox(height: 14.0),
 
-          // 2. 预设方案水平胶囊栏 (8款发烧经典预设)
-          Row(
-            children: [
-              for (int i = 0; i < presets.length; i++) ...[
-                if (i > 0) const SizedBox(width: 8.0),
-                Expanded(
-                  child: InkWell(
+          // 2. 预设方案水平胶囊栏 (8款发烧经典预设，支持平滑横向拖拽与舒适触控间距)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                for (int i = 0; i < presets.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8.0),
+                  InkWell(
                     onTap: () => _applyPreset(i),
                     borderRadius: BorderRadius.circular(13.0),
                     child: Container(
-                      height: 26.0,
+                      height: 28.0,
+                      padding: const EdgeInsets.symmetric(horizontal: 14.0),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: _selectedPreset == i
@@ -246,9 +249,9 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
                       ),
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
           const SizedBox(height: 12.0),
 

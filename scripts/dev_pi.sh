@@ -38,11 +38,14 @@ function sync_code() {
     check_conn
     log_info "正在增量同步本地代码至树莓派 (${PI_DIR})..."
     rsync -avz --delete \
-        --exclude '.git' \
         --exclude 'build' \
         --exclude '.dart_tool' \
         --exclude '.idea' \
         --exclude '.vscode' \
+        --exclude 'libhifi_audio_ffi.so' \
+        --exclude 'ephemeral' \
+        --exclude '.flutter-plugins*' \
+        --exclude 'linux/flutter/ephemeral' \
         "${LOCAL_DIR}/" "${PI_USER}@${PI_HOST}:${PI_DIR}/"
     log_succ "代码同步完成！"
 }

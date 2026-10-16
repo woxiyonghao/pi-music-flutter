@@ -32,6 +32,11 @@ class MacBackgroundWidget extends StatelessWidget {
           orElse: () => ThemeService.presets.first,
         );
 
+        final isHardwareMeter = visualizerType == VisualizerType.mcIntosh ||
+            visualizerType == VisualizerType.accuphase ||
+            visualizerType == VisualizerType.tapeReel ||
+            visualizerType == VisualizerType.glassClock;
+
         return Stack(
           fit: StackFit.expand,
           children: [
@@ -39,23 +44,35 @@ class MacBackgroundWidget extends StatelessWidget {
             const ColoredBox(color: UIConfig.mainStageBg),
 
             // 2. 背景动效层分发 (严格使用 RepaintBoundary 建立独立 GPU 合成图层，彻底阻断对前台卡片列表的重绘波及)
-            if (visualizerType == VisualizerType.ledSpectrum)
-              RepaintBoundary(
-                child: CustomPaint(
-                  painter: _LedSpectrumBackgroundPainter(
-                    isPlaying: isPlaying,
-                    spectrumLevels: spectrum,
-                    litColor: accent,
-                    peakColor: currentPreset.peakColor,
-                  ),
-                ),
-              )
-            else if (visualizerType != VisualizerType.pureBlack)
+            // 当处于非全屏模式时，名机大表头/磁带机等完整机械机架无法在卡片遮挡下舒展呈现，且表头底座切片会与底部控制栏产生遮挡瑕疵；
+            // 因此非全屏待机时自动平滑呈现同色系全景 LED 频谱底纹，而在全屏沉浸时自然过渡为 100% 震撼大表头
+
+            if (visualizerType == VisualizerType.ledSpectrum ||
+                (isHardwareMeter && fullscreenProgress < 0.95))
               RepaintBoundary(
                 child: Opacity(
-                  opacity: (0.85 + 0.15 * fullscreenProgress).clamp(0.0, 1.0),
+                  opacity: isHardwareMeter
+                      ? (1.0 - fullscreenProgress).clamp(0.0, 1.0)
+                      : 1.0,
+                  child: CustomPaint(
+                    painter: _LedSpectrumBackgroundPainter(
+                      isPlaying: isPlaying,
+                      spectrumLevels: spectrum,
+                      litColor: accent,
+                      peakColor: currentPreset.peakColor,
+                    ),
+                  ),
+                ),
+              ),
+
+            if (visualizerType != VisualizerType.pureBlack &&
+                visualizerType != VisualizerType.ledSpectrum)
+              RepaintBoundary(
+                child: Opacity(
+                  opacity: isHardwareMeter
+                      ? fullscreenProgress.clamp(0.0, 1.0)
+                      : (0.85 + 0.15 * fullscreenProgress).clamp(0.0, 1.0),
                   child: VisualizerStageWidget(
-                    key: ValueKey('${visualizerType.index}_${theme.currentThemeId}_${accent.toARGB32()}'),
                     activeType: visualizerType,
                   ),
                 ),

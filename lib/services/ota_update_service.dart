@@ -59,6 +59,22 @@ class OtaUpdateService extends ChangeNotifier {
     }
   }
 
+  /// 解析 Flutter 命令行执行路径 (兼容树莓派 winheo 用户专用 SDK 路径)
+  static String getFlutterExecutable() {
+    if (Platform.isLinux) {
+      const candidates = [
+        '/home/winheo/flutter/bin/flutter',
+        '/home/pi/flutter/bin/flutter',
+        '/usr/local/bin/flutter',
+        '/usr/bin/flutter',
+      ];
+      for (final p in candidates) {
+        if (File(p).existsSync()) return p;
+      }
+    }
+    return 'flutter';
+  }
+
   /// 获取 Git 源码根目录
   String getRepoRoot() {
     if (_repoRoot != null) return _repoRoot!;
@@ -74,6 +90,9 @@ class OtaUpdateService extends ChangeNotifier {
     // 备用探测路径
     final candidates = [
       Directory.current.path,
+      '/home/winheo/pi-music-flutter',
+      '/home/pi/pi-music-flutter',
+      '/Users/lusesi/Desktop/pi-hifi-music-flutter',
       '/Users/mk10/Desktop/hide_player_flutter',
       '/home/pi/hide_player_flutter',
     ];
@@ -253,11 +272,16 @@ class OtaUpdateService extends ChangeNotifier {
           return false;
         }
       } else if (Platform.isLinux) {
+        final flutterBin = getFlutterExecutable();
         final buildRes = await Process.run(
-          'flutter',
+          flutterBin,
           ['build', 'linux', '--release'],
           workingDirectory: root,
-        ).timeout(const Duration(minutes: 5));
+          environment: {
+            ...Platform.environment,
+            'PATH': '/home/winheo/flutter/bin:/usr/local/bin:/usr/bin:/bin:${Platform.environment['PATH'] ?? ''}',
+          },
+        ).timeout(const Duration(minutes: 8));
 
         if (buildRes.exitCode != 0) {
           _status = OtaStatus.failed;
