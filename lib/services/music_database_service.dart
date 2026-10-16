@@ -367,11 +367,26 @@ class MusicDatabaseService extends ChangeNotifier {
         if (Directory(homeMusic).existsSync()) scanDirs.add(homeMusic);
         const piMusic = '/home/pi/Music';
         if (Directory(piMusic).existsSync() && !scanDirs.contains(piMusic)) scanDirs.add(piMusic);
-        // 自动探测挂载在 /media/pi 或 /media 下的所有 U 盘与外置移动硬盘
+        // 自动探测挂载在 /media/pi 或 /media 下的所有 U 盘、SATA 与 NVMe 固态硬盘
+        final mediaPiDir = Directory('/media/pi');
+        if (mediaPiDir.existsSync()) {
+          try {
+            for (final sub in mediaPiDir.listSync()) {
+              if (sub is Directory && !scanDirs.contains(sub.path)) scanDirs.add(sub.path);
+            }
+          } catch (_) {}
+        }
         final mediaDir = Directory('/media');
-        if (mediaDir.existsSync()) scanDirs.add('/media');
+        if (mediaDir.existsSync() && !scanDirs.contains('/media')) scanDirs.add('/media');
         final mntDir = Directory('/mnt');
-        if (mntDir.existsSync()) scanDirs.add('/mnt');
+        if (mntDir.existsSync()) {
+          try {
+            for (final sub in mntDir.listSync()) {
+              if (sub is Directory && !scanDirs.contains(sub.path)) scanDirs.add(sub.path);
+            }
+          } catch (_) {}
+          if (!scanDirs.contains('/mnt')) scanDirs.add('/mnt');
+        }
       } else {
         final music = '$home/Music';
         if (Directory(music).existsSync()) scanDirs.add(music);
