@@ -1,7 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'core/app_paths.dart';
 import 'core/platform_helper.dart';
+import 'services/music_database_service.dart';
 import 'services/web_remote_service.dart';
+import 'services/wifi_transfer_service.dart';
 import 'theme/hifi_theme.dart';
 import 'theme/ui_config.dart';
 import 'ui/iphone/iphone_main_view.dart';
@@ -11,11 +15,22 @@ import 'ui/ipad/ipad_main_view.dart';
 import 'ui/mac/mac_main_view.dart';
 import 'ui/window/window_main_view.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppPaths.init();
+  MusicDatabaseService.instance.loadLibrary();
+
+  // iPad 端强制锁定纯横屏 (只允许 LandscapeLeft / LandscapeRight)
+  if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
   runApp(const HiFiPlayerApp());
 
-  // 1:1 对齐 C++ Application.cpp，启动后台 Web 远程遥控中枢
+  // 启动后台 Web 远程遥控中枢 (WiFi 传歌服务默认不开启，由用户在界面按需开启)
   if (!Platform.environment.containsKey('FLUTTER_TEST')) {
     WebRemoteService.instance.start(port: 8088);
   }

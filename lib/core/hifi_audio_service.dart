@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/track.dart';
 import '../models/playback_state.dart';
+import '../services/music_database_service.dart';
 import 'hifi_audio_bindings.dart';
 
 /// 全局音频服务 (提供 60fps 动效数据流与状态响应式驱动)
@@ -28,6 +29,16 @@ class HifiAudioService extends ChangeNotifier {
   PlaybackState get state => _state;
 
   Timer? _ticker;
+  bool _hasConfirmedPlaying = false;
+  int _consecutiveErrors = 0;
+
+  bool _eqEnabled = false;
+  bool get eqEnabled => _eqEnabled;
+
+  List<double> _eqBands = List.filled(10, 0.0);
+  List<double> get eqBands => List.unmodifiable(_eqBands);
+
+  String lastDebugLog = '';
 
   final ValueNotifier<int?> currentTrackIdNotifier = ValueNotifier<int?>(null);
   final ValueNotifier<Track?> currentTrackNotifier = ValueNotifier<Track?>(null);
@@ -35,9 +46,63 @@ class HifiAudioService extends ChangeNotifier {
 
   HifiAudioService._() {
     _bindings.init();
+    _loadEqSettings();
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       _startTicker();
     }
+  }
+
+  void _loadEqSettings() {
+    try {
+      final db = MusicDatabaseService.instance;
+      _eqEnabled = db.getSetting('eq_enabled', '0') == '1';
+      for (int i = 0; i < 10; i++) {
+        final valStr = db.getSetting('eq_band_$i', '0.0');
+        _eqBands[i] = double.tryParse(valStr)?.clamp(-12.0, 12.0) ?? 0.0;
+      }
+      _bindings.setEqEnabled(_eqEnabled);
+      _bindings.setEqBands(_eqBands);
+    } catch (_) {}
+  }
+
+  void setEqEnabled(bool enabled) {
+    _eqEnabled = enabled;
+    _bindings.setEqEnabled(enabled);
+    MusicDatabaseService.instance.setSetting('eq_enabled', enabled ? '1' : '0');
+    notifyListeners();
+  }
+
+  void setEqBands(List<double> bands) {
+    if (bands.length != 10) return;
+    _eqBands = List.from(bands);
+    _bindings.setEqBands(_eqBands);
+    final db = MusicDatabaseService.instance;
+    for (int i = 0; i < 10; i++) {
+      db.setSetting('eq_band_$i', _eqBands[i].toStringAsFixed(1));
+    }
+    notifyListeners();
+  }
+
+  void setEqBand(int index, double gain) {
+    if (index < 0 || index >= 10) return;
+    _eqBands[index] = gain.clamp(-12.0, 12.0);
+    _bindings.setEqBands(_eqBands);
+    MusicDatabaseService.instance.setSetting('eq_band_$index', _eqBands[index].toStringAsFixed(1));
+    notifyListeners();
+  }
+
+  void resetEq() {
+    _eqBands = List.filled(10, 0.0);
+    _eqEnabled = false;
+    _bindings.setEqEnabled(false);
+    _bindings.setEqBands(_eqBands);
+    final db = MusicDatabaseService.instance;
+    db.setSetting('eq_enabled', '0');
+    db.setSetting('eq_selected_preset', '0');
+    for (int i = 0; i < 10; i++) {
+      db.setSetting('eq_band_$i', '0.0');
+    }
+    notifyListeners();
   }
 
   void stopTicker() {
@@ -65,8 +130,14 @@ class HifiAudioService extends ChangeNotifier {
         isPlayingNotifier.value = isPlaying;
       }
 
-      // 检查曲目是否自然播放结束 (包含 CUE 分轨区间播完)
-      if (_state.isPlaying && !isPlaying && !_state.isPaused) {
+      if (isPlaying) {
+        _hasConfirmedPlaying = true;
+        _consecutiveErrors = 0;
+      }
+
+      // 仅当曲目曾经在底层引擎真正开始播放，且现在底层已经停止，并且不是处于暂停状态时，才视为自然播完
+      if (_hasConfirmedPlaying && _state.isPlaying && !isPlaying && !_state.isPaused) {
+        _hasConfirmedPlaying = false;
         _state = PlaybackState(
           isPlaying: false,
           isPaused: false,
@@ -119,7 +190,6 @@ class HifiAudioService extends ChangeNotifier {
     _currentTrack = track;
     currentTrackIdNotifier.value = track.id;
     currentTrackNotifier.value = track;
-    isPlayingNotifier.value = true;
 
     if (queue != null && index != null) {
       _playlistQueue = List.from(queue);
@@ -131,6 +201,91 @@ class HifiAudioService extends ChangeNotifier {
       _currentIndex = _playlistQueue.indexOf(track);
     }
 
+    _hasConfirmedPlaying = false;
+
+    // 在单元测试无头环境下模拟成功播放，方便验证 Flutter Widget 树与高亮状态流转
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      _hasConfirmedPlaying = true;
+      _consecutiveErrors = 0;
+      isPlayingNotifier.value = true;
+      _state = PlaybackState(
+        isPlaying: true,
+        isPaused: false,
+        isBitPerfect: true,
+        currentTime: 0.0,
+        duration: track.durationSec.toDouble(),
+        progress: 0.0,
+        volume: _state.volume,
+        isMuted: _state.isMuted,
+        playMode: _playMode,
+        activeDeviceName: 'Apple Direct',
+        activeSampleRate: track.sampleRate,
+        spectrumLevels: _state.spectrumLevels,
+      );
+      notifyListeners();
+      return;
+    }
+
+    // 智能自愈并校验物理文件是否存在，彻底避免 iOS Sandbox Container UUID 变化导致播放失败
+    final resolvedPath = MusicDatabaseService.resolveTrackPath(track.filepath);
+    final fileExists = File(resolvedPath).existsSync();
+    if (!fileExists) {
+      lastDebugLog = 'FILE_NOT_FOUND: resolved=$resolvedPath (orig=${track.filepath})';
+      debugPrint('[HifiAudioService] 音频物理文件不存在: $resolvedPath (原路径: ${track.filepath})');
+      _consecutiveErrors++;
+      isPlayingNotifier.value = false;
+      _state = PlaybackState(
+        isPlaying: false,
+        isPaused: false,
+        isBitPerfect: false,
+        currentTime: 0.0,
+        duration: track.durationSec.toDouble(),
+        progress: 0.0,
+        volume: _state.volume,
+        isMuted: _state.isMuted,
+        playMode: _playMode,
+        activeDeviceName: 'Apple Direct',
+        activeSampleRate: track.sampleRate,
+        spectrumLevels: List.filled(12, 0.0),
+      );
+      notifyListeners();
+      return;
+    }
+
+    final bool success;
+    if (track.isCueTrack && track.endTimeSec > track.startTimeSec) {
+      success = _bindings.openAndPlaySection(resolvedPath, track.startTimeSec, track.endTimeSec);
+    } else {
+      success = _bindings.openAndPlay(resolvedPath);
+    }
+
+    if (!success) {
+      lastDebugLog = 'BINDINGS_OPEN_FAIL: path=$resolvedPath, isCue=${track.isCueTrack}, isLoaded=${_bindings.isLoaded}';
+      debugPrint('[HifiAudioService] 底层解码器打开音频文件失败: $resolvedPath');
+      _consecutiveErrors++;
+      isPlayingNotifier.value = false;
+      _state = PlaybackState(
+        isPlaying: false,
+        isPaused: false,
+        isBitPerfect: false,
+        currentTime: 0.0,
+        duration: track.durationSec.toDouble(),
+        progress: 0.0,
+        volume: _state.volume,
+        isMuted: _state.isMuted,
+        playMode: _playMode,
+        activeDeviceName: 'Apple Direct',
+        activeSampleRate: track.sampleRate,
+        spectrumLevels: List.filled(12, 0.0),
+      );
+      notifyListeners();
+      return;
+    }
+
+    lastDebugLog = 'SUCCESS_PLAY: $resolvedPath';
+    _consecutiveErrors = 0;
+    _hasConfirmedPlaying = false;
+    isPlayingNotifier.value = true;
     _state = PlaybackState(
       isPlaying: true,
       isPaused: false,
@@ -146,15 +301,6 @@ class HifiAudioService extends ChangeNotifier {
       spectrumLevels: _state.spectrumLevels,
     );
     notifyListeners();
-
-    // 延迟到事件循环下一轮执行 C++ 解码与声卡 I/O，确保当前 UI 帧 60fps 零卡顿即时响应
-    Future(() async {
-      if (track.isCueTrack && track.endTimeSec > track.startTimeSec) {
-        _bindings.openAndPlaySection(track.filepath, track.startTimeSec, track.endTimeSec);
-      } else {
-        _bindings.openAndPlay(track.filepath);
-      }
-    });
   }
 
   void togglePlayPause() {
@@ -185,17 +331,68 @@ class HifiAudioService extends ChangeNotifier {
   void play() {
     _bindings.play();
     isPlayingNotifier.value = true;
+    _state = PlaybackState(
+      isPlaying: true,
+      isPaused: false,
+      isBitPerfect: _state.isBitPerfect,
+      currentTime: _state.currentTime,
+      duration: _state.duration,
+      progress: _state.progress,
+      volume: _state.volume,
+      isMuted: _state.isMuted,
+      playMode: _playMode,
+      activeDeviceName: _state.activeDeviceName,
+      activeSampleRate: _state.activeSampleRate,
+      spectrumLevels: _state.spectrumLevels,
+    );
     notifyListeners();
   }
 
   void pause() {
+    _hasConfirmedPlaying = false;
     _bindings.pause();
     isPlayingNotifier.value = false;
+    _state = PlaybackState(
+      isPlaying: false,
+      isPaused: true,
+      isBitPerfect: _state.isBitPerfect,
+      currentTime: _state.currentTime,
+      duration: _state.duration,
+      progress: _state.progress,
+      volume: _state.volume,
+      isMuted: _state.isMuted,
+      playMode: _playMode,
+      activeDeviceName: _state.activeDeviceName,
+      activeSampleRate: _state.activeSampleRate,
+      spectrumLevels: _state.spectrumLevels,
+    );
+    notifyListeners();
+  }
+
+  void stop() {
+    _hasConfirmedPlaying = false;
+    _bindings.stop();
+    isPlayingNotifier.value = false;
+    _state = PlaybackState(
+      isPlaying: false,
+      isPaused: false,
+      isBitPerfect: _state.isBitPerfect,
+      currentTime: 0.0,
+      duration: _state.duration,
+      progress: 0.0,
+      volume: _state.volume,
+      isMuted: _state.isMuted,
+      playMode: _playMode,
+      activeDeviceName: _state.activeDeviceName,
+      activeSampleRate: _state.activeSampleRate,
+      spectrumLevels: List.filled(12, 0.0),
+    );
     notifyListeners();
   }
 
   void previous() {
     if (_playlistQueue.isEmpty) return;
+    _hasConfirmedPlaying = false;
     if (_state.currentTime > 3.0) {
       seek(0.0);
       return;
@@ -210,6 +407,13 @@ class HifiAudioService extends ChangeNotifier {
 
   void next() {
     if (_playlistQueue.isEmpty) return;
+    if (_consecutiveErrors >= _playlistQueue.length) {
+      _consecutiveErrors = 0;
+      _hasConfirmedPlaying = false;
+      pause();
+      return;
+    }
+    _hasConfirmedPlaying = false;
     switch (_playMode) {
       case PlayMode.loopSingle:
         seek(0.0);

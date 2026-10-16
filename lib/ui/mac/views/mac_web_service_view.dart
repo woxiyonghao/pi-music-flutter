@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../services/ota_update_service.dart';
 import '../../../services/theme_service.dart';
@@ -31,6 +32,16 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
     _activeSubModule = widget.isWifiTransfer ? 1 : 0;
     _ipInputController =
         TextEditingController(text: WebRemoteService.instance.localIp);
+    _refreshIps();
+  }
+
+  void _refreshIps() async {
+    final ip = await WebRemoteService.instance.refreshIp();
+    await WifiTransferService.instance.refreshIp();
+    if (mounted) {
+      _ipInputController.text = ip;
+      setState(() {});
+    }
   }
 
   @override
@@ -57,14 +68,40 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
     if (!WebRemoteService.instance.isRunning) {
       await WebRemoteService.instance.start();
     }
-    _openUrl(url);
+    if (Platform.isIOS) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已复制 Web 遥控网址至剪贴板: $url\n请在同一局域网电脑/手机浏览器打开即可远程控制'),
+            backgroundColor: const Color(0xFF3B82F6),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } else {
+      _openUrl(url);
+    }
   }
 
   void _openWifiUrl(String url) async {
     if (!WifiTransferService.instance.isRunning) {
       await WifiTransferService.instance.start();
     }
-    _openUrl(url);
+    if (Platform.isIOS) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已复制传歌网址至剪贴板: $url\n请在同一局域网电脑浏览器访问此地址，直接拖拽上传歌曲'),
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } else {
+      _openUrl(url);
+    }
   }
 
   @override
@@ -535,56 +572,58 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
           ],
         ),
       ),
-      const SizedBox(height: 12.0),
+      if (!Platform.isIOS) ...[
+        const SizedBox(height: 12.0),
 
-      // 卡片 5：系统在线 OTA 升级 (通过 Git 远程极速检查更新与一键热升级)
-      _buildCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.system_update_alt, size: 16.0, color: accent),
-                          const SizedBox(width: 8.0),
-                          const Text(
-                            '【系统在线 OTA 升级】Git 云端远程固件与应用热更新',
-                            style: TextStyle(
-                              fontSize: UIConfig.fontSmall,
-                              fontWeight: FontWeight.bold,
-                              color: UIConfig.textActive,
+        // 卡片 5：系统在线 OTA 升级 (通过 Git 远程极速检查更新与一键热升级)
+        _buildCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.system_update_alt, size: 16.0, color: accent),
+                            const SizedBox(width: 8.0),
+                            const Text(
+                              '【系统在线 OTA 升级】Git 云端远程固件与应用热更新',
+                              style: TextStyle(
+                                fontSize: UIConfig.fontSmall,
+                                fontWeight: FontWeight.bold,
+                                color: UIConfig.textActive,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4.0),
-                      const Text(
-                        '支持 macOS 桌面端与树莓派 Linux 硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: UIConfig.textMuted,
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4.0),
+                        const Text(
+                          '支持 macOS 桌面端与树莓派 Linux 硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: UIConfig.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16.0),
-                _buildOtaActionButton(accent),
-              ],
-            ),
-            const SizedBox(height: 12.0),
-            _buildOtaVersionBanner(accent),
-            ..._buildOtaDetails(accent),
-          ],
+                  const SizedBox(width: 16.0),
+                  _buildOtaActionButton(accent),
+                ],
+              ),
+              const SizedBox(height: 12.0),
+              _buildOtaVersionBanner(accent),
+              ..._buildOtaDetails(accent),
+            ],
+          ),
         ),
-      ),
+      ],
     ];
   }
 

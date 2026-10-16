@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
@@ -24,13 +25,25 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     'ROHM 34301',
   ];
 
+  bool get _isIOS => Platform.isIOS;
+
+  List<Map<String, String>> get _devices => _isIOS
+      ? const [
+          {'name': 'iPad 内置扬声器', 'arch': '架构: Apple AOP Audio', 'tag': 'iPad 内置'},
+          {'name': 'USB-C / 外部数字DAC', 'arch': '架构: Bit-Perfect (UAC2.0)', 'tag': '外部输出'},
+        ]
+      : const [
+          {'name': 'Mac 内置扬声器', 'arch': '架构: AppleHDA Built-in', 'tag': 'Mac 内置'},
+          {'name': '外接音频 / 高保真DAC', 'arch': '架构: CoreAudio Direct Stream', 'tag': '外接音频'},
+        ];
+
   // 0. Apple Direct 选项状态
   bool _exclusiveMode = true;
   int _appleExclusiveFlow = 0; // 0: Bit-Perfect 独占流, 1: 系统混音共享
   int _appleSampleRateTrack = 0; // 0: 原生跟随母带 (44.1k-192k), 1: 锁定 96kHz, 2: 锁定 192kHz
   int _appleImpedanceDrive = 0; // 0: 智能检测 (1.25V~3Vrms), 1: 强制高输出 (3.0Vrms), 2: 标准输出 (1.25Vrms)
   int _appleBitDepth = 0; // 0: 32-bit Float 浮点直通, 1: 24-bit 整数定点
-  int _selectedDeviceIndex = 1; // 0: LS27B61x, 1: Mac mini扬声器
+  int _selectedDeviceIndex = 0;
 
   // 1. ESS Sabre ES9038PRO
   int _essPcmFilter = 0; // 0~6: 快速最小, 慢速最小, 快速线性, 慢速线性, 变迹滤波, 砖墙滤波, 混合滤波
@@ -80,6 +93,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     _appleSampleRateTrack = int.tryParse(db.getSetting('setting_dac_apple_sample_rate', '0'))?.clamp(0, 2) ?? 0;
     _appleImpedanceDrive = int.tryParse(db.getSetting('setting_dac_apple_drive', '0'))?.clamp(0, 2) ?? 0;
     _appleBitDepth = int.tryParse(db.getSetting('setting_dac_apple_bit_depth', '0'))?.clamp(0, 1) ?? 0;
+    _selectedDeviceIndex = int.tryParse(db.getSetting('setting_dac_selected_device', '0'))?.clamp(0, _devices.length - 1) ?? 0;
 
     // ESS Sabre
     _essPcmFilter = int.tryParse(db.getSetting('setting_dac_pcm_filter', '0'))?.clamp(0, 6) ?? 0;
@@ -219,9 +233,9 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                       ),
                     ),
                     const SizedBox(width: 10.0),
-                    const Text(
-                      '声卡硬件: Mac mini扬声器  |  独占模式就绪 (起播锁定)  |  44 kHz',
-                      style: TextStyle(
+                    Text(
+                      '声卡硬件: ${_devices[_selectedDeviceIndex.clamp(0, _devices.length - 1)]['name']}  |  独占模式就绪 (起播锁定)  |  44 kHz',
+                      style: const TextStyle(
                         fontSize: UIConfig.fontSmall,
                         color: UIConfig.textActive,
                       ),
@@ -308,7 +322,9 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     return Column(
       children: [
         _buildSectionCard(
-          title: 'Mac 硬件直通通道 (Apple CoreAudio Bit-Perfect)',
+          title: _isIOS
+              ? 'iPad 硬件直通通道 (Apple CoreAudio Bit-Perfect)'
+              : 'Mac 硬件直通通道 (Apple CoreAudio Bit-Perfect)',
           children: [
             _buildSegmentedRow(
               label: '硬件独占流',
@@ -366,9 +382,11 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               accent: accent,
             ),
             const SizedBox(height: 10.0),
-            const Text(
-              'Apple Direct 说明: MacBook Pro 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持 3.5mm 智能阻抗自适应放大。',
-              style: TextStyle(
+            Text(
+              _isIOS
+                  ? 'Apple Direct 说明: iPadOS 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持 USB-C DAC 解码耳放与自适应音频输出。'
+                  : 'Apple Direct 说明: Mac 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持 3.5mm 智能阻抗自适应放大与外接 DAC。',
+              style: const TextStyle(
                 fontSize: 11.0,
                 color: UIConfig.textMuted,
                 height: 1.4,
@@ -380,25 +398,21 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         _buildSectionCard(
           title: 'CoreAudio 音频输出设备拓扑 (实时枚举)',
           children: [
-            _buildDeviceRow(
-              index: 0,
-              name: 'LS27B61x',
-              arch: '架构: AppleHDA',
-              isBuiltIn: true,
-              isCurrent: _selectedDeviceIndex == 0,
-              onTap: () => setState(() => _selectedDeviceIndex = 0),
-              accent: accent,
-            ),
-            const SizedBox(height: 6.0),
-            _buildDeviceRow(
-              index: 1,
-              name: 'Mac mini扬声器',
-              arch: '架构: AppleHDA',
-              isBuiltIn: true,
-              isCurrent: _selectedDeviceIndex == 1,
-              onTap: () => setState(() => _selectedDeviceIndex = 1),
-              accent: accent,
-            ),
+            for (int i = 0; i < _devices.length; i++) ...[
+              if (i > 0) const SizedBox(height: 6.0),
+              _buildDeviceRow(
+                index: i,
+                name: _devices[i]['name']!,
+                arch: _devices[i]['arch']!,
+                tag: _devices[i]['tag']!,
+                isCurrent: _selectedDeviceIndex == i,
+                onTap: () {
+                  setState(() => _selectedDeviceIndex = i);
+                  MusicDatabaseService.instance.setSetting('setting_dac_selected_device', i.toString());
+                },
+                accent: accent,
+              ),
+            ],
           ],
         ),
       ],
@@ -938,7 +952,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     required int index,
     required String name,
     required String arch,
-    required bool isBuiltIn,
+    required String tag,
     required bool isCurrent,
     required VoidCallback onTap,
     required Color accent,
@@ -985,18 +999,17 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
             ),
             Row(
               children: [
-                if (isBuiltIn)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
-                    decoration: BoxDecoration(
-                      color: const Color.fromRGBO(255, 255, 255, 0.08),
-                      borderRadius: BorderRadius.circular(4.0),
-                    ),
-                    child: const Text(
-                      'Mac 内置',
-                      style: TextStyle(fontSize: 10.0, color: UIConfig.textNormal),
-                    ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(255, 255, 255, 0.08),
+                    borderRadius: BorderRadius.circular(4.0),
                   ),
+                  child: Text(
+                    tag,
+                    style: const TextStyle(fontSize: 10.0, color: UIConfig.textNormal),
+                  ),
+                ),
                 if (isCurrent) ...[
                   const SizedBox(width: 6.0),
                   Container(

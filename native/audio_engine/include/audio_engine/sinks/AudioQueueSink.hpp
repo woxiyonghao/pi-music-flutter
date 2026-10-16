@@ -34,7 +34,7 @@ private:
     static void outputCallbackThunk(void* inUserData, AudioQueueRef inAQ, AudioQueueBufferRef inBuffer);
 
     AudioQueueRef audio_queue_{nullptr};
-    static constexpr int kNumBuffers = 4;
+    static constexpr int kNumBuffers = 6;
     AudioQueueBufferRef buffers_[kNumBuffers]{nullptr};
 
     AudioFormatSpec actual_spec_{};

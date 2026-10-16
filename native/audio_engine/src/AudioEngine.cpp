@@ -7,6 +7,8 @@
 #if defined(__APPLE__)
 #include "audio_engine/decoders/AppleAudioDecoder.hpp"
 #include <TargetConditionals.h>
+#include <pthread.h>
+#include <pthread/qos.h>
 #endif
 
 #if defined(__ANDROID__)
@@ -111,6 +113,12 @@ std::unique_ptr<IAudioDecoder> AudioEngine::createDecoderForFile(const std::stri
     std::string ext = p.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });
 
+    // 1. DSD 格式 (.dsf / .dff) 无论任何输出设备，必须优先且唯一使用 DsfParser 原生解析！
+    // 苹果 ExtAudioFile 底层不识别 DSD 格式，必须由专用解析器抽样转为 32-bit Float PCM 输出
+    if (ext == ".dsf" || ext == ".dff") {
+        return std::make_unique<DsfParser>();
+    }
+
 #if defined(__APPLE__) && TARGET_OS_IPHONE
     // AirPods 实际工作在 AVAudioSession 的输出采样率（通常 48 kHz）。先在
     // 解码线程用 ExtAudioFile 完成系统级重采样，再以同采样率打开 AudioQueue，
@@ -131,8 +139,6 @@ std::unique_ptr<IAudioDecoder> AudioEngine::createDecoderForFile(const std::stri
         return std::make_unique<WavDecoder>();
     } else if (ext == ".mp3") {
         return std::make_unique<Mp3Decoder>();
-    } else if (ext == ".dsf" || ext == ".dff") {
-        return std::make_unique<DsfParser>();
 #if defined(__APPLE__)
     } else if (ext == ".m4a" || ext == ".alac" || ext == ".aac" || ext == ".aiff" || ext == ".aif" || ext == ".caf") {
         return std::make_unique<AppleAudioDecoder>();
@@ -360,10 +366,10 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
 
     decode_thread_ = std::jthread([this](std::stop_token st) { decodeWorker(st); });
 
-    size_t safe_watermark = std::min(static_cast<size_t>(32768 * current_spec_.channels),
+    size_t safe_watermark = std::min(static_cast<size_t>(65536 * current_spec_.channels),
                                      static_cast<size_t>(duration_sec_ * current_spec_.sample_rate * current_spec_.channels));
     int wait_cycles = 0;
-    while (ring_buffer_.available_read() < safe_watermark && !is_eof_.load(std::memory_order_acquire) && wait_cycles < 30) {
+    while (ring_buffer_.available_read() < safe_watermark && !is_eof_.load(std::memory_order_acquire) && wait_cycles < 60) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
         wait_cycles++;
     }
@@ -1015,6 +1021,10 @@ void AudioEngine::setEofCallback(std::function<void()> callback) {
 }
 
 void AudioEngine::decodeWorker(std::stop_token stop_token) {
+#if defined(__APPLE__)
+    // 提升解码线程至最高用户交互/实时级 QoS，杜绝 Flutter 主题切换、UI 动画与后台网络任务引起的 CPU 抢占爆音
+    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#endif
     constexpr size_t CHUNK_FRAMES = 8192;
     std::vector<float> decode_buf(CHUNK_FRAMES * current_spec_.channels);
 

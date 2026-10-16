@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import '../core/app_paths.dart';
 import 'music_database_service.dart';
 import 'web_remote_service.dart';
 import 'wifi_transfer_html.dart';
@@ -71,23 +72,7 @@ class WifiTransferService extends ChangeNotifier {
 
   /// 智能探测默认音乐存储目录
   static String _resolveDefaultMusicDir() {
-    final home = Platform.environment['HOME'] ?? '';
-    if (home.isNotEmpty) {
-      final downloadsMusic = '$home/Downloads/music';
-      if (Directory(downloadsMusic).existsSync()) return downloadsMusic;
-
-      final macMusic = '$home/Music';
-      if (Directory(macMusic).existsSync()) return macMusic;
-
-      final downloads = '$home/Downloads';
-      if (Directory(downloads).existsSync()) return downloads;
-
-      return macMusic;
-    }
-    if (Platform.isLinux) {
-      return '/home/pi/Music';
-    }
-    return '/tmp/music';
+    return AppPaths.musicDirectory;
   }
 
   /// 启动 WiFi 传歌 HTTP 服务 (默认端口 8080)
@@ -152,12 +137,19 @@ class WifiTransferService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<String> refreshIp() async {
+    _localIp = await WebRemoteService.findLocalIp();
+    notifyListeners();
+    return _localIp;
+  }
+
   /// 处理 HTTP 请求
   void _handleHttpRequest(HttpRequest request) async {
     // 设置通用跨域头部
     request.response.headers.set('Access-Control-Allow-Origin', '*');
-    request.response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    request.response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
     request.response.headers.set('Access-Control-Allow-Headers', '*');
+    request.response.headers.set('Access-Control-Max-Age', '86400');
 
     // OPTIONS 预检请求 (现代浏览器拖拽上传前必查)
     if (request.method == 'OPTIONS') {
@@ -171,9 +163,11 @@ class WifiTransferService extends ChangeNotifier {
     // 1. GET / 或 /index.html: 返回 H5 拖拽传歌网页 (同时兼容 HEAD 请求)
     if ((request.method == 'GET' || request.method == 'HEAD') &&
         (path == '/' || path == '/index.html')) {
-      final platformLabel = Platform.isMacOS
-          ? 'Mac'
-          : (Platform.isLinux ? '树莓派' : 'HiFi主机');
+      final platformLabel = Platform.isIOS
+          ? 'iPad'
+          : (Platform.isMacOS
+              ? 'Mac'
+              : (Platform.isLinux ? '树莓派' : 'HiFi主机'));
       final html = wifiTransferHtml.replaceAll('{{PLATFORM}}', platformLabel);
 
       request.response.headers.contentType = ContentType.html;
@@ -211,6 +205,10 @@ class WifiTransferService extends ChangeNotifier {
 
   /// 接收并落地音乐文件二进制流
   Future<void> _handleFileUpload(HttpRequest request) async {
+    request.response.headers.set('Access-Control-Allow-Origin', '*');
+    request.response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
+    request.response.headers.set('Access-Control-Allow-Headers', '*');
+
     // 解析文件名
     String filename = 'uploaded_track.flac';
     final queryName = request.uri.queryParameters['filename'];
@@ -233,15 +231,17 @@ class WifiTransferService extends ChangeNotifier {
       }
     }
 
-    // 文件名安全过滤 (防路径穿越)
-    filename = filename
-        .replaceAll('/', '_')
-        .replaceAll(r'\', '_')
-        .replaceAll('..', '_')
-        .trim();
-    if (filename.isEmpty) {
-      filename = 'track_${DateTime.now().millisecondsSinceEpoch}.flac';
+    // 安全规范化相对路径与目录结构 (防路径穿越 ../ 并支持保留无损专辑子目录)
+    final parts = filename.split(RegExp(r'[/\\]'));
+    final safeParts = <String>[];
+    for (final seg in parts) {
+      final s = seg.trim();
+      if (s.isEmpty || s == '.' || s == '..') continue;
+      safeParts.add(s.replaceAll(RegExp(r'[:*?"<>|]'), '_'));
     }
+    final relativePath = safeParts.isNotEmpty
+        ? safeParts.join(Platform.pathSeparator)
+        : 'track_${DateTime.now().millisecondsSinceEpoch}.flac';
 
     final targetDir = Directory(_targetDir);
     if (!targetDir.existsSync()) {
@@ -250,8 +250,19 @@ class WifiTransferService extends ChangeNotifier {
       } catch (_) {}
     }
 
-    final tempFile = File('${targetDir.path}/$filename.part');
-    final finalFile = File('${targetDir.path}/$filename');
+    var finalFile = File('${targetDir.path}/$relativePath');
+    final tempFile = File('${finalFile.path}.part');
+
+    if (!finalFile.parent.existsSync()) {
+      try {
+        finalFile.parent.createSync(recursive: true);
+      } catch (_) {}
+    }
+
+    // 避免与同名子目录冲突
+    if (FileSystemEntity.isDirectorySync(finalFile.path)) {
+      finalFile = File('${finalFile.path}_audio.flac');
+    }
 
     try {
       final sink = tempFile.openWrite();
@@ -265,8 +276,23 @@ class WifiTransferService extends ChangeNotifier {
       await sink.flush();
       await sink.close();
 
-      // 覆盖旧文件 (如有同名)
-      if (finalFile.existsSync()) {
+      // 空文件防入库拦截
+      if (totalBytes == 0) {
+        if (tempFile.existsSync()) {
+          try { tempFile.deleteSync(); } catch (_) {}
+        }
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode({
+          'status': 'error',
+          'message': '上传内容为空 (0 字节)',
+        }));
+        await request.response.close();
+        return;
+      }
+
+      // 覆盖旧文件 (如有同名普通文件)
+      if (finalFile.existsSync() && !FileSystemEntity.isDirectorySync(finalFile.path)) {
         try {
           finalFile.deleteSync();
         } catch (_) {}
@@ -283,8 +309,8 @@ class WifiTransferService extends ChangeNotifier {
       _uploadedFiles.insert(0, record);
       notifyListeners();
 
-      // 核心发烧特性：即传即入库！自动触发 MusicDatabaseService 重新加载曲库
-      MusicDatabaseService.instance.loadLibrary();
+      // 核心发烧特性：即传即入库！自动触发 MusicDatabaseService 真正扫描落盘文件入库
+      await MusicDatabaseService.instance.scanLibrary();
 
       debugPrint('[WifiTransferService] 文件上传成功: $filename ($totalBytes bytes) -> ${finalFile.path}');
 

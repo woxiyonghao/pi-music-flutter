@@ -1,1 +1,5 @@
 #include "Generated.xcconfig"
+
+HEADER_SEARCH_PATHS = $(inherited) $(PROJECT_DIR)/../native/include
+LIBRARY_SEARCH_PATHS = $(inherited) $(PROJECT_DIR)/lib/$(PLATFORM_NAME) $(PROJECT_DIR)/lib
+OTHER_LDFLAGS = $(inherited) -force_load $(PROJECT_DIR)/lib/$(PLATFORM_NAME)/libhifi_audio_ffi.a -Wl,-exported_symbols_list,$(PROJECT_DIR)/exported_symbols.txt -framework AVFoundation -framework AudioToolbox -framework CoreAudio -lsqlite3

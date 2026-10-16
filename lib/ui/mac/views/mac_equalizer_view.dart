@@ -1,7 +1,10 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../core/hifi_audio_service.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/web_remote_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
 
@@ -30,35 +33,50 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
     {'name': '自定义',   'gains': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]},
   ];
 
-  int _selectedPreset = 6; // 通透高音 (对齐截图 1_eq)
-  late List<double> _bandGains = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.5, 4.5, 6.0, 6.0];
-  bool _isEnabled = true;
+  int _selectedPreset = 0; // 0: 原音直通 (初始纯净直通，无人工染色)
+  late List<double> _bandGains = List.filled(10, 0.0);
+  bool _isEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    HifiAudioService.instance.addListener(_onAudioServiceChanged);
+  }
+
+  @override
+  void dispose() {
+    HifiAudioService.instance.removeListener(_onAudioServiceChanged);
+    super.dispose();
+  }
+
+  void _onAudioServiceChanged() {
+    if (!mounted) return;
+    final audio = HifiAudioService.instance;
+    if (_isEnabled != audio.eqEnabled || !listEquals(_bandGains, audio.eqBands)) {
+      setState(() {
+        _isEnabled = audio.eqEnabled;
+        _bandGains = List<double>.from(audio.eqBands);
+      });
+    }
   }
 
   void _loadSettings() {
-    final db = MusicDatabaseService.instance;
-    _isEnabled = db.getSetting('eq_enabled', '1') == '1';
-    _selectedPreset = int.tryParse(db.getSetting('eq_selected_preset', '6'))?.clamp(0, presets.length - 1) ?? 6;
+    final audio = HifiAudioService.instance;
+    _isEnabled = audio.eqEnabled;
+    _bandGains = List<double>.from(audio.eqBands);
 
-    final defaultGains = presets[_selectedPreset]['gains'] as List<double>;
-    _bandGains = List<double>.generate(10, (i) {
-      final savedStr = db.getSetting('eq_band_$i', defaultGains[i].toString());
-      return double.tryParse(savedStr)?.clamp(-12.0, 12.0) ?? defaultGains[i];
-    });
+    final db = MusicDatabaseService.instance;
+    _selectedPreset = int.tryParse(db.getSetting('eq_selected_preset', '0'))?.clamp(0, presets.length - 1) ?? 0;
   }
 
   void _saveSettings() {
+    final audio = HifiAudioService.instance;
+    audio.setEqEnabled(_isEnabled);
+    audio.setEqBands(_bandGains);
     final db = MusicDatabaseService.instance;
-    db.setSetting('eq_enabled', _isEnabled ? '1' : '0');
     db.setSetting('eq_selected_preset', _selectedPreset.toString());
-    for (int i = 0; i < 10; i++) {
-      db.setSetting('eq_band_$i', _bandGains[i].toStringAsFixed(1));
-    }
+    WebRemoteService.instance.broadcastState();
   }
 
   void _applyPreset(int index) {
@@ -75,7 +93,8 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
       _selectedPreset = 0;
       _bandGains = List.filled(10, 0.0);
       _isEnabled = false;
-      _saveSettings();
+      HifiAudioService.instance.resetEq();
+      WebRemoteService.instance.broadcastState();
     });
   }
 

@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import '../core/app_paths.dart';
+import '../core/hifi_audio_bindings.dart';
 import '../core/hifi_audio_service.dart';
 import '../models/playback_state.dart';
 import '../models/track.dart';
+import 'mseb_service.dart';
 import 'music_database_service.dart';
 import 'theme_service.dart';
 import 'web_remote_html.dart';
@@ -66,6 +69,12 @@ class WebRemoteService extends ChangeNotifier {
       debugPrint('[WebRemoteService] 获取局域网 IP 异常: $e');
     }
     return '127.0.0.1';
+  }
+
+  Future<String> refreshIp() async {
+    _localIp = await findLocalIp();
+    notifyListeners();
+    return _localIp;
   }
 
   /// 启动 Web 远程遥控服务 (默认端口 8088)
@@ -199,6 +208,25 @@ class WebRemoteService extends ChangeNotifier {
     if (request.method == 'GET' && path == '/api/library') {
       request.response.headers.contentType = ContentType.json;
       request.response.write(jsonEncode(_buildLibraryMap()));
+      await request.response.close();
+      return;
+    }
+
+    // 5.1 GET /api/debug: 诊断内部路径与音频引擎状态
+    if (request.method == 'GET' && path == '/api/debug') {
+      final audio = HifiAudioService.instance;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'load_error': HifiAudioBindings.instance.loadError,
+        'is_loaded': HifiAudioBindings.instance.isLoaded,
+        'last_debug_log': audio.lastDebugLog,
+        'documents_dir': AppPaths.documentsDirectory,
+        'music_dir': AppPaths.musicDirectory,
+        'tracks_count': MusicDatabaseService.instance.tracks.length,
+        'first_track_path': MusicDatabaseService.instance.tracks.isNotEmpty ? MusicDatabaseService.instance.tracks.first.filepath : '',
+        'resolved_first_path': MusicDatabaseService.instance.tracks.isNotEmpty ? MusicDatabaseService.resolveTrackPath(MusicDatabaseService.instance.tracks.first.filepath) : '',
+        'first_exists': MusicDatabaseService.instance.tracks.isNotEmpty ? File(MusicDatabaseService.resolveTrackPath(MusicDatabaseService.instance.tracks.first.filepath)).existsSync() : false,
+      }));
       await request.response.close();
       return;
     }
@@ -392,6 +420,75 @@ class WebRemoteService extends ChangeNotifier {
             broadcastState();
           }
           break;
+        case 'set_eq_enabled':
+          final en = cmd['enabled'] as bool? ?? false;
+          audio.setEqEnabled(en);
+          broadcastState();
+          break;
+        case 'set_eq_band':
+          final idx = (cmd['index'] as num?)?.toInt();
+          final val = (cmd['value'] as num?)?.toDouble() ?? (cmd['gain'] as num?)?.toDouble();
+          if (idx != null && val != null) {
+            audio.setEqBand(idx, val);
+            audio.setEqEnabled(true);
+            broadcastState();
+          }
+          break;
+        case 'reset_eq':
+          audio.resetEq();
+          broadcastState();
+          break;
+        case 'set_eq_preset':
+          final bandsRaw = cmd['bands'] as List?;
+          if (bandsRaw != null && bandsRaw.length == 10) {
+            final bands = bandsRaw.map((e) => (e as num).toDouble()).toList();
+            audio.setEqBands(bands);
+            audio.setEqEnabled(true);
+            broadcastState();
+          }
+          break;
+        case 'set_mseb_enabled':
+          final en = cmd['enabled'] as bool? ?? false;
+          MsebService.instance.setEnabled(en);
+          broadcastMseb();
+          broadcastState();
+          break;
+        case 'set_mseb_param':
+          final idx = (cmd['index'] as num?)?.toInt();
+          final val = (cmd['value'] as num?)?.toDouble() ?? (cmd['gain'] as num?)?.toDouble();
+          if (idx != null && val != null) {
+            MsebService.instance.setParam(idx, val);
+            MsebService.instance.setEnabled(true);
+            broadcastMseb();
+            broadcastState();
+          }
+          break;
+        case 'reset_mseb':
+          MsebService.instance.resetAll();
+          broadcastMseb();
+          broadcastState();
+          break;
+        case 'play_playlist':
+          final pid = (cmd['id'] as num?)?.toInt();
+          if (pid != null) {
+            final pl = db.playlists.cast<Playlist?>().firstWhere(
+              (p) => p?.id == pid,
+              orElse: () => null,
+            );
+            if (pl != null && pl.tracks.isNotEmpty) {
+              audio.playTracks(pl.tracks, 0);
+              _broadcast(jsonEncode(_buildQueueMap()));
+              broadcastState();
+            }
+          }
+          break;
+        case 'delete_playlist':
+          final pid = (cmd['id'] as num?)?.toInt();
+          if (pid != null) {
+            db.deletePlaylist(pid);
+            _broadcast(jsonEncode(_buildPlaylistsMap()));
+          }
+          break;
       }
     } catch (e) {
       debugPrint('[WebRemoteService] 处理客户端指令失败: $e');
@@ -402,6 +499,11 @@ class WebRemoteService extends ChangeNotifier {
   void broadcastState() {
     if (_clients.isEmpty) return;
     _broadcast(jsonEncode(_buildStateMap()));
+  }
+
+  void broadcastMseb() {
+    if (_clients.isEmpty) return;
+    _broadcast(jsonEncode(_buildMsebMap()));
   }
 
   void _broadcast(String message) {
@@ -415,6 +517,7 @@ class WebRemoteService extends ChangeNotifier {
   Map<String, dynamic> _buildStateMap() {
     final audio = HifiAudioService.instance;
     final theme = ThemeService.instance;
+    final mseb = MsebService.instance;
     final cur = audio.currentTrack;
 
     String modeStr = 'list';
@@ -441,10 +544,10 @@ class WebRemoteService extends ChangeNotifier {
       'is_muted': audio.state.isMuted,
       'mode': modeStr,
       'spectrum': audio.state.spectrumLevels,
-      'eq_enabled': false,
-      'eq_bands': List.filled(10, 0.0),
-      'mseb_enabled': false,
-      'mseb_params': List.filled(10, 0.0),
+      'eq_enabled': audio.eqEnabled,
+      'eq_bands': audio.eqBands,
+      'mseb_enabled': mseb.isEnabled,
+      'mseb_params': mseb.values,
       'theme_id': theme.currentThemeId,
       'visual_mode': theme.backgroundVisualMode,
       'fade_duration': 0.5,
@@ -515,10 +618,11 @@ class WebRemoteService extends ChangeNotifier {
   }
 
   Map<String, dynamic> _buildMsebMap() {
+    final mseb = MsebService.instance;
     return {
       'type': 'mseb',
-      'enabled': false,
-      'params': List.filled(10, 0.0),
+      'enabled': mseb.isEnabled,
+      'params': mseb.values,
     };
   }
 

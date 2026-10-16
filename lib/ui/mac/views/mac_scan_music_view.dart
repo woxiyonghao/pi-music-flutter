@@ -101,23 +101,49 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
     super.dispose();
   }
 
-  void _triggerScan() {
+  Future<void> _triggerScan() async {
     setState(() {
       _state = ScanUIState.scanning;
       _isEditMode = false;
       _selectedTrackIds.clear();
     });
 
-    // 异步扫描音乐文件
-    Timer(const Duration(milliseconds: 2200), () {
-      if (mounted) {
-        MusicDatabaseService.instance.loadLibrary();
-        widget.onScanComplete?.call();
-        setState(() {
-          _state = ScanUIState.completed;
-        });
+    int count = 0;
+    try {
+      final results = await Future.wait([
+        MusicDatabaseService.instance.scanLibrary(),
+        Future.delayed(const Duration(milliseconds: 1500)),
+      ]);
+      count = results.first as int;
+    } catch (e) {
+      debugPrint('[MacScanMusicView] 扫描异常: $e');
+    }
+
+    if (mounted) {
+      widget.onScanComplete?.call();
+      final total = MusicDatabaseService.instance.tracks.length;
+      setState(() {
+        _state = total == 0 ? ScanUIState.idle : ScanUIState.completed;
+      });
+
+      if (total == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('未在本地存储目录中发现音频文件。\n请点击左侧【Web服务】开启局域网传歌，或通过电脑隔空投放歌曲。'),
+            backgroundColor: Color(0xFFEAB308),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('全盘检索完成！已成功扫描并收录 $total 首母带音轨。'),
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
-    });
+    }
   }
 
   @override
@@ -166,13 +192,13 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
             mainAxisSize: MainAxisSize.min,
             children: [
               Transform.translate(
-                offset: Offset(offsetX, offsetY - 20.0),
+                offset: Offset(offsetX, offsetY - 10.0),
                 child: CustomPaint(
-                  size: const Size(110.0, 110.0),
+                  size: const Size(100.0, 100.0),
                   painter: _SearchIconPainter(accentColor: accent),
                 ),
               ),
-              const SizedBox(height: 36.0),
+              const SizedBox(height: 28.0),
 
               // 全盘检索发烧胶囊按钮
               InkWell(
@@ -205,6 +231,36 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
                       letterSpacing: 1.2,
                     ),
                   ),
+                ),
+              ),
+
+              const SizedBox(height: 24.0),
+
+              // 友好提示卡片：指导用户如何导入发烧音乐
+              Container(
+                constraints: const BoxConstraints(maxWidth: 440),
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                decoration: BoxDecoration(
+                  color: const Color.fromRGBO(255, 255, 255, 0.04),
+                  borderRadius: BorderRadius.circular(10.0),
+                  border: Border.all(
+                    color: const Color.fromRGBO(255, 255, 255, 0.08),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      '本地曲库暂无音乐 · 支持 FLAC, WAV, DSD, ALAC, MP3 等母带格式',
+                      style: TextStyle(fontSize: 12.0, color: UIConfig.textNormal, fontWeight: FontWeight.w600),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 6.0),
+                    Text(
+                      '• 无线导入：点击左侧【Web服务】进入 WiFi 传歌，同一局域网用电脑直接拖拽\n'
+                      '• 有线导入：将设备连接电脑，通过 Finder 或 iTunes 文件共享将歌曲拷贝至 Documents',
+                      style: TextStyle(fontSize: 11.0, color: UIConfig.textMuted.withValues(alpha: 0.9), height: 1.4),
+                    ),
+                  ],
                 ),
               ),
             ],
