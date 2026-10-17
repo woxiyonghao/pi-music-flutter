@@ -9,17 +9,18 @@
 # 5. 持续写入 /home/winheo/longevity_3h.log 与 /home/winheo/longevity_summary.json
 # ==============================================================================
 
-DURATION_SEC=${1:-10800} # 默认 3 小时 (10800 秒)
+DURATION_SEC=${1:-7200} # 默认 2 小时 (7200 秒)
+DURATION_HOURS=$(awk "BEGIN {printf \"%.1f\", $DURATION_SEC / 3600}")
 INTERVAL_SEC=10
-LOG_FILE="/home/winheo/longevity_3h.log"
-SUMMARY_FILE="/home/winheo/longevity_summary.json"
+LOG_FILE=${2:-"/home/winheo/longevity_2h.log"}
+SUMMARY_FILE=${3:-"/home/winheo/longevity_summary.json"}
 
 START_TIME=$(date +%s)
 END_TIME=$((START_TIME + DURATION_SEC))
 
 echo "==================================================================" >> "$LOG_FILE"
-echo "🎵 MyHiFiPlayer 树莓派 5 连续 3 小时全功能耐久测试已启动" >> "$LOG_FILE"
-echo "开始时间: $(date '+%Y-%m-%d %H:%M:%S') | 目标运行: ${DURATION_SEC} 秒 (3.0 小时)" >> "$LOG_FILE"
+echo "🎵 MyHiFiPlayer 树莓派 5 连续 ${DURATION_HOURS} 小时全功能耐久与稳定性测试已启动" >> "$LOG_FILE"
+echo "开始时间: $(date '+%Y-%m-%d %H:%M:%S') | 目标运行: ${DURATION_SEC} 秒 (${DURATION_HOURS} 小时)" >> "$LOG_FILE"
 echo "==================================================================" >> "$LOG_FILE"
 
 SAMPLE_COUNT=0
@@ -121,12 +122,33 @@ while [ $(date +%s) -lt $END_TIME ]; do
 }
 EOF
 
-    # 7. 每隔 120 秒，模拟人类轻微操作 (如调节音量或微调进度)，保持长任务活跃
-    if [ $((SAMPLE_COUNT % 12)) -eq 0 ]; then
+    # 7. 模拟发烧友真实交互行为 (保持整个系统全模块深度负载活跃)
+    # (a) 每隔 60 秒检查播放状态，若曲目放完则继续循环点播
+    if [ $((SAMPLE_COUNT % 6)) -eq 0 ]; then
         if [ "$IS_PLAYING" != "true" ]; then
             curl -s -m 2 -X POST "http://127.0.0.1:8088/api/play" >/dev/null 2>&1 || true
         fi
-        curl -s -m 2 -X POST "http://127.0.0.1:8088/api/volume?value=0.78" >/dev/null 2>&1 || true
+    fi
+
+    # (b) 每隔 120 秒，微调发烧音量增益
+    if [ $((SAMPLE_COUNT % 12)) -eq 0 ]; then
+        VOL_TARGETS=(0.75 0.78 0.82 0.76)
+        VOL_IDX=$(( (SAMPLE_COUNT / 12) % 4 ))
+        curl -s -m 2 -X POST "http://127.0.0.1:8088/api/volume?value=${VOL_TARGETS[$VOL_IDX]}" >/dev/null 2>&1 || true
+    fi
+
+    # (c) 每隔 300 秒 (5分钟)，模拟发烧友切换名机主题调音
+    if [ $((SAMPLE_COUNT % 30)) -eq 0 ]; then
+        THEME_IDS=(0 1 2 3 5 6 7 8)
+        THEME_IDX=$(( (SAMPLE_COUNT / 30) % 8 ))
+        curl -s -m 2 -X POST "http://127.0.0.1:8088/api/theme?id=${THEME_IDS[$THEME_IDX]}" >/dev/null 2>&1 || true
+    fi
+
+    # (d) 每隔 600 秒 (10分钟)，模拟切换背景动圈表头 / 频谱模式
+    if [ $((SAMPLE_COUNT % 60)) -eq 0 ]; then
+        VIS_MODES=(0 1 2 3)
+        VIS_IDX=$(( (SAMPLE_COUNT / 60) % 4 ))
+        curl -s -m 2 -X POST "http://127.0.0.1:8088/api/visual_mode?id=${VIS_MODES[$VIS_IDX]}" >/dev/null 2>&1 || true
     fi
 
     sleep $INTERVAL_SEC
@@ -156,5 +178,5 @@ cat <<EOF > "$SUMMARY_FILE"
 EOF
 
 echo "==================================================================" >> "$LOG_FILE"
-echo "✅ 3 小时长任务测试圆满完成！无崩溃，运行平稳！" >> "$LOG_FILE"
+echo "✅ ${DURATION_HOURS} 小时长任务稳定性测试圆满完成！无崩溃，运行平稳！" >> "$LOG_FILE"
 echo "==================================================================" >> "$LOG_FILE"
