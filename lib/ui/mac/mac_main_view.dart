@@ -370,7 +370,16 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                 ),
                               ),
 
-                             // 5. 全屏沉浸模式悬浮工具条 (动效切换 + 退出全屏)
+                            // 5. 全屏模式双击任意区域退出全屏 (对齐发烧播放器人机工效: 触控双击/鼠标双击瞬时退出全屏)
+                            if (progress > 0.3)
+                              Positioned.fill(
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onDoubleTap: _exitFullscreenIdle,
+                                ),
+                              ),
+
+                            // 6. 全屏沉浸模式悬浮工具条 (动效切换 + 退出全屏)
                             if (progress > 0.05)
                               Positioned(
                                 top: 16.0,
