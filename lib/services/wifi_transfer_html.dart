@@ -283,12 +283,24 @@ function uploadSingleFile(item) {
     const xhr = new XMLHttpRequest();
     const encodedName = encodeURIComponent(item.file.name);
     xhr.open('POST', `/upload?filename=${encodedName}`);
-    xhr.timeout = 300000; // 5分钟超时
+    xhr.timeout = 0; // 取消固定硬限制，支持超大无损母带(700MB WAV/2GB DSD)
 
     let startTime = Date.now();
     let lastLoaded = 0;
+    let inactivityTimer = null;
+
+    // 活跃看门狗：仅当连续 90 秒没有任何数据推进时才判定断流超时
+    function resetInactivityTimer() {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        try { xhr.abort(); } catch(_) {}
+        reject(new Error('传输连接停滞 (90秒无数据响应)'));
+      }, 90000);
+    }
+    resetInactivityTimer();
 
     xhr.upload.onprogress = (e) => {
+      resetInactivityTimer();
       if (e.lengthComputable) {
         item.loaded = e.loaded;
         item.total = e.total;
@@ -307,6 +319,7 @@ function uploadSingleFile(item) {
     };
 
     xhr.onload = () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
       if (xhr.status === 200) {
         resolve();
       } else {
@@ -318,8 +331,17 @@ function uploadSingleFile(item) {
         reject(new Error(msg));
       }
     };
-    xhr.onerror = () => reject(new Error('网络断开或跨域受阻'));
-    xhr.ontimeout = () => reject(new Error('传输超时'));
+    xhr.onerror = () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      reject(new Error('网络断开或跨域受阻'));
+    };
+    xhr.ontimeout = () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      reject(new Error('传输超时'));
+    };
+    xhr.onabort = () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+    };
     xhr.send(item.file);
   });
 }

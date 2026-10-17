@@ -117,6 +117,7 @@ class WifiTransferService extends ChangeNotifier {
 
     try {
       _server = await HttpServer.bind(InternetAddress.anyIPv4, _port, shared: true);
+      _server!.idleTimeout = const Duration(minutes: 15);
       debugPrint('[WifiTransferService] 服务已启动: http://$_localIp:$_port (存储: $_targetDir)');
 
       _server!.listen(
@@ -283,11 +284,9 @@ class WifiTransferService extends ChangeNotifier {
       _uploadedFiles.insert(0, record);
       notifyListeners();
 
-      // 核心发烧特性：即传即入库！自动触发 MusicDatabaseService 全盘扫描新曲目
-      await MusicDatabaseService.instance.scanLibrary();
-
       debugPrint('[WifiTransferService] 文件上传成功: $filename ($totalBytes bytes) -> ${finalFile.path}');
 
+      // 立即向客户端返回 200 OK 确认响应，解除前端等待
       request.response.headers.contentType = ContentType.json;
       request.response.write(jsonEncode({
         'status': 'ok',
@@ -295,6 +294,9 @@ class WifiTransferService extends ChangeNotifier {
         'bytes': totalBytes,
       }));
       await request.response.close();
+
+      // 核心发烧特性：即传即入库！在响应发送完成后，异步触发全盘扫描，彻底杜绝客户端阻塞或超时
+      unawaited(MusicDatabaseService.instance.scanLibrary());
     } catch (e) {
       debugPrint('[WifiTransferService] 写入文件失败: $e');
       try {

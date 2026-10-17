@@ -424,6 +424,19 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
               widget.onVisualizerChanged(
                 VisualizerType.values[i.clamp(0, VisualizerType.values.length - 1)],
               );
+              // 同步全屏屏保主题设置，确保锁屏与空闲待机时 100% 呈现用户指定的名表表头
+              int sIdx = 0;
+              final visType = VisualizerType.values[i.clamp(0, VisualizerType.values.length - 1)];
+              switch (visType) {
+                case VisualizerType.mcIntosh: sIdx = 1; break;
+                case VisualizerType.accuphase: sIdx = 2; break;
+                case VisualizerType.tapeReel: sIdx = 3; break;
+                case VisualizerType.siriWave: sIdx = 4; break;
+                case VisualizerType.bubbles: sIdx = 5; break;
+                case VisualizerType.glassClock: sIdx = 6; break;
+                default: sIdx = 0; break;
+              }
+              MusicDatabaseService.instance.setSetting('setting_idle_screensaver_theme', sIdx.toString());
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),

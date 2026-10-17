@@ -179,11 +179,13 @@ class ThemeService extends ChangeNotifier {
     }
   }
 
-  void setTheme(int id) {
+  void setTheme(int id, {bool updateVisualMode = false}) {
     final preset = presets.firstWhere((p) => p.id == id, orElse: () => presets.first);
     _currentThemeId = preset.id;
     _accentColor = preset.accentColor;
-    _backgroundVisualMode = preset.defaultVisualMode;
+    if (updateVisualMode) {
+      _backgroundVisualMode = preset.defaultVisualMode;
+    }
     final hsv = HSVColor.fromColor(_accentColor);
     _customHue = hsv.hue;
     _customSat = hsv.saturation;
