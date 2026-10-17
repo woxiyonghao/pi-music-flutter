@@ -256,6 +256,30 @@ class WebRemoteService extends ChangeNotifier {
       return;
     }
 
+    // 5.3 GET /api/wifi_transfer: 查询与切换 WiFi 传歌服务状态
+    if (request.method == 'GET' && path == '/api/wifi_transfer') {
+      final action = request.uri.queryParameters['action'];
+      if (action == 'stop') {
+        await WifiTransferService.instance.stop();
+      } else if (action == 'start') {
+        await WifiTransferService.instance.start(port: 8080);
+      } else if (action == 'toggle') {
+        if (WifiTransferService.instance.isRunning) {
+          await WifiTransferService.instance.stop();
+        } else {
+          await WifiTransferService.instance.start(port: 8080);
+        }
+      }
+      broadcastState();
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'status': 'ok',
+        'wifi_running': WifiTransferService.instance.isRunning,
+      }));
+      await request.response.close();
+      return;
+    }
+
     // 6. REST API 控制指令 (POST /api/...)
     if (request.method == 'POST') {
       final audio = HifiAudioService.instance;
