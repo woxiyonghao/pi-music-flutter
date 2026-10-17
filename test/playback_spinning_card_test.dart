@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
 import 'package:hide_player_flutter/models/track.dart';
 import 'package:hide_player_flutter/services/theme_service.dart';
+import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:hide_player_flutter/ui/mac/views/mac_scan_music_view.dart';
 import 'package:hide_player_flutter/ui/mac/widgets/mac_music_item_widget.dart';
 
@@ -102,6 +103,20 @@ void main() {
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1.0;
+
+    MusicDatabaseService.instance.setTracksForTesting([
+      const Track(
+        id: 999,
+        title: 'decaud-goldberg-var5-dsd128',
+        artist: 'Bach',
+        album: 'Goldberg Variations',
+        filepath: '/Music/test.dsf',
+        format: AudioFormat.dsdDsf,
+        sampleRate: 5644800,
+        bitDepth: 1,
+        durationSec: 180,
+      ),
+    ]);
 
     await tester.pumpWidget(
       const MaterialApp(

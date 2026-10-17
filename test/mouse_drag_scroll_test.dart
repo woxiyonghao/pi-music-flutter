@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
+import 'package:hide_player_flutter/models/track.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:hide_player_flutter/theme/ui_config.dart';
 import 'package:hide_player_flutter/ui/mac/views/mac_scan_music_view.dart';
@@ -9,6 +10,22 @@ import 'package:hide_player_flutter/ui/mac/views/mac_scan_music_view.dart';
 void main() {
   setUp(() {
     MusicDatabaseService.instance.loadLibrary();
+    MusicDatabaseService.instance.setTracksForTesting(
+      List.generate(
+        8,
+        (i) => Track(
+          id: 990 + i,
+          title: i == 0 ? 'decaud-goldberg-var5-dsd128' : 'Track $i',
+          artist: 'Bach',
+          album: 'Goldberg Variations',
+          filepath: '/Music/test_$i.dsf',
+          format: AudioFormat.dsdDsf,
+          sampleRate: 5644800,
+          bitDepth: 1,
+          durationSec: 180,
+        ),
+      ),
+    );
   });
 
   tearDown(() {

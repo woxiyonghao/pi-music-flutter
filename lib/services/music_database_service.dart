@@ -15,6 +15,12 @@ class MusicDatabaseService extends ChangeNotifier {
   List<Track> _tracks = [];
   List<Track> get tracks => _tracks;
 
+  @visibleForTesting
+  void setTracksForTesting(List<Track> tracks) {
+    _tracks = List.from(tracks);
+    notifyListeners();
+  }
+
   List<Playlist> _playlists = [];
   List<Playlist> get playlists => _playlists;
 

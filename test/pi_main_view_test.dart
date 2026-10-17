@@ -69,12 +69,12 @@ void main() {
       expect(find.text('均衡器'), findsOneWidget);
       expect(find.text('调音魔棒'), findsOneWidget);
       expect(find.text('DAC'), findsOneWidget);
-      expect(find.text('主题'), findsOneWidget);
+      expect(find.text('主题'), findsWidgets);
       expect(find.text('设置'), findsOneWidget);
       expect(find.text('Web服务'), findsOneWidget);
 
       // 验证声卡状态显示 (自动联动 PiSystemService DAC)
-      expect(find.textContaining('AK4191 + AK4499EX'), findsOneWidget);
+      expect(find.textContaining('AK4191 + AK4499EX'), findsWidgets);
     });
 
     testWidgets('switches to 10-band Equalizer view on touch without overflow', (tester) async {

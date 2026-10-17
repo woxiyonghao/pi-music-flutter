@@ -31,12 +31,21 @@ class DacSettingService extends ChangeNotifier {
 
   String get dacName {
     if (_selectedChip >= 0 && _selectedChip < chips.length) {
+      if (_selectedChip == 0 && Platform.isLinux) {
+        return 'ALSA 直通';
+      }
       return chips[_selectedChip];
     }
-    return Platform.isIOS ? 'iPad AOP 纯音硬件' : 'Apple Direct 纯音硬件';
+    if (Platform.isLinux) {
+      return '树莓派 ALSA 纯音硬件';
+    }
+    return Platform.isIOS ? 'iPad AOP 纯音硬件' : 'Mac Direct 纯音硬件';
   }
 
   String get activeOutput {
+    if (Platform.isLinux) {
+      return _selectedChip == 0 ? 'ALSA 物理硬件直通' : '外接音频 / 高保真 DAC';
+    }
     if (Platform.isIOS) {
       return _selectedChip == 0 ? 'iPad 内置扬声器 / 耳机' : 'USB-C / 外部数字 DAC';
     }

@@ -87,8 +87,9 @@ void main() {
       expect(find.text('ROHM 34301'), findsOneWidget);
 
       // 验证点击切换 DAC 芯片
+      await tester.ensureVisible(find.text('CS43198'));
       await tester.tap(find.text('CS43198'));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(DacSettingService.instance.selectedChip, equals(3));
       expect(find.textContaining('CS43198'), findsWidgets);
 

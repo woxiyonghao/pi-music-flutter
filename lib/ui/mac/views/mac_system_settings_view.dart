@@ -277,7 +277,9 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                 color: const Color(0xFFF59E0B),
                 onTap: () => _confirmAction(
                   title: '确认重启系统？',
-                  content: '树莓派将在数秒内平滑重启并自动加载 HiFi 播放系统。',
+                  content: Platform.isLinux
+                      ? '树莓派将在数秒内平滑重启并自动加载 HiFi 播放系统。'
+                      : '设备将在数秒内平滑重启并自动加载 HiFi 播放系统。',
                   confirmText: '立刻重启',
                   confirmColor: const Color(0xFFF59E0B),
                   onConfirm: () async {
@@ -457,62 +459,6 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
   }) {
     final accent = ThemeService.instance.accentColor;
 
-    if (options.length > 4) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: UIConfig.fontSmall,
-              color: UIConfig.textMuted,
-            ),
-          ),
-          const SizedBox(height: 8.0),
-          Wrap(
-            spacing: 8.0,
-            runSpacing: 8.0,
-            children: [
-              for (int i = 0; i < options.length; i++)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onSelected(i),
-                  child: Container(
-                    height: 28.0,
-                    padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: selectedIndex == i
-                          ? accent.withValues(alpha: 0.28)
-                          : const Color.fromRGBO(255, 255, 255, 0.04),
-                      borderRadius: BorderRadius.circular(6.0),
-                      border: Border.all(
-                        color: selectedIndex == i
-                            ? accent
-                            : const Color.fromRGBO(255, 255, 255, 0.1),
-                        width: 1.0,
-                      ),
-                    ),
-                    child: Text(
-                      options[i],
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: selectedIndex == i
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: selectedIndex == i
-                            ? UIConfig.textActive
-                            : UIConfig.textNormal,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      );
-    }
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -527,48 +473,93 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
           ),
         ),
         Expanded(
-          child: Row(
-            children: [
-              for (int i = 0; i < options.length; i++) ...[
-                if (i > 0) const SizedBox(width: 8.0),
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => onSelected(i),
-                    child: Container(
-                      height: 28.0,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: selectedIndex == i
-                            ? accent.withValues(alpha: 0.28)
-                            : const Color.fromRGBO(255, 255, 255, 0.04),
-                        borderRadius: BorderRadius.circular(6.0),
-                        border: Border.all(
-                          color: selectedIndex == i
-                              ? accent
-                              : const Color.fromRGBO(255, 255, 255, 0.1),
-                          width: 1.0,
+          child: options.length <= 5
+              ? Row(
+                  children: [
+                    for (int i = 0; i < options.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 8.0),
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => onSelected(i),
+                          child: Container(
+                            height: 28.0,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: selectedIndex == i
+                                  ? accent.withValues(alpha: 0.28)
+                                  : const Color.fromRGBO(255, 255, 255, 0.04),
+                              borderRadius: BorderRadius.circular(6.0),
+                              border: Border.all(
+                                color: selectedIndex == i
+                                    ? accent
+                                    : const Color.fromRGBO(255, 255, 255, 0.1),
+                                width: 1.0,
+                              ),
+                            ),
+                            child: Text(
+                              options[i],
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: selectedIndex == i
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                                color: selectedIndex == i
+                                    ? UIConfig.textActive
+                                    : UIConfig.textNormal,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      child: Text(
-                        options[i],
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: selectedIndex == i
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: selectedIndex == i
-                              ? UIConfig.textActive
-                              : UIConfig.textNormal,
+                    ],
+                  ],
+                )
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: [
+                      for (int i = 0; i < options.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 8.0),
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => onSelected(i),
+                          child: Container(
+                            height: 28.0,
+                            padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: selectedIndex == i
+                                  ? accent.withValues(alpha: 0.28)
+                                  : const Color.fromRGBO(255, 255, 255, 0.04),
+                              borderRadius: BorderRadius.circular(6.0),
+                              border: Border.all(
+                                color: selectedIndex == i
+                                    ? accent
+                                    : const Color.fromRGBO(255, 255, 255, 0.1),
+                                width: 1.0,
+                              ),
+                            ),
+                            child: Text(
+                              options[i],
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: selectedIndex == i
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                                color: selectedIndex == i
+                                    ? UIConfig.textActive
+                                    : UIConfig.textNormal,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+                      ],
+                    ],
                   ),
                 ),
-              ],
-            ],
-          ),
         ),
       ],
     );

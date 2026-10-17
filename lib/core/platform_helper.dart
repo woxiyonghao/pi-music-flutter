@@ -41,10 +41,7 @@ class PlatformHelper {
     }
 
     if (Platform.isLinux) {
-      // 树莓派微雪 7 寸通常是 1024x600 或检测环境变量
-      final isPiScreen = (screenWidth <= 1024 && screenHeight <= 600) ||
-          Platform.environment.containsKey('HIFI_PLATFORM_RPI');
-      return isPiScreen ? HifiPlatformType.pi : HifiPlatformType.mac;
+      return HifiPlatformType.pi;
     }
 
     return HifiPlatformType.mac;

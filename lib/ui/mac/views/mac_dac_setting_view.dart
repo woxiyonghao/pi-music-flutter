@@ -18,7 +18,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
   int _selectedChip = 0; // 0: Apple 直通, 1: ES9038PRO, 2: AK4499EX, 3: CS43198, 4: R-2R 纯电阻, 5: ROHM 34301
 
   static List<String> get chips => [
-    Platform.isLinux ? 'ALSA 直通' : (Platform.isIOS ? 'iOS 直通' : 'Apple 直通'),
+    Platform.isLinux ? 'ALSA 直通' : (Platform.isIOS ? 'iPad 直通' : 'Mac 直通'),
     'ES9038PRO',
     'AK4499EX',
     'CS43198',
@@ -204,32 +204,40 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 8.0,
-                      height: 8.0,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: accent,
-                        boxShadow: [
-                          BoxShadow(
-                            color: accent.withValues(alpha: 0.7),
-                            blurRadius: 4.0,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8.0,
+                        height: 8.0,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: accent,
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.7),
+                              blurRadius: 4.0,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10.0),
+                      Expanded(
+                        child: Text(
+                          Platform.isLinux
+                              ? '声卡硬件: ${PiSystemService.instance.dacDeviceName.isNotEmpty ? PiSystemService.instance.dacDeviceName : "树莓派 ALSA 硬件直通"}  |  独占模式就绪 (起播锁定)  |  44 kHz'
+                              : '声卡硬件: Mac 原生硬件  |  独占模式就绪 (起播锁定)  |  44 kHz',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: UIConfig.fontSmall,
+                            color: UIConfig.textActive,
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10.0),
-                    const Text(
-                      '声卡硬件: Mac mini扬声器  |  独占模式就绪 (起播锁定)  |  44 kHz',
-                      style: TextStyle(
-                        fontSize: UIConfig.fontSmall,
-                        color: UIConfig.textActive,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8.0),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
@@ -310,7 +318,9 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     return Column(
       children: [
         _buildSectionCard(
-          title: 'Mac 硬件直通通道 (Apple CoreAudio Bit-Perfect)',
+          title: Platform.isLinux
+              ? '树莓派 5 硬件直通通道 (ALSA Bit-Perfect)'
+              : 'Mac 硬件直通通道 (Apple CoreAudio Bit-Perfect)',
           children: [
             _buildSegmentedRow(
               label: '硬件独占流',
@@ -368,9 +378,11 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               accent: accent,
             ),
             const SizedBox(height: 10.0),
-            const Text(
-              'Apple Direct 说明: MacBook Pro 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持 3.5mm 智能阻抗自适应放大。',
-              style: TextStyle(
+            Text(
+              Platform.isLinux
+                  ? 'ALSA Direct 说明: 树莓派 5 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持 I2S / USB DAC 硬件直连。'
+                  : 'Apple Direct 说明: Mac 硬件直通，Bit-Perfect 独占流绕过系统混音，原生 0 损耗输出。支持高阻抗耳机智能驱动。',
+              style: const TextStyle(
                 fontSize: 11.0,
                 color: UIConfig.textMuted,
                 height: 1.4,
@@ -1030,9 +1042,9 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                       color: const Color.fromRGBO(255, 255, 255, 0.08),
                       borderRadius: BorderRadius.circular(4.0),
                     ),
-                    child: const Text(
-                      'Mac 内置',
-                      style: TextStyle(fontSize: 10.0, color: UIConfig.textNormal),
+                    child: Text(
+                      Platform.isLinux ? '板载硬件' : 'Mac 内置',
+                      style: const TextStyle(fontSize: 10.0, color: UIConfig.textNormal),
                     ),
                   ),
                 if (isCurrent) ...[

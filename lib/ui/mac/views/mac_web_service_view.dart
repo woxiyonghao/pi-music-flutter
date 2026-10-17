@@ -418,9 +418,11 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '【客户端模式】连接局域网内的其他数播设备 (树莓派 / 旧手机数播)',
-              style: TextStyle(
+            Text(
+              Platform.isLinux
+                  ? '【客户端模式】连接局域网内的其他数播设备'
+                  : '【客户端模式】连接局域网内的其他数播设备 (树莓派 / HiFi 数播)',
+              style: const TextStyle(
                 fontSize: UIConfig.fontSmall,
                 fontWeight: FontWeight.bold,
                 color: UIConfig.textActive,
@@ -508,29 +510,45 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
       // 卡片 4：变废为宝实战秘籍
       _buildCard(
-        child: const Column(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '【旧手机当数播实战秘籍】变废为宝打造发烧纯音转盘',
-              style: TextStyle(
+              Platform.isLinux
+                  ? '【树莓派 5 发烧数播纯音配置指南】打造发烧级无损数字转盘'
+                  : (Platform.isMacOS
+                      ? '【macOS 桌面 HiFi 工作台配置指南】打造发烧级桌面纯音转盘'
+                      : '【便携移动数播实战秘籍】打造随身发烧纯音转盘'),
+              style: const TextStyle(
                 fontSize: UIConfig.fontSmall,
                 fontWeight: FontWeight.bold,
                 color: UIConfig.textActive,
               ),
             ),
-            SizedBox(height: 8.0),
+            const SizedBox(height: 8.0),
             Text(
-              '1. 硬件连接直通: 旧 iPhone / iPad (Lightning/Type-C 转接线) 或 Android (OTG 线) 直接连接外置 USB DAC 或发烧耳放小尾巴。',
-              style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
+              Platform.isLinux
+                  ? '1. 硬件连接直通: 树莓派 5 USB 3.0 / I2S 接口直连高端 USB DAC 或发烧级 HAT 声卡，原生 Bit-Perfect 硬件直通。'
+                  : (Platform.isMacOS
+                      ? '1. 硬件连接直通: Mac USB-C / 雷电接口直接连接外置高解析 USB DAC 或独立解码耳放一体机。'
+                      : '1. 硬件连接直通: 设备通过转接线直接连接外置 USB DAC 或发烧耳放小尾巴。'),
+              style: const TextStyle(fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
             ),
             Text(
-              '2. 极致纯净电池供电: 旧手机自带锂电池供电，天然隔绝 220V 市电高频杂波，底噪比普通 PC 和劣质开关电源更低！',
-              style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
+              Platform.isLinux
+                  ? '2. 线性电源与低噪屏蔽: 推荐使用高质量线性稳压电源 (LPS) 供电，有效降低高频纹波，底噪更加纯净沉稳。'
+                  : (Platform.isMacOS
+                      ? '2. 独占模式与整数倍频: 启用 CoreAudio 硬件独占流与采样率追踪，绕过系统 CoreAudio 混音算法。'
+                      : '2. 极致纯净电池供电: 自带锂电池供电，天然隔绝市电杂波，底噪比普通 PC 更低。'),
+              style: const TextStyle(fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
             ),
             Text(
-              '3. 免路由器热点直连: 即使在展会或无 Wi-Fi 环境，旧手机开启「个人热点」，主力机连入即可通过 172.20.10.1:8088 畅快遥控。',
-              style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
+              Platform.isLinux
+                  ? '3. 局域网无缝遥控: 连接同一家庭网络后，任意手机或电脑浏览器访问当前 IP 地址即可全功能无线遥控曲库与播放。'
+                  : (Platform.isMacOS
+                      ? '3. 局域网无缝遥控: 手机扫描二维码或浏览器访问局域网 IP，即可轻松无线遥控音乐。'
+                      : '3. 免路由器热点直连: 开启「个人热点」，主力机连入即可通过网页畅快遥控。'),
+              style: const TextStyle(fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
             ),
           ],
         ),
@@ -565,9 +583,11 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                         ],
                       ),
                       const SizedBox(height: 4.0),
-                      const Text(
-                        '支持 macOS 桌面端与树莓派 Linux 硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署',
-                        style: TextStyle(
+                      Text(
+                        Platform.isLinux
+                            ? '树莓派 Linux 硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署'
+                            : 'macOS 桌面端硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署',
+                        style: const TextStyle(
                           fontSize: 11.5,
                           color: UIConfig.textMuted,
                         ),

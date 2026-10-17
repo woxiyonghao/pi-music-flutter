@@ -122,56 +122,63 @@ class MacBottomBarWidget extends StatelessWidget {
     final durTimeStr = state.durationString;
     final progress = state.progress.clamp(0.0, 1.0);
 
-    return Row(
-      children: [
-        // 当前播放时间戳
-        Text(
-          curTimeStr,
-          style: const TextStyle(
-            fontSize: UIConfig.fontSmall,
-            color: UIConfig.textMuted,
-            fontFamily: 'monospace',
-          ),
-        ),
-        const SizedBox(width: 10.0),
-
-        // 交互式进度滑条
-        Expanded(
-          child: SliderTheme(
-            data: SliderThemeData(
-              trackHeight: 3.5,
-              activeTrackColor: ThemeService.instance.accentColor,
-              inactiveTrackColor: const Color.fromRGBO(255, 255, 255, 0.15),
-              thumbColor: Colors.white,
-              thumbShape: const RoundSliderThumbShape(
-                enabledThumbRadius: 5.0,
-                elevation: 3.0,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 120) {
+          return const SizedBox.shrink();
+        }
+        return Row(
+          children: [
+            // 当前播放时间戳
+            Text(
+              curTimeStr,
+              style: const TextStyle(
+                fontSize: UIConfig.fontSmall,
+                color: UIConfig.textMuted,
+                fontFamily: 'monospace',
               ),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 10.0),
-              overlayColor: ThemeService.instance.accentColor.withValues(alpha: 0.25),
             ),
-            child: Slider(
-              value: progress,
-              onChanged: (val) {
-                if (state.duration > 0.0) {
-                  service.seek(val * state.duration);
-                }
-              },
-            ),
-          ),
-        ),
-        const SizedBox(width: 10.0),
+            const SizedBox(width: 8.0),
 
-        // 总时长
-        Text(
-          durTimeStr,
-          style: const TextStyle(
-            fontSize: UIConfig.fontSmall,
-            color: UIConfig.textMuted,
-            fontFamily: 'monospace',
-          ),
-        ),
-      ],
+            // 交互式进度滑条
+            Expanded(
+              child: SliderTheme(
+                data: SliderThemeData(
+                  trackHeight: 3.5,
+                  activeTrackColor: ThemeService.instance.accentColor,
+                  inactiveTrackColor: const Color.fromRGBO(255, 255, 255, 0.15),
+                  thumbColor: Colors.white,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 5.0,
+                    elevation: 3.0,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 10.0),
+                  overlayColor: ThemeService.instance.accentColor.withValues(alpha: 0.25),
+                ),
+                child: Slider(
+                  value: progress,
+                  onChanged: (val) {
+                    if (state.duration > 0.0) {
+                      service.seek(val * state.duration);
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 8.0),
+
+            // 总时长
+            Text(
+              durTimeStr,
+              style: const TextStyle(
+                fontSize: UIConfig.fontSmall,
+                color: UIConfig.textMuted,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

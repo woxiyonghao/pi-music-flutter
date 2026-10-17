@@ -109,9 +109,9 @@ static void my_application_activate(GApplication* application) {
 
   if (is_pi_kiosk) {
     GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(view));
-    GdkCursor* blank_cursor = gdk_cursor_new_from_name(display, "default");
+    GdkCursor* blank_cursor = gdk_cursor_new_for_display(display, GDK_BLANK_CURSOR);
     if (!blank_cursor) {
-      blank_cursor = gdk_cursor_new_from_name(display, "left_ptr");
+      blank_cursor = gdk_cursor_new_from_name(display, "default");
     }
     if (blank_cursor) {
       GdkWindow* gdk_win = gtk_widget_get_window(GTK_WIDGET(window));

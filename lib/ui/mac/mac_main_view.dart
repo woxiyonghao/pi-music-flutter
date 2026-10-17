@@ -43,6 +43,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
   late AnimationController _fullscreenController;
   late Animation<double> _fullscreenAnim;
   bool _isFullscreenIdle = false;
+  bool _isManualFullscreen = false;
   double _idleSeconds = 0.0;
   Timer? _idleCheckTimer;
 
@@ -101,11 +102,11 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
     final timeout = _getIdleTimeoutSeconds();
     if (timeout > 0.0 && !_showCreatePlaylistModal) {
       _idleSeconds += 1.0;
-      if (_idleSeconds >= timeout && !_isFullscreenIdle) {
+      if (_idleSeconds >= timeout && !_isFullscreenIdle && !_isManualFullscreen) {
         _enterFullscreenIdle();
       }
     } else {
-      if (!_isFullscreenIdle) {
+      if (!_isFullscreenIdle && !_isManualFullscreen) {
         _idleSeconds = 0.0;
       }
     }
@@ -119,28 +120,34 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
   }
 
   void _enterFullscreenIdle() {
-    if (!_isFullscreenIdle) {
+    if (!_isFullscreenIdle && !_isManualFullscreen) {
       setState(() {
         _isFullscreenIdle = true;
+        _isManualFullscreen = false;
       });
       _fullscreenController.forward();
     }
   }
 
   void _exitFullscreenIdle() {
-    if (_isFullscreenIdle) {
+    if (_isFullscreenIdle || _isManualFullscreen) {
       setState(() {
         _isFullscreenIdle = false;
+        _isManualFullscreen = false;
       });
       _fullscreenController.reverse();
     }
   }
 
   void _toggleFullscreen() {
-    if (_isFullscreenIdle) {
+    if (_isFullscreenIdle || _isManualFullscreen) {
       _exitFullscreenIdle();
     } else {
-      _enterFullscreenIdle();
+      setState(() {
+        _isManualFullscreen = true;
+        _isFullscreenIdle = false;
+      });
+      _fullscreenController.forward();
     }
   }
 
@@ -237,7 +244,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
 
                         final screensaverThemeIdx = int.tryParse(db.getSetting('setting_idle_screensaver_theme', '0')) ?? 0;
                         final VisualizerType effectiveVisualizer;
-                        if (progress > 0.6 && screensaverThemeIdx > 0) {
+                        if (_isFullscreenIdle && screensaverThemeIdx > 0) {
                           switch (screensaverThemeIdx) {
                             case 1: effectiveVisualizer = VisualizerType.mcIntosh; break;
                             case 2: effectiveVisualizer = VisualizerType.accuphase; break;
