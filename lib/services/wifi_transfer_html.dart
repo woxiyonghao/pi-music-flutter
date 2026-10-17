@@ -289,28 +289,35 @@ function uploadSingleFile(item) {
     let lastLoaded = 0;
     let inactivityTimer = null;
 
-    // 活跃看门狗：仅当连续 90 秒没有任何数据推进时才判定断流超时
-    function resetInactivityTimer() {
+    // 活跃看门狗：仅当持续无数据推进时才判定断流超时 (针对大文件提供充足落盘与入库宽限时间)
+    function resetInactivityTimer(ms = 180000) {
       if (inactivityTimer) clearTimeout(inactivityTimer);
       inactivityTimer = setTimeout(() => {
         try { xhr.abort(); } catch(_) {}
-        reject(new Error('传输连接停滞 (90秒无数据响应)'));
-      }, 90000);
+        reject(new Error('传输连接停滞 (超时无响应)'));
+      }, ms);
     }
-    resetInactivityTimer();
+    resetInactivityTimer(180000);
 
     xhr.upload.onprogress = (e) => {
-      resetInactivityTimer();
+      resetInactivityTimer(180000);
       if (e.lengthComputable) {
         item.loaded = e.loaded;
         item.total = e.total;
+
+        if (e.loaded === e.total) {
+          overallSpeed.textContent = `已上传 100%，正在校验并入库: ${item.file.name}...`;
+          resetInactivityTimer(300000); // 5分钟大文件落盘与全盘入库宽限时间
+        }
 
         let now = Date.now();
         let elapsed = (now - startTime) / 1000;
         if (elapsed > 0.3) {
           let speedVal = ((e.loaded - lastLoaded) / elapsed / 1024 / 1024).toFixed(1);
           item.speed = `${speedVal} MB/s`;
-          overallSpeed.textContent = `正在传输: ${item.file.name} · ${item.speed}`;
+          if (e.loaded < e.total) {
+            overallSpeed.textContent = `正在传输: ${item.file.name} · ${item.speed}`;
+          }
           startTime = now;
           lastLoaded = e.loaded;
           renderQueue();

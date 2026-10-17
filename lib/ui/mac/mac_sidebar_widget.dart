@@ -123,9 +123,7 @@ class _MacSidebarWidgetState extends State<MacSidebarWidget> {
                   thumbColor: ThemeService.instance.accentColor.withValues(alpha: 0.45),
                   child: SingleChildScrollView(
                     controller: _scrollController,
-                    physics: const AlwaysScrollableScrollPhysics(
-                      parent: BouncingScrollPhysics(),
-                    ),
+                    physics: const ClampingScrollPhysics(),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -179,6 +177,13 @@ class _MacSidebarWidgetState extends State<MacSidebarWidget> {
                           iconData: Icons.desktop_windows_rounded,
                           isSelected: widget.currentTab == SidebarTab.webService,
                           onTap: () => widget.onTabSelected(SidebarTab.webService),
+                        ),
+                        _buildNavItem(
+                          tab: SidebarTab.wifiTransfer,
+                          label: 'WiFi传歌',
+                          iconData: Icons.wifi_tethering_rounded,
+                          isSelected: widget.currentTab == SidebarTab.wifiTransfer,
+                          onTap: () => widget.onTabSelected(SidebarTab.wifiTransfer),
                         ),
 
                         const SizedBox(height: 8.0),
@@ -329,63 +334,71 @@ class _MacSidebarWidgetState extends State<MacSidebarWidget> {
     Widget? trailing,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1.0),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+      padding: const EdgeInsets.symmetric(vertical: 1.5),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: onTap,
-          borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            height: UIConfig.navItemHeight,
-            padding: const EdgeInsets.symmetric(horizontal: 12.0),
-            decoration: BoxDecoration(
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
+            child: InkWell(
+              onTap: onTap,
               borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
-              color: isSelected
-                  ? ThemeService.instance.accentColor.withValues(alpha: 0.16)
-                  : Colors.transparent,
-              border: isSelected
-                  ? Border.all(
-                      color: ThemeService.instance.accentColor.withValues(alpha: 0.65),
-                      width: 1.0,
-                    )
-                  : null,
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: ThemeService.instance.accentColor.withValues(alpha: 0.28),
-                        blurRadius: 8.0,
-                        spreadRadius: 1.0,
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  iconData,
-                  size: 16.0,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                height: 36.0,
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
                   color: isSelected
-                      ? ThemeService.instance.accentColor
-                      : UIConfig.iconNormal,
+                      ? ThemeService.instance.accentColor.withValues(alpha: 0.16)
+                      : Colors.transparent,
+                  border: isSelected
+                      ? Border.all(
+                          color: ThemeService.instance.accentColor.withValues(alpha: 0.65),
+                          width: 1.0,
+                        )
+                      : null,
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: ThemeService.instance.accentColor.withValues(alpha: 0.28),
+                            blurRadius: 8.0,
+                            spreadRadius: 1.0,
+                          ),
+                        ]
+                      : null,
                 ),
-                const SizedBox(width: 12.0),
-                Expanded(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: UIConfig.fontRegular,
+                child: Row(
+                  children: [
+                    Icon(
+                      iconData,
+                      size: 16.0,
                       color: isSelected
-                          ? UIConfig.textActive
-                          : UIConfig.textNormal,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
+                          ? ThemeService.instance.accentColor
+                          : UIConfig.iconNormal,
                     ),
-                  ),
+                    const SizedBox(width: 12.0),
+                    Expanded(
+                      child: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: UIConfig.fontRegular,
+                          color: isSelected
+                              ? UIConfig.textActive
+                              : UIConfig.textNormal,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                    if (trailing != null) trailing,
+                  ],
                 ),
-                if (trailing != null) trailing,
-              ],
+              ),
             ),
           ),
         ),

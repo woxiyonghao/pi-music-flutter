@@ -318,6 +318,19 @@ class WebRemoteService extends ChangeNotifier {
       } else if (path == '/api/eq') {
         final en = request.uri.queryParameters['enabled'];
         if (en != null) audio.setEqEnabled(en == 'true' || en == '1');
+      } else if (path == '/api/wifi_transfer') {
+        final action = request.uri.queryParameters['action'];
+        if (action == 'stop') {
+          await WifiTransferService.instance.stop();
+        } else if (action == 'start') {
+          await WifiTransferService.instance.start(port: 8080);
+        } else {
+          if (WifiTransferService.instance.isRunning) {
+            await WifiTransferService.instance.stop();
+          } else {
+            await WifiTransferService.instance.start(port: 8080);
+          }
+        }
       } else if (path == '/api/scan') {
         await MusicDatabaseService.instance.scanLibrary();
         _broadcast(jsonEncode(_buildLibraryMap()));
@@ -503,6 +516,21 @@ class WebRemoteService extends ChangeNotifier {
             broadcastState();
           }
           break;
+        case 'set_wifi_transfer':
+          final en = cmd['enabled'] as bool?;
+          if (en == true) {
+            await WifiTransferService.instance.start(port: 8080);
+          } else if (en == false) {
+            await WifiTransferService.instance.stop();
+          } else {
+            if (WifiTransferService.instance.isRunning) {
+              await WifiTransferService.instance.stop();
+            } else {
+              await WifiTransferService.instance.start(port: 8080);
+            }
+          }
+          broadcastState();
+          break;
         case 'set_eq_enabled':
           final en = cmd['enabled'] as bool? ?? false;
           audio.setEqEnabled(en);
@@ -682,6 +710,7 @@ class WebRemoteService extends ChangeNotifier {
       'visual_mode': theme.backgroundVisualMode,
       'fade_duration': 0.5,
       'is_bit_perfect': audio.state.isBitPerfect,
+      'wifi_running': WifiTransferService.instance.isRunning,
     };
   }
 

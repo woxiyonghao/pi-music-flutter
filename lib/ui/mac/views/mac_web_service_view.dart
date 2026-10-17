@@ -36,6 +36,16 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
   }
 
   @override
+  void didUpdateWidget(covariant MacWebServiceView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isWifiTransfer != oldWidget.isWifiTransfer) {
+      setState(() {
+        _activeSubModule = widget.isWifiTransfer ? 1 : 0;
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _ipInputController.dispose();
     super.dispose();
@@ -201,24 +211,27 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
     required bool isActive,
     required Color accent,
   }) {
-    return InkWell(
-      onTap: () => setState(() => _activeSubModule = index),
-      borderRadius: BorderRadius.circular(6.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 6.0),
-        decoration: BoxDecoration(
-          color: isActive ? accent.withValues(alpha: 0.28) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6.0),
-          border: Border.all(
-            color: isActive ? accent : Colors.transparent,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _activeSubModule = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 6.0),
+          decoration: BoxDecoration(
+            color: isActive ? accent.withValues(alpha: 0.28) : Colors.transparent,
+            borderRadius: BorderRadius.circular(6.0),
+            border: Border.all(
+              color: isActive ? accent : Colors.transparent,
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.0,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-            color: isActive ? UIConfig.textActive : UIConfig.textNormal,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.0,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+              color: isActive ? UIConfig.textActive : UIConfig.textNormal,
+            ),
           ),
         ),
       ),
@@ -339,36 +352,40 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
               ),
             ),
             const SizedBox(width: 16.0),
-            InkWell(
-              onTap: () async {
-                if (isRunning) {
-                  await webService.stop();
-                } else {
-                  await webService.start();
-                }
-              },
-              borderRadius: BorderRadius.circular(6.0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 10.0),
-                decoration: BoxDecoration(
-                  color: isRunning
-                      ? const Color.fromRGBO(239, 68, 68, 0.2)
-                      : const Color.fromRGBO(16, 185, 129, 0.2),
-                  borderRadius: BorderRadius.circular(6.0),
-                  border: Border.all(
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () async {
+                  if (isRunning) {
+                    await webService.stop();
+                  } else {
+                    await webService.start();
+                  }
+                  if (mounted) setState(() {});
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 10.0),
+                  decoration: BoxDecoration(
                     color: isRunning
-                        ? const Color(0xFFEF4444)
-                        : const Color(0xFF10B981),
+                        ? const Color.fromRGBO(239, 68, 68, 0.25)
+                        : const Color.fromRGBO(16, 185, 129, 0.25),
+                    borderRadius: BorderRadius.circular(6.0),
+                    border: Border.all(
+                      color: isRunning
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFF10B981),
+                    ),
                   ),
-                ),
-                child: Text(
-                  isRunning ? '停止服务' : '开启服务',
-                  style: TextStyle(
-                    fontSize: UIConfig.fontSmall,
-                    fontWeight: FontWeight.bold,
-                    color: isRunning
-                        ? const Color(0xFFEF4444)
-                        : const Color(0xFF10B981),
+                  child: Text(
+                    isRunning ? '停止服务' : '开启服务',
+                    style: TextStyle(
+                      fontSize: UIConfig.fontSmall,
+                      fontWeight: FontWeight.bold,
+                      color: isRunning
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFF10B981),
+                    ),
                   ),
                 ),
               ),
@@ -1150,36 +1167,40 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
               ),
             ),
             const SizedBox(width: 16.0),
-            InkWell(
-              onTap: () async {
-                if (isRunning) {
-                  await wifiService.stop();
-                } else {
-                  await wifiService.start();
-                }
-              },
-              borderRadius: BorderRadius.circular(6.0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 10.0),
-                decoration: BoxDecoration(
-                  color: isRunning
-                      ? const Color.fromRGBO(239, 68, 68, 0.2)
-                      : const Color.fromRGBO(16, 185, 129, 0.2),
-                  borderRadius: BorderRadius.circular(6.0),
-                  border: Border.all(
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () async {
+                  if (isRunning) {
+                    await wifiService.stop();
+                  } else {
+                    await wifiService.start(port: 8080);
+                  }
+                  if (mounted) setState(() {});
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 10.0),
+                  decoration: BoxDecoration(
                     color: isRunning
-                        ? const Color(0xFFEF4444)
-                        : const Color(0xFF10B981),
+                        ? const Color.fromRGBO(239, 68, 68, 0.25)
+                        : const Color.fromRGBO(16, 185, 129, 0.25),
+                    borderRadius: BorderRadius.circular(6.0),
+                    border: Border.all(
+                      color: isRunning
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFF10B981),
+                    ),
                   ),
-                ),
-                child: Text(
-                  isRunning ? '停止传歌' : '开始传歌',
-                  style: TextStyle(
-                    fontSize: UIConfig.fontSmall,
-                    fontWeight: FontWeight.bold,
-                    color: isRunning
-                        ? const Color(0xFFEF4444)
-                        : const Color(0xFF10B981),
+                  child: Text(
+                    isRunning ? '停止传歌' : '开始传歌',
+                    style: TextStyle(
+                      fontSize: UIConfig.fontSmall,
+                      fontWeight: FontWeight.bold,
+                      color: isRunning
+                          ? const Color(0xFFEF4444)
+                          : const Color(0xFF10B981),
+                    ),
                   ),
                 ),
               ),
