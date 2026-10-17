@@ -10,6 +10,7 @@ import '../models/track.dart';
 import 'dac_setting_service.dart';
 import 'mseb_service.dart';
 import 'music_database_service.dart';
+import 'pi_system_service.dart';
 import 'theme_service.dart';
 import 'web_remote_html.dart';
 
@@ -101,6 +102,7 @@ class WebRemoteService extends ChangeNotifier {
 
       _startBroadcastTimer();
       DacSettingService.instance.onBroadcastNeeded = broadcastDac;
+      PiSystemService.instance.addListener(broadcastState);
       notifyListeners();
       return true;
     } catch (e) {
@@ -114,6 +116,7 @@ class WebRemoteService extends ChangeNotifier {
   /// 停止 Web 远程遥控服务
   Future<void> stop() async {
     DacSettingService.instance.onBroadcastNeeded = null;
+    PiSystemService.instance.removeListener(broadcastState);
     _broadcastTimer?.cancel();
     _broadcastTimer = null;
 
@@ -234,6 +237,24 @@ class WebRemoteService extends ChangeNotifier {
       return;
     }
 
+    // 5.2 GET /api/system_info: 平台硬件与 ALSA 拓扑直通状态
+    if (request.method == 'GET' && path == '/api/system_info') {
+      final piSys = PiSystemService.instance;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'platform': Platform.operatingSystem,
+        'platform_name': Platform.isLinux ? '树莓派 5' : (Platform.isIOS ? 'iPad' : 'macOS'),
+        'temperature': piSys.socTemperature,
+        'temp_color': piSys.tempColorHex,
+        'dac_device': Platform.isLinux ? piSys.dacDeviceName : DacSettingService.instance.dacName,
+        'alsa_card': piSys.alsaCard,
+        'detected_alsa_devices': piSys.getDetectedAlsaDevices(),
+        'screensaver_timeout': piSys.screenSaverTimeoutMinutes,
+      }));
+      await request.response.close();
+      return;
+    }
+
     // 6. REST API 控制指令 (POST /api/...)
     if (request.method == 'POST') {
       final audio = HifiAudioService.instance;
@@ -266,6 +287,10 @@ class WebRemoteService extends ChangeNotifier {
       } else if (path == '/api/eq') {
         final en = request.uri.queryParameters['enabled'];
         if (en != null) audio.setEqEnabled(en == 'true' || en == '1');
+      } else if (path == '/api/scan') {
+        await MusicDatabaseService.instance.scanLibrary();
+        _broadcast(jsonEncode(_buildLibraryMap()));
+        _broadcast(jsonEncode(_buildQueueMap()));
       }
 
       broadcastState();
@@ -315,7 +340,7 @@ class WebRemoteService extends ChangeNotifier {
   }
 
   /// 分发客户端下发的遥控动作 (1:1 严格对齐 C++ WebService 动作表)
-  void _processClientCommand(String rawJson, WebSocket socket) {
+  void _processClientCommand(String rawJson, WebSocket socket) async {
     try {
       final cmd = jsonDecode(rawJson) as Map<String, dynamic>;
       final action = cmd['action'] as String? ?? '';
@@ -415,8 +440,10 @@ class WebRemoteService extends ChangeNotifier {
           socket.add(jsonEncode(_buildPlaylistsMap()));
           break;
         case 'start_scan':
-          db.loadLibrary();
+          await db.scanLibrary();
           _broadcast(jsonEncode(_buildLibraryMap()));
+          _broadcast(jsonEncode(_buildQueueMap()));
+          broadcastState();
           break;
         case 'set_theme':
           final tid = (cmd['theme_id'] as num?)?.toInt();
@@ -516,6 +543,15 @@ class WebRemoteService extends ChangeNotifier {
             broadcastDac();
           }
           break;
+        case 'set_pi_dac':
+          final dacName = cmd['dac_name'] as String?;
+          final alsaCard = cmd['alsa_card'] as String?;
+          if (dacName != null && alsaCard != null) {
+            PiSystemService.instance.setDacDevice(dacName, alsaCard);
+            broadcastDac();
+            broadcastState();
+          }
+          break;
       }
     } catch (e) {
       debugPrint('[WebRemoteService] 处理客户端指令失败: $e');
@@ -550,6 +586,7 @@ class WebRemoteService extends ChangeNotifier {
     final audio = HifiAudioService.instance;
     final theme = ThemeService.instance;
     final mseb = MsebService.instance;
+    final piSys = PiSystemService.instance;
     final cur = audio.currentTrack;
 
     String modeStr = 'list';
@@ -561,8 +598,25 @@ class WebRemoteService extends ChangeNotifier {
       modeStr = 'seq';
     }
 
+    String platformName = 'macOS';
+    if (Platform.isLinux) {
+      platformName = '树莓派 5';
+    } else if (Platform.isIOS) {
+      platformName = 'iPad / iOS';
+    } else if (Platform.isWindows) {
+      platformName = 'Windows';
+    } else if (Platform.isAndroid) {
+      platformName = 'Android';
+    }
+
     return {
       'type': 'state',
+      'platform': Platform.operatingSystem,
+      'platform_name': platformName,
+      'temperature': piSys.socTemperature,
+      'temp_color': piSys.tempColorHex,
+      'dac_device': Platform.isLinux ? piSys.dacDeviceName : DacSettingService.instance.dacName,
+      'alsa_card': piSys.alsaCard,
       'is_playing': audio.state.isPlaying,
       'title': cur?.title ?? '暂未载入曲目',
       'artist': cur?.artist ?? '未知艺术家',
@@ -634,11 +688,16 @@ class WebRemoteService extends ChangeNotifier {
 
   Map<String, dynamic> _buildDacMap() {
     final dac = DacSettingService.instance;
+    final piSys = PiSystemService.instance;
     return {
       'type': 'dac',
+      'platform': Platform.operatingSystem,
+      'temperature': piSys.socTemperature,
       'has_external_dac': dac.hasExternalDac,
-      'dac_name': dac.dacName,
+      'dac_name': Platform.isLinux ? piSys.dacDeviceName : dac.dacName,
       'active_output': dac.activeOutput,
+      'alsa_card': piSys.alsaCard,
+      'detected_alsa_devices': piSys.getDetectedAlsaDevices(),
       'selected_chip': dac.selectedChip,
       'chip_name': dac.dacName,
       'params': dac.allParams,

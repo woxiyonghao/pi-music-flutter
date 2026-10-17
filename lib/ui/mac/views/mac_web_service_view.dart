@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../services/ota_update_service.dart';
+import '../../../services/pi_system_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/web_remote_service.dart';
 import '../../../services/wifi_transfer_service.dart';
@@ -39,17 +41,38 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
     super.dispose();
   }
 
+  Color _getTempColor(String hexName) {
+    switch (hexName) {
+      case 'cyan': return const Color(0xFF00B4D8);
+      case 'amber': return const Color(0xFFF59E0B);
+      case 'red': return const Color(0xFFEF4444);
+      default: return const Color(0xFF10B981);
+    }
+  }
+
   void _openUrl(String url) {
+    Clipboard.setData(ClipboardData(text: url));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已复制网址到剪贴板: $url (可在同局域网手机/电脑浏览器中访问)'),
+          duration: const Duration(seconds: 2),
+          backgroundColor: const Color(0xFF161F2E),
+        ),
+      );
+    }
     try {
       if (Platform.isMacOS) {
         Process.run('open', [url]);
       } else if (Platform.isLinux) {
-        Process.run('xdg-open', [url]);
+        Process.run('xdg-open', [url]).catchError((_) {
+          return ProcessResult(0, 0, '', '');
+        });
       } else if (Platform.isWindows) {
         Process.run('cmd', ['/c', 'start', url]);
       }
     } catch (e) {
-      debugPrint('[MacWebServiceView] 无法打开 URL $url: $e');
+      debugPrint('[MacWebServiceView] 打开 URL 提示: $e');
     }
   }
 
@@ -76,6 +99,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
         WifiTransferService.instance,
         HifiAudioService.instance,
         OtaUpdateService.instance,
+        PiSystemService.instance,
       ]),
       builder: (context, _) {
         final accent = ThemeService.instance.accentColor;
@@ -348,6 +372,123 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                   ),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12.0),
+
+      // 卡片 1.5：树莓派 / 本机硬件与平台服务直通状态
+      _buildCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Platform.isLinux ? Icons.memory : Icons.computer,
+                      size: 16.0,
+                      color: accent,
+                    ),
+                    const SizedBox(width: 8.0),
+                    Text(
+                      Platform.isLinux
+                          ? '【树莓派 5 平台硬件监控】BCM2712 SoC 与 ALSA 硬件直通'
+                          : '【平台硬件监控】系统硬件状态与发烧音频引擎',
+                      style: const TextStyle(
+                        fontSize: UIConfig.fontSmall,
+                        fontWeight: FontWeight.bold,
+                        color: UIConfig.textActive,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                  decoration: BoxDecoration(
+                    color: _getTempColor(PiSystemService.instance.tempColorHex).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4.0),
+                    border: Border.all(
+                      color: _getTempColor(PiSystemService.instance.tempColorHex),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6.0,
+                        height: 6.0,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _getTempColor(PiSystemService.instance.tempColorHex),
+                        ),
+                      ),
+                      const SizedBox(width: 5.0),
+                      Text(
+                        'SoC 核心: ${PiSystemService.instance.socTemperature.toStringAsFixed(1)}°C',
+                        style: TextStyle(
+                          fontSize: 11.0,
+                          fontWeight: FontWeight.bold,
+                          color: _getTempColor(PiSystemService.instance.tempColorHex),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10.0),
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(10.0),
+                    decoration: BoxDecoration(
+                      color: const Color.fromRGBO(10, 14, 20, 0.6),
+                      borderRadius: BorderRadius.circular(6.0),
+                      border: Border.all(color: const Color.fromRGBO(255, 255, 255, 0.06)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('ALSA / 硬件音频输出', style: TextStyle(fontSize: 11.0, color: UIConfig.textMuted)),
+                        const SizedBox(height: 4.0),
+                        Text(
+                          PiSystemService.instance.alsaCard,
+                          style: const TextStyle(fontSize: 12.0, fontWeight: FontWeight.bold, color: UIConfig.textActive),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10.0),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(10.0),
+                    decoration: BoxDecoration(
+                      color: const Color.fromRGBO(10, 14, 20, 0.6),
+                      borderRadius: BorderRadius.circular(6.0),
+                      border: Border.all(color: const Color.fromRGBO(255, 255, 255, 0.06)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('当前配置硬件 DAC', style: TextStyle(fontSize: 11.0, color: UIConfig.textMuted)),
+                        const SizedBox(height: 4.0),
+                        Text(
+                          Platform.isLinux ? PiSystemService.instance.dacDeviceName : 'Mac / Apple Direct 纯音引擎',
+                          style: const TextStyle(fontSize: 12.0, fontWeight: FontWeight.bold, color: Color(0xFF64B5F6)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

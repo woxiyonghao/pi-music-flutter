@@ -23,6 +23,13 @@ class MacAllMusicView extends StatefulWidget {
 class _MacAllMusicViewState extends State<MacAllMusicView> {
   int _viewMode = 0; // 0: 音频格式, 1: 艺术家/专辑, 2: 存储目录
   final Map<String, bool> _treeExpanded = {};
+  int? _selectedTrackId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedTrackId = HifiAudioService.instance.currentTrack?.id;
+  }
 
   bool _isGroupOpen(String key) => _treeExpanded[key] ?? true;
 
@@ -446,13 +453,21 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
         final isCurrent = service.currentTrack != null &&
             service.currentTrack!.matches(track);
         final isPlaying = isCurrent && service.isPlayingNotifier.value;
+        final isSelected = _selectedTrackId == track.id;
 
         final numStr = '${(index + 1).toString().padLeft(2, '0')}.';
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 2.0),
           child: InkWell(
+            canRequestFocus: false, // 彻底消除 Flutter 系统层默认焦点冲突
+            focusColor: Colors.transparent,
+            hoverColor: accent.withValues(alpha: 0.08),
+            splashColor: accent.withValues(alpha: 0.12),
             onTap: () {
+              setState(() {
+                _selectedTrackId = track.id;
+              });
               service.playTracks(queueContext, index);
             },
             borderRadius: BorderRadius.circular(6.0),
@@ -460,13 +475,18 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
               height: 30.0,
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               decoration: BoxDecoration(
-                color: isCurrent
-                    ? accent.withValues(alpha: 0.18)
-                    : Colors.transparent,
+                // 仅单一选中项展示选中边框与底色；在播音轨若未被选中仅呈现微弱底色，不再出现两个焦点
+                color: isSelected
+                    ? accent.withValues(alpha: 0.20)
+                    : (isCurrent
+                        ? accent.withValues(alpha: 0.08)
+                        : Colors.transparent),
                 borderRadius: BorderRadius.circular(6.0),
-                border: isCurrent
-                    ? Border.all(color: accent.withValues(alpha: 0.5), width: 1.0)
-                    : null,
+                border: isSelected
+                    ? Border.all(color: accent.withValues(alpha: 0.6), width: 1.0)
+                    : (isCurrent
+                        ? Border.all(color: accent.withValues(alpha: 0.25), width: 1.0)
+                        : null),
               ),
               child: Row(
                 children: [
@@ -507,8 +527,8 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                             style: TextStyle(
                               fontSize: UIConfig.fontRegular,
                               fontWeight:
-                                  isCurrent ? FontWeight.w600 : FontWeight.normal,
-                              color: isCurrent
+                                  (isSelected || isCurrent) ? FontWeight.w600 : FontWeight.normal,
+                              color: (isSelected || isCurrent)
                                   ? UIConfig.textActive
                                   : const Color.fromRGBO(215, 225, 238, 0.9),
                             ),
@@ -519,9 +539,11 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                           Text(
                             '- ${track.artist}',
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: UIConfig.fontSmall,
-                              color: UIConfig.textMuted,
+                              color: isSelected
+                                  ? UIConfig.textActive.withValues(alpha: 0.75)
+                                  : UIConfig.textMuted,
                             ),
                           ),
                         ],
@@ -570,26 +592,36 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                   const SizedBox(width: 10.0),
 
                   // 播放按钮
-                  GestureDetector(
+                  InkWell(
+                    canRequestFocus: false,
                     onTap: () {
+                      setState(() {
+                        _selectedTrackId = track.id;
+                      });
                       service.playTracks(queueContext, index);
                     },
+                    borderRadius: BorderRadius.circular(4.0),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8.0, vertical: 2.0),
                       decoration: BoxDecoration(
-                        color: const Color.fromRGBO(40, 48, 66, 0.75),
+                        color: isSelected
+                            ? accent.withValues(alpha: 0.28)
+                            : const Color.fromRGBO(40, 48, 66, 0.75),
                         borderRadius: BorderRadius.circular(4.0),
                         border: Border.all(
-                          color: const Color.fromRGBO(255, 255, 255, 0.10),
+                          color: isSelected
+                              ? accent.withValues(alpha: 0.6)
+                              : const Color.fromRGBO(255, 255, 255, 0.10),
                           width: 1.0,
                         ),
                       ),
-                      child: const Text(
-                        '播放',
+                      child: Text(
+                        isPlaying ? '暂停' : '播放',
                         style: TextStyle(
                           fontSize: UIConfig.fontSmall,
-                          color: UIConfig.textActive,
+                          color: isSelected ? accent : UIConfig.textActive,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
                     ),

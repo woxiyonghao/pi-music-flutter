@@ -573,8 +573,36 @@ class MusicDatabaseService extends ChangeNotifier {
       if (rawName.contains(' - ')) {
         final parts = rawName.split(' - ');
         if (parts.length >= 2) {
-          artist = parts[0].trim();
-          title = parts.sublist(1).join(' - ').trim();
+          final p0 = parts[0].trim();
+          final p1 = parts.sublist(1).join(' - ').trim();
+
+          // 情况 1: 前缀为纯数字序号，例如 "03 - 石頭記"
+          if (RegExp(r'^\d+$').hasMatch(p0)) {
+            title = p1;
+          }
+          // 情况 2: 后缀包含方括号专辑名，例如 "讲不出再见 - 谭咏麟[二十年白金畅销金曲全记录]"
+          else if (p1.contains('[') && p1.endsWith(']')) {
+            final bStart = p1.indexOf('[');
+            final artCandidate = p1.substring(0, bStart).trim();
+            final albCandidate = p1.substring(bStart + 1, p1.length - 1).trim();
+            title = p0;
+            if (artCandidate.isNotEmpty) artist = artCandidate;
+            if (albCandidate.isNotEmpty) album = albCandidate;
+          }
+          // 情况 3: 前缀包含方括号专辑名，例如 "谭咏麟[二十年白金畅销金曲全记录] - 讲不出再见"
+          else if (p0.contains('[') && p0.endsWith(']')) {
+            final bStart = p0.indexOf('[');
+            final artCandidate = p0.substring(0, bStart).trim();
+            final albCandidate = p0.substring(bStart + 1, p0.length - 1).trim();
+            title = p1;
+            if (artCandidate.isNotEmpty) artist = artCandidate;
+            if (albCandidate.isNotEmpty) album = albCandidate;
+          }
+          // 默认情况: "艺术家 - 歌名"
+          else {
+            artist = p0;
+            title = p1;
+          }
         }
       }
 

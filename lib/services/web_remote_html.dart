@@ -445,9 +445,18 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
   <!-- 头部信息 -->
   <div class="header">
     <h1>PiHiFi 发烧纯音远程中枢</h1>
-    <div class="badge disconnected" id="connStatus">
-      <div class="badge-dot"></div>
-      <span id="connText">正在连接数播 WebSocket...</span>
+    <div style="display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
+      <div class="badge disconnected" id="connStatus">
+        <div class="badge-dot"></div>
+        <span id="connText">正在连接数播 WebSocket...</span>
+      </div>
+      <div class="badge" id="platformBadge" style="display:none; border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: var(--text-normal);">
+        <span id="platformText">树莓派 5</span>
+      </div>
+      <div class="badge" id="tempBadge" style="display:none;">
+        <div class="badge-dot" id="tempDot" style="background:#10b981;"></div>
+        <span id="tempText">42.0°C</span>
+      </div>
     </div>
   </div>
 
@@ -632,9 +641,9 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
 
       <div class="section-title">6 大名片解码芯片架构选择</div>
       <div class="dac-chips-grid" id="dacChipsGrid">
-        <div class="dac-chip-card active" data-chip="0">
-          <div class="dac-chip-name">Apple Direct</div>
-          <div class="dac-chip-brand">Mac/iOS 硬件直通</div>
+        <div class="dac-chip-card active" data-chip="0" id="dacChipCard0">
+          <div class="dac-chip-name" id="dacChip0Name">ALSA / 硬件直通</div>
+          <div class="dac-chip-brand" id="dacChip0Desc">纯音硬件输出</div>
         </div>
         <div class="dac-chip-card" data-chip="1">
           <div class="dac-chip-name">ESS Sabre</div>
@@ -784,11 +793,11 @@ const eqPresets = {
 
 // DAC 参数项定义表
 const dacChipOptions = {
-  0: [ // Apple Direct
-    { key: "apple_exclusive", label: "输出模式", opts: ["Bit-Perfect 独占流", "系统混音共享"] },
+  0: [ // 平台/系统硬件直通 (自适应 ALSA 物理声卡直通与 macOS CoreAudio)
+    { key: "apple_exclusive", label: "硬件直通模式", opts: ["Bit-Perfect 硬件直通 (hw:X,Y)", "系统混音共享"] },
     { key: "apple_sample_rate", label: "采样率模式", opts: ["原生跟随母带", "固定 96kHz", "固定 192kHz"] },
-    { key: "apple_drive", label: "耳放输出电平", opts: ["智能阻抗自适应", "强制高输出 3.0Vrms", "标准输出 1.25Vrms"] },
-    { key: "apple_bit_depth", label: "定点/浮点精度", opts: ["32-bit Float 直通", "24-bit 整数定点"] }
+    { key: "apple_drive", label: "输出推力电平", opts: ["智能阻抗自适应", "强制高输出 3.0Vrms", "标准输出 1.25Vrms"] },
+    { key: "apple_bit_depth", label: "采样位深精度", opts: ["32-bit Float 直通", "24-bit 整数定点"] }
   ],
   1: [ // ESS Sabre
     { key: "pcm_filter", label: "PCM 数字滤波", opts: ["快速最小", "慢速最小", "快速线性", "慢速线性", "变迹滤波", "砖墙滤波", "混合滤波"] },
@@ -874,6 +883,36 @@ function sendAction(msg) {
 
 // ==================== 状态更新与渲染 ====================
 function updateState(s) {
+  // 平台与温度状态更新
+  if (s.platform_name) {
+    const pBadge = document.getElementById('platformBadge');
+    if (pBadge) {
+      pBadge.style.display = 'inline-flex';
+      document.getElementById('platformText').textContent = s.platform_name;
+    }
+  }
+  if (s.temperature !== undefined) {
+    const tBadge = document.getElementById('tempBadge');
+    if (tBadge) {
+      tBadge.style.display = 'inline-flex';
+      const tVal = parseFloat(s.temperature);
+      document.getElementById('tempText').textContent = tVal.toFixed(1) + '°C';
+      const tDot = document.getElementById('tempDot');
+      if (tDot) {
+        if (tVal < 50.0) {
+          tDot.style.background = '#00B4D8';
+          tDot.style.boxShadow = '0 0 8px #00B4D8';
+        } else if (tVal < 70.0) {
+          tDot.style.background = '#10B981';
+          tDot.style.boxShadow = '0 0 8px #10B981';
+        } else {
+          tDot.style.background = '#EF4444';
+          tDot.style.boxShadow = '0 0 8px #EF4444';
+        }
+      }
+    }
+  }
+
   document.getElementById('trackTitle').textContent = s.title || '暂未载入曲目';
   document.getElementById('trackArtist').textContent = s.artist || '未知艺术家';
   document.getElementById('formatBadge').textContent = s.specs || 'Hi-Res 直通';
@@ -1196,8 +1235,28 @@ function updateDac(d) {
   dacConfigData = d;
   activeDacChip = d.selected_chip || 0;
 
+  // 自适应当前平台物理声卡标题与说明
+  const chip0Name = document.getElementById('dacChip0Name');
+  const chip0Desc = document.getElementById('dacChip0Desc');
+  if (chip0Name && chip0Desc) {
+    if (d.platform === 'linux') {
+      chip0Name.textContent = 'ALSA 直通';
+      chip0Desc.textContent = 'Linux 物理声卡直通 (I2S/USB)';
+    } else if (d.platform === 'ios') {
+      chip0Name.textContent = 'Apple Direct';
+      chip0Desc.textContent = 'iPad / iOS 硬件直通';
+    } else {
+      chip0Name.textContent = 'Apple Direct';
+      chip0Desc.textContent = 'Mac 硬件直通';
+    }
+  }
+
   document.getElementById('dacDeviceName').textContent = d.dac_name || '系统默认声卡';
-  document.getElementById('dacDeviceDesc').textContent = '活跃输出: ' + (d.active_output || '默认音频输出');
+  let desc = '活跃输出: ' + (d.active_output || '默认音频输出');
+  if (d.alsa_card) {
+    desc += ' · 声卡: ' + d.alsa_card;
+  }
+  document.getElementById('dacDeviceDesc').textContent = desc;
   document.getElementById('dacStatusIcon').style.color = d.has_external_dac ? 'var(--accent)' : 'var(--text-muted)';
 
   // 芯片卡片高亮
