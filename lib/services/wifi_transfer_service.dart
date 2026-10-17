@@ -198,13 +198,19 @@ class WifiTransferService extends ChangeNotifier {
       return;
     }
 
-    // 3. POST /upload_chunk: 分片流式接收超大无损母带/镜像 (断点续传与抗弱网)
+    // 3. GET /upload_status: 查询特定文件上传与断点续传状态
+    if (request.method == 'GET' && path.startsWith('/upload_status')) {
+      await _handleUploadStatus(request);
+      return;
+    }
+
+    // 4. POST /upload_chunk: 分片流式接收超大无损母带/镜像 (断点续传与抗弱网)
     if (request.method == 'POST' && path.startsWith('/upload_chunk')) {
       await _handleChunkUpload(request);
       return;
     }
 
-    // 4. POST /upload: 接收单次音频二进制数据流
+    // 5. POST /upload: 接收单次音频二进制数据流
     if (request.method == 'POST' && path.startsWith('/upload')) {
       await _handleFileUpload(request);
       return;
@@ -213,6 +219,40 @@ class WifiTransferService extends ChangeNotifier {
     // 未知路径 404
     request.response.statusCode = HttpStatus.notFound;
     request.response.write('Not Found');
+    await request.response.close();
+  }
+
+  /// 查询特定文件当前传输状态 (支持断点续传秒验)
+  Future<void> _handleUploadStatus(HttpRequest request) async {
+    final query = request.uri.queryParameters;
+    String filename = query['filename'] ?? '';
+    try {
+      filename = Uri.decodeComponent(filename);
+    } catch (_) {}
+    filename = filename
+        .replaceAll('/', '_')
+        .replaceAll(r'\', '_')
+        .replaceAll('..', '_')
+        .trim();
+
+    final targetDir = Directory(_targetDir);
+    final tempFile = File('${targetDir.path}/$filename.part');
+    final finalFile = File('${targetDir.path}/$filename');
+
+    final bool exists = finalFile.existsSync();
+    final int finalBytes = exists ? finalFile.lengthSync() : 0;
+    final bool hasPartial = tempFile.existsSync();
+    final int partialBytes = hasPartial ? tempFile.lengthSync() : 0;
+
+    request.response.headers.contentType = ContentType.json;
+    request.response.write(jsonEncode({
+      'status': 'ok',
+      'filename': filename,
+      'exists': exists,
+      'finalBytes': finalBytes,
+      'hasPartial': hasPartial,
+      'partialBytes': partialBytes,
+    }));
     await request.response.close();
   }
 
@@ -242,6 +282,9 @@ class WifiTransferService extends ChangeNotifier {
     final chunkIndex = int.tryParse(query['chunk'] ?? '0') ?? 0;
     final totalChunks = int.tryParse(query['totalChunks'] ?? '1') ?? 1;
     final totalBytes = int.tryParse(query['totalBytes'] ?? '0') ?? 0;
+    final chunkSize = int.tryParse(query['chunkSize'] ?? '0') ?? 0;
+    final explicitOffset = int.tryParse(query['offset'] ?? '');
+    final offset = explicitOffset ?? (chunkIndex * chunkSize);
 
     final targetDir = Directory(_targetDir);
     if (!targetDir.existsSync()) {
@@ -254,26 +297,36 @@ class WifiTransferService extends ChangeNotifier {
     final finalFile = File('${targetDir.path}/$filename');
 
     try {
-      // 首片：重置旧的残余分片文件
-      if (chunkIndex == 0 && tempFile.existsSync()) {
-        try {
-          tempFile.deleteSync();
-        } catch (_) {}
+      // 仅在明确传入 reset=true 或全新第0分片且未指定 offset 时清理历史残余
+      if (query['reset'] == 'true' || (offset == 0 && chunkIndex == 0 && query['offset'] == null)) {
+        if (tempFile.existsSync()) {
+          try {
+            tempFile.deleteSync();
+          } catch (_) {}
+        }
       }
 
-      final sink = tempFile.openWrite(
-        mode: chunkIndex == 0 ? FileMode.write : FileMode.append,
-      );
+      if (!tempFile.existsSync()) {
+        tempFile.createSync(recursive: true);
+      }
+
+      // 使用 RandomAccessFile 准确定位写入，保障断点重试不发生字节错位或尾部虚增
+      final raf = await tempFile.open(mode: FileMode.writeOnly);
+      if (offset > 0) {
+        await raf.setPosition(offset);
+      }
 
       int chunkBytes = 0;
-      await sink.addStream(request.map((c) {
-        chunkBytes += c.length;
-        return c;
-      }));
-      await sink.flush();
-      await sink.close();
+      await for (final chunk in request) {
+        await raf.writeFrom(chunk);
+        chunkBytes += chunk.length;
+      }
+      await raf.flush();
+      await raf.close();
 
-      final isLastChunk = chunkIndex >= totalChunks - 1;
+      final currentPartSize = tempFile.existsSync() ? tempFile.lengthSync() : 0;
+      final isLastChunk = (chunkIndex >= totalChunks - 1) || (totalBytes > 0 && currentPartSize >= totalBytes);
+
       if (isLastChunk) {
         // 覆盖旧文件 (如有同名)
         if (finalFile.existsSync()) {
@@ -312,7 +365,9 @@ class WifiTransferService extends ChangeNotifier {
           'status': 'ok',
           'completed': false,
           'chunk': chunkIndex,
+          'offset': offset,
           'bytes': chunkBytes,
+          'currentSize': currentPartSize,
         }));
         await request.response.close();
       }

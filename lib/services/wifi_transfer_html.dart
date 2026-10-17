@@ -278,75 +278,102 @@ btnUpload.addEventListener('click', async () => {
   btnClear.disabled = false;
 });
 
-function uploadSingleFile(item) {
-  const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB 分片 (针对弱网与大型 WAV/DSD 极速安全流转)
+async function uploadSingleFile(item) {
+  const CHUNK_SIZE = 512 * 1024; // 512 KB 黄金分片尺寸 (抗 2.4G 弱网、丢包秒级恢复)
   const file = item.file;
+  const encodedName = encodeURIComponent(file.name);
 
-  // 小于等于 2MB 的文件 (例如 CUE 分轨表、短音频) 走单片快速传输
-  if (file.size <= CHUNK_SIZE) {
-    return uploadSingleChunk(file, file.name, 0, 1, file.size, (loaded) => {
+  // 1. 探测远端服务断点信息 (支持断点续传秒验)
+  let startByte = 0;
+  try {
+    const statusResp = await fetch(`/upload_status?filename=${encodedName}`);
+    if (statusResp.ok) {
+      const info = await statusResp.json();
+      if (info.exists && info.finalBytes === file.size) {
+        // 文件已存在且完整，秒级入库
+        item.status = 'success';
+        item.loaded = file.size;
+        overallSpeed.textContent = `秒传完成: ${file.name} 已存在于音乐库`;
+        renderQueue();
+        return;
+      }
+      if (info.hasPartial && info.partialBytes > 0 && info.partialBytes < file.size) {
+        // 断点续传：对齐到最近的 512KB 分片边界，避免碎片错位
+        startByte = Math.floor(info.partialBytes / CHUNK_SIZE) * CHUNK_SIZE;
+        item.loaded = startByte;
+        overallSpeed.textContent = `断点续传中: ${file.name} 从 ${formatBytes(startByte)} 继续...`;
+        renderQueue();
+      }
+    }
+  } catch (e) {
+    console.warn('[WiFiUpload] 断点状态探测跳过:', e);
+  }
+
+  // 2. 超小文件 (<= 512KB 且无断点) 走单片快速传输
+  if (file.size <= CHUNK_SIZE && startByte === 0) {
+    return uploadSingleChunk(file, file.name, 0, 1, file.size, 0, (loaded) => {
       item.loaded = loaded;
       renderQueue();
     });
   }
 
-  // 超大文件 (如 604MB WAV / DSD / SACD 镜像)：智能切片并发重试流式上传
-  return new Promise(async (resolve, reject) => {
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    let startTime = Date.now();
-    let lastLoaded = 0;
+  // 3. 超大无损母带/镜像分片流式上传
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const startChunkIdx = Math.floor(startByte / CHUNK_SIZE);
+  let startTime = Date.now();
+  let lastLoaded = startByte;
 
-    for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
-      const start = chunkIdx * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, file.size);
-      const chunkBlob = file.slice(start, end);
+  for (let chunkIdx = startChunkIdx; chunkIdx < totalChunks; chunkIdx++) {
+    const start = chunkIdx * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, file.size);
+    const chunkBlob = file.slice(start, end);
 
-      let success = false;
-      let lastErr = null;
+    let success = false;
+    let lastErr = null;
 
-      // 每个分片最多自动重试 5 次 (智能规避 2.4G WiFi 丢包或短暂信道拥堵)
-      for (let attempt = 1; attempt <= 5; attempt++) {
-        try {
-          await uploadSingleChunk(chunkBlob, file.name, chunkIdx, totalChunks, file.size, (chunkLoaded) => {
-            item.loaded = start + chunkLoaded;
-            let now = Date.now();
-            let elapsed = (now - startTime) / 1000;
-            if (elapsed > 0.3) {
-              let speedVal = ((item.loaded - lastLoaded) / elapsed / 1024 / 1024).toFixed(1);
-              item.speed = `${speedVal} MB/s`;
-              overallSpeed.textContent = `传输中: ${file.name} (${chunkIdx + 1}/${totalChunks}片) · ${item.speed}`;
-              startTime = now;
-              lastLoaded = item.loaded;
-              renderQueue();
-            }
-          });
-          success = true;
-          break;
-        } catch (err) {
-          lastErr = err;
-          console.warn(`[WiFiUpload] 分片 ${chunkIdx + 1}/${totalChunks} 失败，准备第 ${attempt} 次重试...`, err);
-          overallSpeed.textContent = `正在弱网自愈重试 (${chunkIdx + 1}/${totalChunks}片, 第${attempt}次)...`;
-          await new Promise(r => setTimeout(r, 1000 * attempt));
-        }
-      }
-
-      if (!success) {
-        return reject(new Error(`分片 ${chunkIdx + 1}/${totalChunks} 传输失败: ${lastErr ? lastErr.message : '网络中断'}`));
+    // 每个分片最多自动重试 5 次 (智能规避 2.4G WiFi 丢包或短暂信道拥堵)
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      try {
+        await uploadSingleChunk(chunkBlob, file.name, chunkIdx, totalChunks, file.size, start, (chunkLoaded) => {
+          item.loaded = start + chunkLoaded;
+          let now = Date.now();
+          let elapsed = (now - startTime) / 1000;
+          if (elapsed > 0.3) {
+            let bytesDiff = item.loaded - lastLoaded;
+            let speedKB = (bytesDiff / elapsed / 1024);
+            let speedText = speedKB >= 1024 ? (speedKB / 1024).toFixed(1) + ' MB/s' : Math.round(speedKB) + ' KB/s';
+            item.speed = speedText;
+            overallSpeed.textContent = `传输中: ${file.name} (${chunkIdx + 1}/${totalChunks}片) · ${item.speed}`;
+            startTime = now;
+            lastLoaded = item.loaded;
+            renderQueue();
+          }
+        });
+        success = true;
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.warn(`[WiFiUpload] 分片 ${chunkIdx + 1}/${totalChunks} 失败，准备第 ${attempt} 次重试...`, err);
+        overallSpeed.textContent = `弱网自愈重试 (${chunkIdx + 1}/${totalChunks}片, 第${attempt}次)...`;
+        await new Promise(r => setTimeout(r, 1000 * attempt));
       }
     }
 
-    item.loaded = file.size;
-    renderQueue();
-    resolve();
-  });
+    if (!success) {
+      throw new Error(`分片 ${chunkIdx + 1}/${totalChunks} 传输失败: ${lastErr ? lastErr.message : '网络中断'}`);
+    }
+  }
+
+  item.loaded = file.size;
+  renderQueue();
 }
 
-function uploadSingleChunk(blob, filename, chunkIdx, totalChunks, totalBytes, onProgress) {
+function uploadSingleChunk(blob, filename, chunkIdx, totalChunks, totalBytes, offset, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const encodedName = encodeURIComponent(filename);
-    xhr.open('POST', `/upload_chunk?filename=${encodedName}&chunk=${chunkIdx}&totalChunks=${totalChunks}&totalBytes=${totalBytes}`);
-    xhr.timeout = 60000; // 每个 2MB 分片给足 60 秒超时窗口
+    xhr.open('POST', `/upload_chunk?filename=${encodedName}&chunk=${chunkIdx}&totalChunks=${totalChunks}&totalBytes=${totalBytes}&offset=${offset}`);
+    xhr.timeout = 45000; // 512KB 分片给足 45 秒超时窗口
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) {
