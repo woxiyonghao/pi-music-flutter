@@ -259,7 +259,25 @@ class WebRemoteService extends ChangeNotifier {
     if (request.method == 'POST') {
       final audio = HifiAudioService.instance;
       if (path == '/api/play') {
-        audio.play();
+        final db = MusicDatabaseService.instance;
+        final id = int.tryParse(request.uri.queryParameters['id'] ?? '');
+        final idx = int.tryParse(request.uri.queryParameters['index'] ?? '');
+        if (id != null) {
+          final tIdx = db.tracks.indexWhere((t) => t.id == id);
+          if (tIdx != -1) {
+            audio.playTracks(db.tracks, tIdx);
+          } else {
+            audio.play();
+          }
+        } else if (idx != null && idx >= 0 && idx < db.tracks.length) {
+          audio.playTracks(db.tracks, idx);
+        } else {
+          if (audio.playlistQueue.isEmpty && db.tracks.isNotEmpty) {
+            audio.playTracks(db.tracks, 0);
+          } else {
+            audio.play();
+          }
+        }
       } else if (path == '/api/pause') {
         audio.pause();
       } else if (path == '/api/toggle') {
