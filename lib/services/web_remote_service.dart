@@ -13,6 +13,7 @@ import 'music_database_service.dart';
 import 'pi_system_service.dart';
 import 'theme_service.dart';
 import 'web_remote_html.dart';
+import 'wifi_transfer_service.dart';
 
 /// Web 远程遥控服务端 (基于 dart:io 纯标准库原生 HttpServer 与 WebSocket)
 /// 1:1 严格对齐 C++ WebService.cpp，支持多端移动端/桌面端浏览器实时毫秒级双向遥控
