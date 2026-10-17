@@ -6,8 +6,8 @@ import '../../services/theme_service.dart';
 import '../../theme/ui_config.dart';
 import '../common/glass_card.dart';
 
-/// macOS 专业侧边栏 (1:1 严格对齐 C++ SidebarView.cpp / SidebarFeatureWidget.cpp / SidebarDacWidget.cpp)
-class MacSidebarWidget extends StatelessWidget {
+/// macOS / 树莓派专业发烧侧边栏 (1:1 严格对齐 C++ SidebarView.cpp / SidebarFeatureWidget.cpp / SidebarDacWidget.cpp)
+class MacSidebarWidget extends StatefulWidget {
   final SidebarTab currentTab;
   final int selectedPlaylistId;
   final List<Playlist> playlists;
@@ -17,6 +17,7 @@ class MacSidebarWidget extends StatelessWidget {
   final ValueChanged<SidebarTab> onTabSelected;
   final ValueChanged<int> onPlaylistSelected;
   final VoidCallback onCreatePlaylist;
+  final ValueChanged<int>? onDeletePlaylist;
   final VoidCallback onDacClicked;
 
   const MacSidebarWidget({
@@ -30,8 +31,70 @@ class MacSidebarWidget extends StatelessWidget {
     required this.onTabSelected,
     required this.onPlaylistSelected,
     required this.onCreatePlaylist,
+    this.onDeletePlaylist,
     required this.onDacClicked,
   });
+
+  @override
+  State<MacSidebarWidget> createState() => _MacSidebarWidgetState();
+}
+
+class _MacSidebarWidgetState extends State<MacSidebarWidget> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _confirmDeletePlaylist(BuildContext context, int id, String name) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E232A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.0),
+          side: BorderSide(
+            color: ThemeService.instance.accentColor.withValues(alpha: 0.35),
+            width: 1.0,
+          ),
+        ),
+        title: const Text(
+          '删除播放列表',
+          style: TextStyle(color: Colors.white, fontSize: 16.0, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          '确定要从曲库中移除播放列表「$name」吗？',
+          style: const TextStyle(color: UIConfig.textNormal, fontSize: 13.0),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消', style: TextStyle(color: UIConfig.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              widget.onDeletePlaylist?.call(id);
+            },
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,101 +108,128 @@ class MacSidebarWidget extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // 1. 上半部分：功能项与歌单列表容器 (Xcode 风格液态玻璃卡片)
+          // 1. 上半部分：功能项与歌单列表容器 (Xcode 风格液态玻璃卡片 + 全指针平滑拖拽滚动)
           Expanded(
             child: GlassCard(
               borderRadius: UIConfig.containerRounding,
               padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // [板块一：功能项]
-                    _buildSectionHeader('功能'),
-                    _buildNavItem(
-                      tab: SidebarTab.scanMusic,
-                      label: '扫描音乐',
-                      iconData: Icons.search_rounded,
-                      isSelected: currentTab == SidebarTab.scanMusic,
-                      onTap: () => onTabSelected(SidebarTab.scanMusic),
+              child: ScrollConfiguration(
+                behavior: const MouseDraggableScrollBehavior(),
+                child: RawScrollbar(
+                  controller: _scrollController,
+                  thumbVisibility: false,
+                  thickness: 3.0,
+                  radius: const Radius.circular(2.0),
+                  thumbColor: ThemeService.instance.accentColor.withValues(alpha: 0.45),
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
                     ),
-                    _buildNavItem(
-                      tab: SidebarTab.equalizer,
-                      label: '均衡器',
-                      iconData: Icons.tune_rounded,
-                      isSelected: currentTab == SidebarTab.equalizer,
-                      onTap: () => onTabSelected(SidebarTab.equalizer),
-                    ),
-                    _buildNavItem(
-                      tab: SidebarTab.msebTuning,
-                      label: '调音魔棒',
-                      iconData: Icons.auto_fix_high_rounded,
-                      isSelected: currentTab == SidebarTab.msebTuning,
-                      onTap: () => onTabSelected(SidebarTab.msebTuning),
-                    ),
-                    _buildNavItem(
-                      tab: SidebarTab.dacSettings,
-                      label: 'DAC',
-                      iconData: Icons.developer_board_rounded,
-                      isSelected: currentTab == SidebarTab.dacSettings,
-                      onTap: () => onTabSelected(SidebarTab.dacSettings),
-                    ),
-                    _buildNavItem(
-                      tab: SidebarTab.themeSettings,
-                      label: '主题',
-                      iconData: Icons.palette_outlined,
-                      isSelected: currentTab == SidebarTab.themeSettings,
-                      onTap: () => onTabSelected(SidebarTab.themeSettings),
-                    ),
-                    _buildNavItem(
-                      tab: SidebarTab.systemSettings,
-                      label: '设置',
-                      iconData: Icons.settings_rounded,
-                      isSelected: currentTab == SidebarTab.systemSettings,
-                      onTap: () => onTabSelected(SidebarTab.systemSettings),
-                    ),
-                    _buildNavItem(
-                      tab: SidebarTab.webService,
-                      label: 'Web服务',
-                      iconData: Icons.desktop_windows_rounded,
-                      isSelected: currentTab == SidebarTab.webService,
-                      onTap: () => onTabSelected(SidebarTab.webService),
-                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // [板块一：功能项]
+                        _buildSectionHeader('功能'),
+                        _buildNavItem(
+                          tab: SidebarTab.scanMusic,
+                          label: '扫描音乐',
+                          iconData: Icons.search_rounded,
+                          isSelected: widget.currentTab == SidebarTab.scanMusic,
+                          onTap: () => widget.onTabSelected(SidebarTab.scanMusic),
+                        ),
+                        _buildNavItem(
+                          tab: SidebarTab.equalizer,
+                          label: '均衡器',
+                          iconData: Icons.tune_rounded,
+                          isSelected: widget.currentTab == SidebarTab.equalizer,
+                          onTap: () => widget.onTabSelected(SidebarTab.equalizer),
+                        ),
+                        _buildNavItem(
+                          tab: SidebarTab.msebTuning,
+                          label: '调音魔棒',
+                          iconData: Icons.auto_fix_high_rounded,
+                          isSelected: widget.currentTab == SidebarTab.msebTuning,
+                          onTap: () => widget.onTabSelected(SidebarTab.msebTuning),
+                        ),
+                        _buildNavItem(
+                          tab: SidebarTab.dacSettings,
+                          label: 'DAC',
+                          iconData: Icons.developer_board_rounded,
+                          isSelected: widget.currentTab == SidebarTab.dacSettings,
+                          onTap: () => widget.onTabSelected(SidebarTab.dacSettings),
+                        ),
+                        _buildNavItem(
+                          tab: SidebarTab.themeSettings,
+                          label: '主题',
+                          iconData: Icons.palette_outlined,
+                          isSelected: widget.currentTab == SidebarTab.themeSettings,
+                          onTap: () => widget.onTabSelected(SidebarTab.themeSettings),
+                        ),
+                        _buildNavItem(
+                          tab: SidebarTab.systemSettings,
+                          label: '设置',
+                          iconData: Icons.settings_rounded,
+                          isSelected: widget.currentTab == SidebarTab.systemSettings,
+                          onTap: () => widget.onTabSelected(SidebarTab.systemSettings),
+                        ),
+                        _buildNavItem(
+                          tab: SidebarTab.webService,
+                          label: 'Web服务',
+                          iconData: Icons.desktop_windows_rounded,
+                          isSelected: widget.currentTab == SidebarTab.webService,
+                          onTap: () => widget.onTabSelected(SidebarTab.webService),
+                        ),
 
-                    const SizedBox(height: 8.0),
+                        const SizedBox(height: 8.0),
 
-                    // [板块二：播放列表]
-                    _buildSectionHeader('播放列表'),
-                    _buildNavItem(
-                      tab: SidebarTab.allMusic,
-                      label: '所有音乐',
-                      iconData: Icons.music_note_rounded,
-                      isSelected: currentTab == SidebarTab.allMusic,
-                      onTap: () => onTabSelected(SidebarTab.allMusic),
+                        // [板块二：播放列表]
+                        _buildSectionHeader('播放列表'),
+                        _buildNavItem(
+                          tab: SidebarTab.allMusic,
+                          label: '所有音乐',
+                          iconData: Icons.music_note_rounded,
+                          isSelected: widget.currentTab == SidebarTab.allMusic,
+                          onTap: () => widget.onTabSelected(SidebarTab.allMusic),
+                        ),
+
+                        // 用户自定义歌单列表
+                        for (final pl in widget.playlists)
+                          _buildNavItem(
+                            tab: SidebarTab.customPlaylist,
+                            label: pl.name,
+                            iconData: Icons.queue_music_rounded,
+                            isSelected: widget.currentTab == SidebarTab.customPlaylist &&
+                                widget.selectedPlaylistId == pl.id,
+                            onTap: () => widget.onPlaylistSelected(pl.id),
+                            trailing: widget.onDeletePlaylist != null
+                                ? GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => _confirmDeletePlaylist(context, pl.id, pl.name),
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(4.0),
+                                      child: Icon(
+                                        Icons.close_rounded,
+                                        size: 13.0,
+                                        color: UIConfig.textMuted,
+                                      ),
+                                    ),
+                                  )
+                                : null,
+                          ),
+
+                        // 添加播放列表按钮 (树莓派屏幕无软键盘故在端侧隐藏，保留在 Web 遥控中枢通过手机/电脑创建)
+                        if (!Platform.isLinux)
+                          _buildNavItem(
+                            tab: null,
+                            label: '添加播放列表',
+                            iconData: Icons.add_rounded,
+                            isSelected: false,
+                            onTap: widget.onCreatePlaylist,
+                          ),
+                      ],
                     ),
-
-                    // 用户自定义歌单列表
-                    for (final pl in playlists)
-                      _buildNavItem(
-                        tab: SidebarTab.customPlaylist,
-                        label: pl.name,
-                        iconData: Icons.queue_music_rounded,
-                        isSelected: currentTab == SidebarTab.customPlaylist &&
-                            selectedPlaylistId == pl.id,
-                        onTap: () => onPlaylistSelected(pl.id),
-                      ),
-
-                    // 添加播放列表按钮 (树莓派屏幕无软键盘故在端侧隐藏，保留在 Web 遥控中枢通过手机/电脑创建)
-                    if (!Platform.isLinux)
-                      _buildNavItem(
-                        tab: null,
-                        label: '添加播放列表',
-                        iconData: Icons.add_rounded,
-                        isSelected: false,
-                        onTap: onCreatePlaylist,
-                      ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -152,7 +242,7 @@ class MacSidebarWidget extends StatelessWidget {
             height: UIConfig.dacCardHeight,
             borderRadius: UIConfig.containerRounding,
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            onTap: onDacClicked,
+            onTap: widget.onDacClicked,
             child: Row(
               children: [
                 // 状态指示灯 (绿灯：已连接，灰灯：未连接)
@@ -161,10 +251,10 @@ class MacSidebarWidget extends StatelessWidget {
                   height: 6.0,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isDacConnected
+                    color: widget.isDacConnected
                         ? UIConfig.dacConnected
                         : UIConfig.dacDisconnected,
-                    boxShadow: isDacConnected
+                    boxShadow: widget.isDacConnected
                         ? [
                             BoxShadow(
                               color: UIConfig.dacConnected.withValues(alpha: 0.55),
@@ -178,19 +268,19 @@ class MacSidebarWidget extends StatelessWidget {
                 const SizedBox(width: 10.0),
                 Expanded(
                   child: Text(
-                    isDacConnected ? dacName : 'DAC: 未连接',
+                    widget.isDacConnected ? widget.dacName : 'DAC: 未连接',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: UIConfig.fontRegular,
-                      color: isDacConnected
+                      color: widget.isDacConnected
                           ? UIConfig.textNormal
                           : UIConfig.textMuted,
                       fontWeight:
-                          isDacConnected ? FontWeight.w500 : FontWeight.normal,
+                          widget.isDacConnected ? FontWeight.w500 : FontWeight.normal,
                     ),
                   ),
                 ),
-                if (temperatureText != null) ...[
+                if (widget.temperatureText != null) ...[
                   const SizedBox(width: 4.0),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 2.0),
@@ -199,7 +289,7 @@ class MacSidebarWidget extends StatelessWidget {
                       borderRadius: BorderRadius.circular(4.0),
                     ),
                     child: Text(
-                      temperatureText!,
+                      widget.temperatureText!,
                       style: const TextStyle(
                         fontSize: 10.0,
                         color: Color(0xFF38BDF8),
@@ -236,6 +326,7 @@ class MacSidebarWidget extends StatelessWidget {
     required IconData iconData,
     required bool isSelected,
     required VoidCallback onTap,
+    Widget? trailing,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1.0),
@@ -293,6 +384,7 @@ class MacSidebarWidget extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (trailing != null) trailing,
               ],
             ),
           ),

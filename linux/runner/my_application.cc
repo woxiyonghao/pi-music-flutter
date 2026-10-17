@@ -16,7 +16,28 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
-  gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+  GtkWidget* toplevel = gtk_widget_get_toplevel(GTK_WIDGET(view));
+  gtk_widget_show(toplevel);
+
+  const char* kiosk_env = getenv("PI_KIOSK");
+  if (kiosk_env && strcmp(kiosk_env, "1") == 0) {
+    GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(view));
+    GdkCursor* blank_cursor = gdk_cursor_new_from_name(display, "default");
+    if (!blank_cursor) {
+      blank_cursor = gdk_cursor_new_from_name(display, "left_ptr");
+    }
+    if (blank_cursor) {
+      GdkWindow* toplevel_win = gtk_widget_get_window(toplevel);
+      if (toplevel_win) {
+        gdk_window_set_cursor(toplevel_win, blank_cursor);
+      }
+      GdkWindow* view_win = gtk_widget_get_window(GTK_WIDGET(view));
+      if (view_win) {
+        gdk_window_set_cursor(view_win, blank_cursor);
+      }
+      g_object_unref(blank_cursor);
+    }
+  }
 }
 
 // Implements GApplication::activate.
@@ -88,9 +109,9 @@ static void my_application_activate(GApplication* application) {
 
   if (is_pi_kiosk) {
     GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(view));
-    GdkCursor* blank_cursor = gdk_cursor_new_for_display(display, GDK_BLANK_CURSOR);
+    GdkCursor* blank_cursor = gdk_cursor_new_from_name(display, "default");
     if (!blank_cursor) {
-      blank_cursor = gdk_cursor_new_from_name(display, "none");
+      blank_cursor = gdk_cursor_new_from_name(display, "left_ptr");
     }
     if (blank_cursor) {
       GdkWindow* gdk_win = gtk_widget_get_window(GTK_WIDGET(window));

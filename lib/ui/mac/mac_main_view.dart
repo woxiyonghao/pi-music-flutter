@@ -297,6 +297,15 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                             MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.customPlaylist.index.toString());
                                           },
                                           onCreatePlaylist: _openCreatePlaylistModal,
+                                          onDeletePlaylist: (plId) {
+                                            MusicDatabaseService.instance.deletePlaylist(plId);
+                                            if (_selectedPlaylistId == plId) {
+                                              setState(() {
+                                                _currentTab = SidebarTab.allMusic;
+                                                _selectedPlaylistId = 0;
+                                              });
+                                            }
+                                          },
                                           onDacClicked: () {
                                             setState(() {
                                               _currentTab = SidebarTab.dacSettings;

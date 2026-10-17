@@ -285,6 +285,16 @@ def test_runner():
         st = http_get("/api/status")
         print(f"  ✅ 播放器状态: is_playing={st.get('is_playing')}, title='{st.get('title')}'")
 
+    # 10. 清理自动化测试创建的临时歌单，保持曲库侧边栏干净整洁
+    print("\n[Step 10] 清理测试临时歌单...")
+    playlists_after = http_get("/api/playlists")
+    for pl in playlists_after.get('playlists', []):
+        if any(pl.get('name', '').startswith(pfx.split('_')[0]) for pfx in test_playlists):
+            ws.send_json({"action": "delete_playlist", "id": pl['id']})
+            time.sleep(0.1)
+            print(f"  ✅ 清理临时歌单: '{pl.get('name')}'")
+    time.sleep(0.3)
+
     ws.close()
     print("\n==================================================================")
     print("🎉 自动化人机交互与全功能模拟测试全部通过！全部功能毫秒级响应！")
