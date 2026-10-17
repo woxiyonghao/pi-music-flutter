@@ -198,7 +198,13 @@ class WifiTransferService extends ChangeNotifier {
       return;
     }
 
-    // 3. POST /upload: 接收音频二进制数据流
+    // 3. POST /upload_chunk: 分片流式接收超大无损母带/镜像 (断点续传与抗弱网)
+    if (request.method == 'POST' && path.startsWith('/upload_chunk')) {
+      await _handleChunkUpload(request);
+      return;
+    }
+
+    // 4. POST /upload: 接收单次音频二进制数据流
     if (request.method == 'POST' && path.startsWith('/upload')) {
       await _handleFileUpload(request);
       return;
@@ -210,7 +216,119 @@ class WifiTransferService extends ChangeNotifier {
     await request.response.close();
   }
 
-  /// 接收并落地音乐文件二进制流
+  /// 分片流式接收超大音频文件 (WAV/DSD/ISO/FLAC)
+  Future<void> _handleChunkUpload(HttpRequest request) async {
+    final query = request.uri.queryParameters;
+    String filename = 'uploaded_track.flac';
+    final queryName = query['filename'];
+    if (queryName != null && queryName.isNotEmpty) {
+      try {
+        filename = Uri.decodeComponent(queryName);
+      } catch (_) {
+        filename = queryName;
+      }
+    }
+
+    // 文件名安全过滤 (防路径穿越)
+    filename = filename
+        .replaceAll('/', '_')
+        .replaceAll(r'\', '_')
+        .replaceAll('..', '_')
+        .trim();
+    if (filename.isEmpty) {
+      filename = 'track_${DateTime.now().millisecondsSinceEpoch}.flac';
+    }
+
+    final chunkIndex = int.tryParse(query['chunk'] ?? '0') ?? 0;
+    final totalChunks = int.tryParse(query['totalChunks'] ?? '1') ?? 1;
+    final totalBytes = int.tryParse(query['totalBytes'] ?? '0') ?? 0;
+
+    final targetDir = Directory(_targetDir);
+    if (!targetDir.existsSync()) {
+      try {
+        targetDir.createSync(recursive: true);
+      } catch (_) {}
+    }
+
+    final tempFile = File('${targetDir.path}/$filename.part');
+    final finalFile = File('${targetDir.path}/$filename');
+
+    try {
+      // 首片：重置旧的残余分片文件
+      if (chunkIndex == 0 && tempFile.existsSync()) {
+        try {
+          tempFile.deleteSync();
+        } catch (_) {}
+      }
+
+      final sink = tempFile.openWrite(
+        mode: chunkIndex == 0 ? FileMode.write : FileMode.append,
+      );
+
+      int chunkBytes = 0;
+      await sink.addStream(request.map((c) {
+        chunkBytes += c.length;
+        return c;
+      }));
+      await sink.flush();
+      await sink.close();
+
+      final isLastChunk = chunkIndex >= totalChunks - 1;
+      if (isLastChunk) {
+        // 覆盖旧文件 (如有同名)
+        if (finalFile.existsSync()) {
+          try {
+            finalFile.deleteSync();
+          } catch (_) {}
+        }
+        await tempFile.rename(finalFile.path);
+
+        final actualSize = finalFile.existsSync() ? finalFile.lengthSync() : totalBytes;
+        final record = UploadedMusicFile(
+          name: filename,
+          sizeBytes: actualSize,
+          path: finalFile.path,
+          timestamp: DateTime.now(),
+        );
+        _uploadedFiles.insert(0, record);
+        notifyListeners();
+
+        debugPrint('[WifiTransferService] 分片全部完成: $filename ($actualSize bytes) -> ${finalFile.path}');
+
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode({
+          'status': 'ok',
+          'completed': true,
+          'filename': filename,
+          'bytes': actualSize,
+        }));
+        await request.response.close();
+
+        // 异步入库扫描
+        unawaited(MusicDatabaseService.instance.scanLibrary());
+      } else {
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode({
+          'status': 'ok',
+          'completed': false,
+          'chunk': chunkIndex,
+          'bytes': chunkBytes,
+        }));
+        await request.response.close();
+      }
+    } catch (e) {
+      debugPrint('[WifiTransferService] 分片写入失败: $e');
+      request.response.statusCode = HttpStatus.internalServerError;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'status': 'error',
+        'message': '分片写入失败: $e',
+      }));
+      await request.response.close();
+    }
+  }
+
+  /// 接收并落地单次上传音频文件二进制流
   Future<void> _handleFileUpload(HttpRequest request) async {
     // 解析文件名
     String filename = 'uploaded_track.flac';
@@ -258,10 +376,10 @@ class WifiTransferService extends ChangeNotifier {
       final sink = tempFile.openWrite();
       int totalBytes = 0;
 
-      await for (final chunk in request) {
-        sink.add(chunk);
+      await sink.addStream(request.map((chunk) {
         totalBytes += chunk.length;
-      }
+        return chunk;
+      }));
 
       await sink.flush();
       await sink.close();

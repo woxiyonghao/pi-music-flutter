@@ -116,9 +116,9 @@ input[type="file"] { display: none; }
       <div class="drop-title">拖拽音频文件到此处，或点击浏览文件</div>
       <div class="drop-sub">支持单选、多选或批量拖拽，传输完毕后数播自动更新曲库</div>
       <div class="file-formats">
-        <span>FLAC</span><span>WAV</span><span>DSF</span><span>DFF</span><span>APE</span><span>MP3</span><span>M4A</span><span>AAC</span>
+        <span>FLAC</span><span>WAV</span><span>CUE</span><span>DSF</span><span>DFF</span><span>APE</span><span>MP3</span><span>M4A</span><span>AAC</span>
       </div>
-      <input type="file" id="fileInput" multiple accept=".flac,.wav,.dsf,.dff,.ape,.mp3,.m4a,.aac,.ogg,.wma,audio/*">
+      <input type="file" id="fileInput" multiple accept=".flac,.wav,.cue,.dsf,.dff,.ape,.mp3,.m4a,.aac,.ogg,.wma,.iso,audio/*">
     </div>
     <div class="actions">
       <button class="btn btn-primary" id="btnUpload" disabled>开始批量传输 (0)</button>
@@ -279,77 +279,99 @@ btnUpload.addEventListener('click', async () => {
 });
 
 function uploadSingleFile(item) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    const encodedName = encodeURIComponent(item.file.name);
-    xhr.open('POST', `/upload?filename=${encodedName}`);
-    xhr.timeout = 0; // 取消固定硬限制，支持超大无损母带(700MB WAV/2GB DSD)
+  const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB 分片 (针对弱网与大型 WAV/DSD 极速安全流转)
+  const file = item.file;
 
+  // 小于等于 2MB 的文件 (例如 CUE 分轨表、短音频) 走单片快速传输
+  if (file.size <= CHUNK_SIZE) {
+    return uploadSingleChunk(file, file.name, 0, 1, file.size, (loaded) => {
+      item.loaded = loaded;
+      renderQueue();
+    });
+  }
+
+  // 超大文件 (如 604MB WAV / DSD / SACD 镜像)：智能切片并发重试流式上传
+  return new Promise(async (resolve, reject) => {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     let startTime = Date.now();
     let lastLoaded = 0;
-    let inactivityTimer = null;
 
-    // 活跃看门狗：仅当持续无数据推进时才判定断流超时 (针对大文件提供充足落盘与入库宽限时间)
-    function resetInactivityTimer(ms = 180000) {
-      if (inactivityTimer) clearTimeout(inactivityTimer);
-      inactivityTimer = setTimeout(() => {
-        try { xhr.abort(); } catch(_) {}
-        reject(new Error('传输连接停滞 (超时无响应)'));
-      }, ms);
+    for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+      const start = chunkIdx * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunkBlob = file.slice(start, end);
+
+      let success = false;
+      let lastErr = null;
+
+      // 每个分片最多自动重试 5 次 (智能规避 2.4G WiFi 丢包或短暂信道拥堵)
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        try {
+          await uploadSingleChunk(chunkBlob, file.name, chunkIdx, totalChunks, file.size, (chunkLoaded) => {
+            item.loaded = start + chunkLoaded;
+            let now = Date.now();
+            let elapsed = (now - startTime) / 1000;
+            if (elapsed > 0.3) {
+              let speedVal = ((item.loaded - lastLoaded) / elapsed / 1024 / 1024).toFixed(1);
+              item.speed = `${speedVal} MB/s`;
+              overallSpeed.textContent = `传输中: ${file.name} (${chunkIdx + 1}/${totalChunks}片) · ${item.speed}`;
+              startTime = now;
+              lastLoaded = item.loaded;
+              renderQueue();
+            }
+          });
+          success = true;
+          break;
+        } catch (err) {
+          lastErr = err;
+          console.warn(`[WiFiUpload] 分片 ${chunkIdx + 1}/${totalChunks} 失败，准备第 ${attempt} 次重试...`, err);
+          overallSpeed.textContent = `正在弱网自愈重试 (${chunkIdx + 1}/${totalChunks}片, 第${attempt}次)...`;
+          await new Promise(r => setTimeout(r, 1000 * attempt));
+        }
+      }
+
+      if (!success) {
+        return reject(new Error(`分片 ${chunkIdx + 1}/${totalChunks} 传输失败: ${lastErr ? lastErr.message : '网络中断'}`));
+      }
     }
-    resetInactivityTimer(180000);
+
+    item.loaded = file.size;
+    renderQueue();
+    resolve();
+  });
+}
+
+function uploadSingleChunk(blob, filename, chunkIdx, totalChunks, totalBytes, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const encodedName = encodeURIComponent(filename);
+    xhr.open('POST', `/upload_chunk?filename=${encodedName}&chunk=${chunkIdx}&totalChunks=${totalChunks}&totalBytes=${totalBytes}`);
+    xhr.timeout = 60000; // 每个 2MB 分片给足 60 秒超时窗口
 
     xhr.upload.onprogress = (e) => {
-      resetInactivityTimer(180000);
-      if (e.lengthComputable) {
-        item.loaded = e.loaded;
-        item.total = e.total;
-
-        if (e.loaded === e.total) {
-          overallSpeed.textContent = `已上传 100%，正在校验并入库: ${item.file.name}...`;
-          resetInactivityTimer(300000); // 5分钟大文件落盘与全盘入库宽限时间
-        }
-
-        let now = Date.now();
-        let elapsed = (now - startTime) / 1000;
-        if (elapsed > 0.3) {
-          let speedVal = ((e.loaded - lastLoaded) / elapsed / 1024 / 1024).toFixed(1);
-          item.speed = `${speedVal} MB/s`;
-          if (e.loaded < e.total) {
-            overallSpeed.textContent = `正在传输: ${item.file.name} · ${item.speed}`;
-          }
-          startTime = now;
-          lastLoaded = e.loaded;
-          renderQueue();
-        }
+      if (e.lengthComputable && onProgress) {
+        onProgress(e.loaded);
       }
     };
 
     xhr.onload = () => {
-      if (inactivityTimer) clearTimeout(inactivityTimer);
       if (xhr.status === 200) {
         resolve();
       } else {
-        let msg = '上传失败';
+        let msg = `HTTP ${xhr.status}`;
         try {
-          let resp = JSON.parse(xhr.responseText);
+          const resp = JSON.parse(xhr.responseText);
           if (resp && resp.message) msg = resp.message;
         } catch (_) {}
         reject(new Error(msg));
       }
     };
-    xhr.onerror = () => {
-      if (inactivityTimer) clearTimeout(inactivityTimer);
-      reject(new Error('网络断开或跨域受阻'));
-    };
-    xhr.ontimeout = () => {
-      if (inactivityTimer) clearTimeout(inactivityTimer);
-      reject(new Error('传输超时'));
-    };
-    xhr.onabort = () => {
-      if (inactivityTimer) clearTimeout(inactivityTimer);
-    };
-    xhr.send(item.file);
+
+    xhr.onerror = () => reject(new Error('网络连接中断'));
+    xhr.ontimeout = () => reject(new Error('分片上传超时'));
+    xhr.onabort = () => reject(new Error('上传被中止'));
+
+    xhr.send(blob);
   });
 }
 </script>
