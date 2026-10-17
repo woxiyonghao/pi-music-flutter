@@ -105,6 +105,37 @@ class MusicDatabaseService extends ChangeNotifier {
     ''');
 
     try {
+      final masterSql = db.select("SELECT sql FROM sqlite_master WHERE tbl_name='scanned_tracks' AND type='table';");
+      if (masterSql.isNotEmpty) {
+        final sql = masterSql.first['sql'] as String? ?? '';
+        if (sql.contains('file_path TEXT UNIQUE')) {
+          db.execute('''
+            CREATE TABLE scanned_tracks_migration (
+              id INTEGER PRIMARY KEY,
+              title TEXT NOT NULL,
+              artist TEXT NOT NULL,
+              album TEXT NOT NULL,
+              file_path TEXT NOT NULL,
+              format INTEGER NOT NULL,
+              sample_rate INTEGER NOT NULL,
+              bit_depth INTEGER NOT NULL,
+              duration_sec INTEGER NOT NULL,
+              start_time_sec REAL DEFAULT 0.0,
+              end_time_sec REAL DEFAULT 0.0,
+              cue_path TEXT DEFAULT '',
+              track_number INTEGER DEFAULT 0,
+              is_cue_track INTEGER DEFAULT 0
+            );
+            INSERT INTO scanned_tracks_migration SELECT 
+              id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec,
+              start_time_sec, end_time_sec, cue_path, track_number, is_cue_track
+            FROM scanned_tracks;
+            DROP TABLE scanned_tracks;
+            ALTER TABLE scanned_tracks_migration RENAME TO scanned_tracks;
+          ''');
+        }
+      }
+
       final info = db.select('PRAGMA table_info(scanned_tracks);');
       final existingCols = info.map((row) => row['name'] as String).toSet();
       if (!existingCols.contains('is_cue_track')) {
