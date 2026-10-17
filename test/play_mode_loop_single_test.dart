@@ -102,6 +102,7 @@ void main() {
       final ok = await web.start(port: port);
       expect(ok, isTrue);
 
+      HttpOverrides.global = null;
       final client = HttpClient();
       try {
         // 1. 设置单曲循环模式
