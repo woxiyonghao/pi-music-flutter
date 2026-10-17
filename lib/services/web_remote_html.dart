@@ -734,9 +734,12 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
       <div class="settings-row">
         <div>
           <div class="settings-lbl">WiFi 网页无线传歌</div>
-          <div class="settings-sub">打开同机 8080 端口上传音乐</div>
+          <div class="settings-sub" id="wifiStatusSub">8080 端口高速局域网传歌服务</div>
         </div>
-        <a id="btnWifiUploadLink" href="#" target="_blank" class="btn-sm" style="text-decoration:none; display:inline-block;">打开传歌页面 &rarr;</a>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <a id="btnWifiUploadLink" href="#" target="_blank" class="btn-sm" style="text-decoration:none; display:inline-block;">打开传歌 &rarr;</a>
+          <button id="btnWifiToggle" class="btn-sm" style="min-width:68px;">关闭服务</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1007,6 +1010,32 @@ function updateState(s) {
   } else {
     bp.textContent = '软件混音';
     bp.className = 'badge disconnected';
+  }
+
+  // WiFi 传歌服务状态
+  const wifiToggleBtn = document.getElementById('btnWifiToggle');
+  const wifiStatusSub = document.getElementById('wifiStatusSub');
+  const wifiUploadLink = document.getElementById('btnWifiUploadLink');
+  if (s.wifi_running !== undefined) {
+    if (wifiToggleBtn) {
+      if (s.wifi_running) {
+        wifiToggleBtn.textContent = '关闭服务';
+        wifiToggleBtn.style.color = '#ef4444';
+        wifiToggleBtn.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+      } else {
+        wifiToggleBtn.textContent = '开启服务';
+        wifiToggleBtn.style.color = '#10b981';
+        wifiToggleBtn.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+      }
+    }
+    if (wifiStatusSub) {
+      wifiStatusSub.textContent = s.wifi_running
+          ? '8080 端口服务运行中 · 手机电脑随时上传'
+          : '服务已停止 (节省硬件资源)';
+    }
+    if (wifiUploadLink) {
+      wifiUploadLink.style.display = s.wifi_running ? 'inline-block' : 'none';
+    }
   }
 }
 
@@ -1485,8 +1514,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // WiFi 网页传歌跳转链接
-  document.getElementById('btnWifiUploadLink').href = window.location.protocol + '//' + window.location.hostname + ':8080';
+  // WiFi 网页传歌跳转链接与开关控制
+  const wifiLink = document.getElementById('btnWifiUploadLink');
+  if (wifiLink) {
+    wifiLink.href = window.location.protocol + '//' + window.location.hostname + ':8080';
+  }
+  const btnWifiToggle = document.getElementById('btnWifiToggle');
+  if (btnWifiToggle) {
+    btnWifiToggle.addEventListener('click', () => {
+      const isCurrentlyRunning = btnWifiToggle.textContent.includes('关闭');
+      sendAction({ action: 'set_wifi_transfer', enabled: !isCurrentlyRunning });
+    });
+  }
 });
 </script>
 </body>

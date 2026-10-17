@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../models/sidebar_tab.dart';
 import '../../models/track.dart';
@@ -114,7 +115,14 @@ class _MacSidebarWidgetState extends State<MacSidebarWidget> {
               borderRadius: UIConfig.containerRounding,
               padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
               child: ScrollConfiguration(
-                behavior: const MouseDraggableScrollBehavior(),
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  scrollbars: false,
+                  dragDevices: {
+                    PointerDeviceKind.touch,
+                    PointerDeviceKind.stylus,
+                    PointerDeviceKind.invertedStylus,
+                  },
+                ),
                 child: RawScrollbar(
                   controller: _scrollController,
                   thumbVisibility: false,
@@ -335,71 +343,112 @@ class _MacSidebarWidgetState extends State<MacSidebarWidget> {
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1.5),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Material(
-            color: Colors.transparent,
+      child: _SidebarNavButton(
+        label: label,
+        iconData: iconData,
+        isSelected: isSelected,
+        onTap: onTap,
+        trailing: trailing,
+      ),
+    );
+  }
+}
+
+class _SidebarNavButton extends StatefulWidget {
+  final String label;
+  final IconData iconData;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Widget? trailing;
+
+  const _SidebarNavButton({
+    required this.label,
+    required this.iconData,
+    required this.isSelected,
+    required this.onTap,
+    this.trailing,
+  });
+
+  @override
+  State<_SidebarNavButton> createState() => _SidebarNavButtonState();
+}
+
+class _SidebarNavButtonState extends State<_SidebarNavButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = ThemeService.instance.accentColor;
+    final isSelected = widget.isSelected;
+
+    Color bg;
+    if (isSelected) {
+      bg = accent.withValues(alpha: 0.16);
+    } else if (_isHovered) {
+      bg = Colors.white.withValues(alpha: 0.08);
+    } else {
+      bg = Colors.transparent;
+    }
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) {
+        if (!_isHovered) setState(() => _isHovered = true);
+      },
+      onExit: (_) {
+        if (_isHovered) setState(() => _isHovered = false);
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 36.0,
+          padding: const EdgeInsets.symmetric(horizontal: 12.0),
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                height: 36.0,
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
-                  color: isSelected
-                      ? ThemeService.instance.accentColor.withValues(alpha: 0.16)
-                      : Colors.transparent,
-                  border: isSelected
-                      ? Border.all(
-                          color: ThemeService.instance.accentColor.withValues(alpha: 0.65),
-                          width: 1.0,
-                        )
-                      : null,
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: ThemeService.instance.accentColor.withValues(alpha: 0.28),
-                            blurRadius: 8.0,
-                            spreadRadius: 1.0,
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      iconData,
-                      size: 16.0,
-                      color: isSelected
-                          ? ThemeService.instance.accentColor
-                          : UIConfig.iconNormal,
+            color: bg,
+            border: isSelected
+                ? Border.all(
+                    color: accent.withValues(alpha: 0.65),
+                    width: 1.0,
+                  )
+                : null,
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.28),
+                      blurRadius: 8.0,
+                      spreadRadius: 1.0,
                     ),
-                    const SizedBox(width: 12.0),
-                    Expanded(
-                      child: Text(
-                        label,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: UIConfig.fontRegular,
-                          color: isSelected
-                              ? UIConfig.textActive
-                              : UIConfig.textNormal,
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                    if (trailing != null) trailing,
-                  ],
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                widget.iconData,
+                size: 16.0,
+                color: isSelected
+                    ? accent
+                    : (_isHovered ? UIConfig.textActive : UIConfig.iconNormal),
+              ),
+              const SizedBox(width: 12.0),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: UIConfig.fontRegular,
+                    color: isSelected
+                        ? UIConfig.textActive
+                        : (_isHovered ? UIConfig.textActive : UIConfig.textNormal),
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  ),
                 ),
               ),
-            ),
+              if (widget.trailing != null) widget.trailing!,
+            ],
           ),
         ),
       ),
