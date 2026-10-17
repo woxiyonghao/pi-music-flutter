@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'core/app_paths.dart';
 import 'core/platform_helper.dart';
 import 'services/web_remote_service.dart';
+import 'services/wifi_transfer_service.dart';
 import 'theme/hifi_theme.dart';
 import 'theme/ui_config.dart';
 import 'ui/iphone/iphone_main_view.dart';
@@ -17,9 +18,10 @@ void main() async {
   await AppPaths.init();
   runApp(const HiFiPlayerApp());
 
-  // 1:1 对齐 C++ Application.cpp，启动后台 Web 远程遥控服务 (默认开启 8088 端口遥控中枢，WiFi 传歌默认保持关闭)
+  // 启动后台 Web 远程遥控服务 (8088 端口) 与局域网极速无线传歌服务 (8080 端口)
   if (!Platform.environment.containsKey('FLUTTER_TEST')) {
     WebRemoteService.instance.start(port: 8088);
+    WifiTransferService.instance.start(port: 8080);
   }
 }
 
