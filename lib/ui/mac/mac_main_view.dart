@@ -400,11 +400,33 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                             value: effectiveVisualizer,
                                             dropdownColor: const Color(0xFF161B24),
                                             icon: Icon(Icons.style_rounded, size: 16, color: theme.accentColor),
-                                            style: const TextStyle(fontSize: 11, color: UIConfig.textActive, fontWeight: FontWeight.bold),
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: UIConfig.textActive,
+                                              fontWeight: FontWeight.bold,
+                                              fontFamilyFallback: [
+                                                'WenQuanYi Micro Hei',
+                                                'WenQuanYi Zen Hei',
+                                                'Noto Sans CJK SC',
+                                                'PingFang SC',
+                                                'sans-serif',
+                                              ],
+                                            ),
                                             items: VisualizerType.values.map((type) {
                                               return DropdownMenuItem<VisualizerType>(
                                                 value: type,
-                                                child: Text(type.displayName),
+                                                child: Text(
+                                                  type.displayName,
+                                                  style: const TextStyle(
+                                                    fontFamilyFallback: [
+                                                      'WenQuanYi Micro Hei',
+                                                      'WenQuanYi Zen Hei',
+                                                      'Noto Sans CJK SC',
+                                                      'PingFang SC',
+                                                      'sans-serif',
+                                                    ],
+                                                  ),
+                                                ),
                                               );
                                             }).toList(),
                                             onChanged: (newType) {
