@@ -373,11 +373,21 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
 }
 
 void AudioEngine::play() {
-    if (isIdle()) return;
+    if (is_playing_.load(std::memory_order_acquire)) {
+        return;
+    }
     if (is_paused_.load(std::memory_order_acquire)) {
         is_paused_.store(false, std::memory_order_release);
         is_playing_.store(true, std::memory_order_release);
         if (sink_) sink_->start();
+        return;
+    }
+    // 若当前处于空闲但解码器与音频接收端依然就绪（如自然播完后重播或 Seek 后恢复）
+    std::lock_guard lock(decoder_mutex_);
+    if (decoder_ && sink_ && sink_->isOpen()) {
+        is_playing_.store(true, std::memory_order_release);
+        is_paused_.store(false, std::memory_order_release);
+        sink_->start();
     }
 }
 

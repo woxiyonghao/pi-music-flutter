@@ -287,7 +287,20 @@ class WebRemoteService extends ChangeNotifier {
       } else if (path == '/api/prev') {
         audio.previous();
       } else if (path == '/api/mode') {
-        audio.cyclePlayMode();
+        final m = request.uri.queryParameters['mode'];
+        if (m != null) {
+          if (m == 'single' || m == 'loopSingle') {
+            audio.setPlayMode(PlayMode.loopSingle);
+          } else if (m == 'shuffle') {
+            audio.setPlayMode(PlayMode.shuffle);
+          } else if (m == 'seq' || m == 'sequence') {
+            audio.setPlayMode(PlayMode.sequence);
+          } else if (m == 'list' || m == 'loopList') {
+            audio.setPlayMode(PlayMode.loopList);
+          }
+        } else {
+          audio.cyclePlayMode();
+        }
       } else if (path == '/api/mute') {
         audio.toggleMute();
       } else if (path == '/api/seek') {
@@ -388,6 +401,19 @@ class WebRemoteService extends ChangeNotifier {
           break;
         case 'mode':
           audio.cyclePlayMode();
+          broadcastState();
+          break;
+        case 'set_mode':
+          final m = cmd['mode'] as String?;
+          if (m == 'single' || m == 'loopSingle') {
+            audio.setPlayMode(PlayMode.loopSingle);
+          } else if (m == 'shuffle') {
+            audio.setPlayMode(PlayMode.shuffle);
+          } else if (m == 'seq' || m == 'sequence') {
+            audio.setPlayMode(PlayMode.sequence);
+          } else if (m == 'list' || m == 'loopList') {
+            audio.setPlayMode(PlayMode.loopList);
+          }
           broadcastState();
           break;
         case 'mute':

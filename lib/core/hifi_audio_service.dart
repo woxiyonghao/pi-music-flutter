@@ -172,7 +172,7 @@ class HifiAudioService extends ChangeNotifier {
         );
         isPlayingNotifier.value = false;
         notifyListeners();
-        next();
+        next(isAutomatic: true);
         return;
       }
 
@@ -423,7 +423,7 @@ class HifiAudioService extends ChangeNotifier {
     playTrack(_playlistQueue[_currentIndex]);
   }
 
-  void next() {
+  void next({bool isAutomatic = false}) {
     if (_playlistQueue.isEmpty) return;
     if (_consecutiveErrors >= _playlistQueue.length) {
       _consecutiveErrors = 0;
@@ -434,9 +434,17 @@ class HifiAudioService extends ChangeNotifier {
     _hasConfirmedPlaying = false;
     switch (_playMode) {
       case PlayMode.loopSingle:
-        seek(0.0);
-        play();
-        return;
+        if (isAutomatic) {
+          // 自然播完单曲循环模式：重新播放当前曲目
+          final trackToReplay = _currentTrack ?? (_playlistQueue.isNotEmpty ? _playlistQueue[_currentIndex] : null);
+          if (trackToReplay != null) {
+            playTrack(trackToReplay);
+            return;
+          }
+        }
+        // 用户手动点击下一曲或队列无当前曲：切到队列的下一首
+        _currentIndex = (_currentIndex + 1) % _playlistQueue.length;
+        break;
       case PlayMode.shuffle:
         if (_playlistQueue.length > 1) {
           int nextIdx;
@@ -480,6 +488,26 @@ class HifiAudioService extends ChangeNotifier {
   void clearQueue() {
     _playlistQueue.clear();
     _currentIndex = -1;
+    notifyListeners();
+  }
+
+  void setPlayMode(PlayMode mode) {
+    if (_playMode == mode) return;
+    _playMode = mode;
+    _state = PlaybackState(
+      isPlaying: _state.isPlaying,
+      isPaused: _state.isPaused,
+      isBitPerfect: _state.isBitPerfect,
+      currentTime: _state.currentTime,
+      duration: _state.duration,
+      progress: _state.progress,
+      volume: _state.volume,
+      isMuted: _state.isMuted,
+      playMode: _playMode,
+      activeDeviceName: _state.activeDeviceName,
+      activeSampleRate: _state.activeSampleRate,
+      spectrumLevels: _state.spectrumLevels,
+    );
     notifyListeners();
   }
 
