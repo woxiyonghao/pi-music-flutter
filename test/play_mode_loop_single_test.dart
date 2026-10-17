@@ -106,7 +106,7 @@ void main() {
       final client = HttpClient();
       try {
         // 1. 设置单曲循环模式
-        final req1 = await client.getUrl(Uri.parse('http://127.0.0.1:$port/api/mode?mode=single'));
+        final req1 = await client.postUrl(Uri.parse('http://127.0.0.1:$port/api/mode?mode=single'));
         final resp1 = await req1.close();
         expect(resp1.statusCode, HttpStatus.ok);
 
@@ -118,7 +118,7 @@ void main() {
         expect(HifiAudioService.instance.playMode, PlayMode.loopSingle);
 
         // 2. 切换到列表循环模式
-        final req2 = await client.getUrl(Uri.parse('http://127.0.0.1:$port/api/mode?mode=list'));
+        final req2 = await client.postUrl(Uri.parse('http://127.0.0.1:$port/api/mode?mode=list'));
         final resp2 = await req2.close();
         expect(resp2.statusCode, HttpStatus.ok);
 
