@@ -10,7 +10,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   final track1 = Track(
-    id: 'track_1',
+    id: 1,
     title: '海阔天空',
     artist: 'Beyond',
     album: 'Words & Music',
@@ -22,7 +22,7 @@ void main() {
   );
 
   final track2 = Track(
-    id: 'track_2',
+    id: 2,
     title: '光辉岁月',
     artist: 'Beyond',
     album: 'Words & Music',
@@ -62,7 +62,7 @@ void main() {
       final service = HifiAudioService.instance;
       service.playTracks([track1, track2], 0);
 
-      expect(service.currentTrack?.id, 'track_1');
+      expect(service.currentTrack?.id, 1);
       expect(service.currentIndex, 0);
 
       service.setPlayMode(PlayMode.loopSingle);
@@ -71,7 +71,7 @@ void main() {
       service.next(isAutomatic: true);
 
       // 验证单曲循环模式下依然播放 track1，不会跳到 track2 也不会停播
-      expect(service.currentTrack?.id, 'track_1');
+      expect(service.currentTrack?.id, 1);
       expect(service.currentIndex, 0);
       expect(service.state.isPlaying, true);
     });
@@ -85,13 +85,13 @@ void main() {
       service.next(isAutomatic: false);
 
       // 手动下一曲应允许切歌到 track2
-      expect(service.currentTrack?.id, 'track_2');
+      expect(service.currentTrack?.id, 2);
       expect(service.currentIndex, 1);
       expect(service.state.isPlaying, true);
 
       // track2 自然播完后应继续单曲循环 track2
       service.next(isAutomatic: true);
-      expect(service.currentTrack?.id, 'track_2');
+      expect(service.currentTrack?.id, 2);
       expect(service.currentIndex, 1);
     });
 
