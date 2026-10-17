@@ -257,6 +257,15 @@ class WebRemoteService extends ChangeNotifier {
       } else if (path == '/api/volume') {
         final val = double.tryParse(request.uri.queryParameters['value'] ?? '');
         if (val != null) audio.setVolume(val);
+      } else if (path == '/api/theme') {
+        final id = int.tryParse(request.uri.queryParameters['id'] ?? '');
+        if (id != null) ThemeService.instance.setTheme(id);
+      } else if (path == '/api/visual_mode') {
+        final id = int.tryParse(request.uri.queryParameters['id'] ?? '');
+        if (id != null) ThemeService.instance.setBackgroundVisualMode(id);
+      } else if (path == '/api/eq') {
+        final en = request.uri.queryParameters['enabled'];
+        if (en != null) audio.setEqEnabled(en == 'true' || en == '1');
       }
 
       broadcastState();

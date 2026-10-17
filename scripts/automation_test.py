@@ -19,6 +19,10 @@ import socket
 import urllib.request
 import urllib.error
 
+# 屏蔽本地 HTTP 代理对局域网及本机的拦截
+os.environ['no_proxy'] = '*'
+os.environ['NO_PROXY'] = '*'
+
 HOST = sys.argv[1] if len(sys.argv) > 1 else "192.168.1.200"
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8088
 
@@ -44,7 +48,16 @@ class SimpleWebSocketClient:
             f"Sec-WebSocket-Version: 13\r\n\r\n"
         )
         self.sock.sendall(req.encode('utf-8'))
-        resp = self.sock.recv(4096).decode('utf-8', errors='ignore')
+        
+        # 精确读取握手响应头至 \r\n\r\n，避免吞噬后续 WebSocket 二进制数据帧
+        header_bytes = bytearray()
+        while b"\r\n\r\n" not in header_bytes:
+            chunk = self.sock.recv(1)
+            if not chunk:
+                raise ConnectionError("Server closed connection during handshake")
+            header_bytes.extend(chunk)
+            
+        resp = header_bytes.decode('utf-8', errors='ignore')
         if "101 Switching Protocols" not in resp:
             raise ConnectionError(f"WebSocket 握手失败: {resp}")
 

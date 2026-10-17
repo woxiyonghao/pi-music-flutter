@@ -9,10 +9,10 @@
 # 5. 持续写入 /home/winheo/longevity_3h.log 与 /home/winheo/longevity_summary.json
 # ==============================================================================
 
-DURATION_SEC=${1:-7200} # 默认 2 小时 (7200 秒)
+DURATION_SEC=${1:-10800} # 默认 3 小时 (10800 秒)
 DURATION_HOURS=$(awk "BEGIN {printf \"%.1f\", $DURATION_SEC / 3600}")
 INTERVAL_SEC=10
-LOG_FILE=${2:-"/home/winheo/longevity_2h.log"}
+LOG_FILE=${2:-"/home/winheo/longevity_3h.log"}
 SUMMARY_FILE=${3:-"/home/winheo/longevity_summary.json"}
 
 START_TIME=$(date +%s)
@@ -39,22 +39,28 @@ while [ $(date +%s) -lt $END_TIME ]; do
     REMAINING=$((END_TIME - NOW))
     SAMPLE_COUNT=$((SAMPLE_COUNT + 1))
     
-    # 1. 查找目标 Flutter 进程
-    APP_PID=$(pgrep -f "hide_player_flutter" | head -n 1)
+    # 1. 准确定位 Flutter 应用主进程 (避免误取 cage 混成器 PID)
+    APP_PID=$(pidof hide_player_flutter 2>/dev/null | awk '{print $1}')
+    if [ -z "$APP_PID" ]; then
+        APP_PID=$(pgrep -f "bundle/hide_player_flutter" 2>/dev/null | head -n 1)
+    fi
     
     CPU="0.0"
     RSS_MB="0.0"
     if [ -n "$APP_PID" ]; then
         CPU=$(ps -p "$APP_PID" -o %cpu --no-headers 2>/dev/null | tr -d ' ' || echo "0.0")
         RSS_KB=$(ps -p "$APP_PID" -o rss --no-headers 2>/dev/null | tr -d ' ' || echo "0")
+        CPU=${CPU:-0.0}
+        RSS_KB=${RSS_KB:-0}
         RSS_MB=$(awk "BEGIN {printf \"%.1f\", $RSS_KB / 1024}")
     else
         CRASH_COUNT=$((CRASH_COUNT + 1))
     fi
 
-    # 2. 测量 SoC 温度
+    # 2. 测量 SoC 温度与系统负载
     TEMP_RAW=$(cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo "0")
     TEMP_C=$(awk "BEGIN {printf \"%.1f\", $TEMP_RAW / 1000}")
+    SYS_LOAD=$(awk '{print $1}' /proc/loadavg 2>/dev/null || echo "0.0")
 
     # 3. 测量 Web API 响应与延迟
     T0=$(date +%s%N)
@@ -86,7 +92,7 @@ while [ $(date +%s) -lt $END_TIME ]; do
     AVG_TEMP=$(awk "BEGIN {printf \"%.1f\", $TOTAL_TEMP / $SAMPLE_COUNT}")
 
     # 5. 写入实时日志
-    LOG_LINE="[$(date '+%H:%M:%S') | +${ELAPSED}s] Temp: ${TEMP_C}°C (Max: ${MAX_TEMP}°C) | CPU: ${CPU}% (Avg: ${AVG_CPU}%) | Mem: ${RSS_MB}MB | API: ${LATENCY_MS}ms | Play: ${IS_PLAYING} ('${CUR_TITLE}')"
+    LOG_LINE="[$(date '+%H:%M:%S') | +${ELAPSED}s] Temp: ${TEMP_C}°C (Max: ${MAX_TEMP}°C) | CPU: ${CPU}% (Avg: ${AVG_CPU}%) | Mem: ${RSS_MB}MB | Load: ${SYS_LOAD} | API: ${LATENCY_MS}ms | Play: ${IS_PLAYING} ('${CUR_TITLE}')"
     echo "$LOG_LINE" >> "$LOG_FILE"
 
     # 6. 生成 JSON 实时摘要供远程监控
@@ -110,6 +116,7 @@ while [ $(date +%s) -lt $END_TIME ]; do
     "current_mem_mb": $RSS_MB,
     "avg_mem_mb": $AVG_MEM,
     "max_mem_mb": $MAX_MEM,
+    "system_load": $SYS_LOAD,
     "api_latency_ms": $LATENCY_MS,
     "crashes_detected": $CRASH_COUNT,
     "api_errors": $API_ERRORS
