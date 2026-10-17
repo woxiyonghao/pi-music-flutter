@@ -11,6 +11,10 @@ class TapeReelPainter extends CustomPainter {
   final bool isPlaying;
   final double elapsedSec;    // 播放时间秒数
   final Color? accentColor;
+  final double levelL;        // 0.0 ~ 1.0 (左声道/低频电平)
+  final double levelCenter;   // 0.0 ~ 1.0 (中央/峰值电平)
+  final double levelR;        // 0.0 ~ 1.0 (右声道/高频电平)
+  final List<double>? spectrumLevels;
 
   static const Color chassisBg = Color(0xFF0C0906);        // 铸铁深邃黑曜底板
   static const Color panelBg = Color(0xFF16120E);          // 复古暖棕黑拉丝面板
@@ -21,7 +25,7 @@ class TapeReelPainter extends CustomPainter {
   static const Color aluminumGlow = Color(0xFFEEF2F6);     // 铝合金镜面倒角高光
   static const Color hubDark = Color(0xFF0B0E14);          // 3孔镂空内部机械暗腔
   static const Color brassCap = Color(0xFFD4AF37);         // 黄铜三芒星卡齿锁扣
-  static const Color headBlockBg = Color(0xFF1A1F29);      // 磁头基座屏蔽罩
+  static const Color headBlockBg = Color(0xFF141820);      // 磁头/数显表头仓深邃基座
   static const Color badgeGold = Color(0xFFD2B478);        // 经典发烧铭牌金
 
   TapeReelPainter({
@@ -31,6 +35,10 @@ class TapeReelPainter extends CustomPainter {
     required this.isPlaying,
     this.elapsedSec = 0.0,
     this.accentColor,
+    this.levelL = 0.0,
+    this.levelCenter = 0.0,
+    this.levelR = 0.0,
+    this.spectrumLevels,
   });
 
   @override
@@ -67,8 +75,8 @@ class TapeReelPainter extends CustomPainter {
         ..strokeWidth = 2.0,
     );
 
-    // 2. 双开盘带轮几何排版 (左右大轮盘)
-    final maxReelRadius = min(w * 0.22, h * 0.38);
+    // 2. 双开盘/卡座带轮几何排版 (左右大轮盘：按要求减小 12px，并优化左右间距)
+    final maxReelRadius = max(30.0, min(w * 0.22, h * 0.38) - 12.0);
     final minHubRadius = maxReelRadius * 0.36;
 
     // 磁带随进度转移：左盘减小，右盘增大 (严格遵循磁带物理面积平方守恒定律)
@@ -76,9 +84,10 @@ class TapeReelPainter extends CustomPainter {
     final leftTapeR = sqrt(pow(maxReelRadius, 2) - prog * (pow(maxReelRadius, 2) - pow(minHubRadius, 2)));
     final rightTapeR = sqrt(pow(minHubRadius, 2) + prog * (pow(maxReelRadius, 2) - pow(minHubRadius, 2)));
 
-    final reelY = panelRect.top + h * 0.42;
-    final reelLx = panelRect.left + w * 0.28;
-    final reelRx = panelRect.left + w * 0.72;
+    final reelY = panelRect.top + h * 0.39;
+    // 左右间距优化：从原先的 0.28 / 0.72 适当拉开至 0.26 / 0.74，形成舒展典雅的卡座机械轮廓
+    final reelLx = panelRect.left + w * 0.26;
+    final reelRx = panelRect.left + w * 0.74;
 
     final leftCenter = Offset(reelLx, reelY);
     final rightCenter = Offset(reelRx, reelY);
@@ -90,11 +99,11 @@ class TapeReelPainter extends CustomPainter {
     _drawSingleReel(canvas, leftCenter, maxReelRadius, leftTapeR, leftAngle);
     _drawSingleReel(canvas, rightCenter, maxReelRadius, rightTapeR, rightAngle);
 
-    // 5. 中央高保真磁头组 (Erase, Record, Playback 坡莫合金金属屏蔽罩)
-    _drawHeadBlock(canvas, Offset(panelRect.left + w * 0.5, panelRect.top + h * 0.76), maxReelRadius * 1.35, h * 0.20);
+    // 5. 中央高保真磁头与数显电平柱长方体组 (随音频声音大小实时跳动高度)
+    _drawHeadBlock(canvas, Offset(panelRect.left + w * 0.5, panelRect.top + h * 0.74), max(190.0, maxReelRadius * 1.60), h * 0.24);
 
     // 6. 中央数码荧光管走带时间计数器 [ MM : SS ]
-    _drawCounter(canvas, Offset(panelRect.left + w * 0.5, reelY - maxReelRadius * 0.65));
+    _drawCounter(canvas, Offset(panelRect.left + w * 0.5, reelY - maxReelRadius * 0.68));
 
     // 7. 底部经典开盘机铭牌
     _drawFooter(canvas, panelRect);
@@ -257,7 +266,13 @@ class TapeReelPainter extends CustomPainter {
   void _drawHeadBlock(Canvas canvas, Offset center, double width, double height) {
     final rect = Rect.fromCenter(center: center, width: width, height: height);
 
-    // 磁头基座屏蔽罩底板
+    // 1. 磁头仓/数显长方体金属底盘 (铸铁深邃边框 + 微内阴影)
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect.shift(const Offset(0, 4)), const Radius.circular(8)),
+      Paint()..color = const Color(0x60000000),
+    );
+
+    // 坡莫合金屏蔽罩金属面板
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect, const Radius.circular(8)),
       Paint()..color = headBlockBg,
@@ -265,55 +280,172 @@ class TapeReelPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect, const Radius.circular(8)),
       Paint()
-        ..color = const Color(0x35FFFFFF)
+        ..color = const Color(0x40FFFFFF)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2,
     );
 
-    // 三组精密模拟磁头 (消音磁头、录音磁头、放音磁头)
+    // 4角发烧紧固微六角螺钉
+    const screwOffset = 7.0;
+    final screwPaint = Paint()..color = const Color(0xFF4A5568);
+    final screwRim = Paint()
+      ..color = const Color(0x80CAD4DE)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8;
+    for (final corner in [
+      rect.topLeft + const Offset(screwOffset, screwOffset),
+      rect.topRight + const Offset(-screwOffset, screwOffset),
+      rect.bottomLeft + const Offset(screwOffset, -screwOffset),
+      rect.bottomRight + const Offset(-screwOffset, -screwOffset),
+    ]) {
+      canvas.drawCircle(corner, 2.5, screwPaint);
+      canvas.drawCircle(corner, 2.5, screwRim);
+      canvas.drawLine(corner - const Offset(1.5, 0), corner + const Offset(1.5, 0), Paint()..color = const Color(0xFF1A202C)..strokeWidth = 0.6);
+    }
+
+    // 顶部铭文
+    final topBadgeTp = TextPainter(
+      text: const TextSpan(
+        text: '· 3-HEAD PEAK MONITOR / FLUORESCENT LEVEL SYSTEM ·',
+        style: TextStyle(
+          color: Color(0xFF718096),
+          fontSize: 6.8,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.8,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    topBadgeTp.paint(canvas, Offset(center.dx - topBadgeTp.width * 0.5, rect.top + 4.5));
+
+    // 2. 三组精密数显光柱 (左声道 CH-L, 中央峰值 PEAK, 右声道 CH-R)
     final headGap = width / 4.0;
-    final headLabels = ['ERASE', 'RECORD', 'PLAYBACK'];
+    final headLabels = ['CH - L', 'PEAK', 'CH - R'];
+    final headSubLabels = ['ERASE', 'REC', 'PLAY'];
+    final levels = [levelL, levelCenter, levelR];
 
-    for (int h = 1; h <= 3; ++h) {
-      final hx = rect.left + h * headGap;
-      final hRect = Rect.fromCenter(center: Offset(hx, center.dy), width: 26.0, height: height * 0.65);
+    const int segmentCount = 13;
 
-      // 坡莫合金金属屏蔽外壳
+    for (int h = 0; h < 3; ++h) {
+      final hx = rect.left + (h + 1) * headGap;
+      final slotWidth = min(32.0, width * 0.20);
+      final slotHeight = height * 0.65;
+      final slotCenter = Offset(hx, center.dy + 3.0);
+      final hRect = Rect.fromCenter(center: slotCenter, width: slotWidth, height: slotHeight);
+
+      // 深色内嵌荧光数显槽基底
       canvas.drawRRect(
         RRect.fromRectAndRadius(hRect, const Radius.circular(4)),
-        Paint()..color = const Color(0xFF283242),
+        Paint()..color = const Color(0xFF0C0F15),
       );
       canvas.drawRRect(
         RRect.fromRectAndRadius(hRect, const Radius.circular(4)),
         Paint()
-          ..color = const Color(0xFFC5D1DE)
+          ..color = const Color(0xFF334155)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.0,
       );
 
-      // 磁头工作微隙 (Gap line)
-      canvas.drawLine(
-        Offset(hx, hRect.top + 3.0),
-        Offset(hx, hRect.bottom - 3.0),
-        Paint()
-          ..color = (accentColor ?? const Color(0xFFF97316))
-          ..strokeWidth = 1.4,
-      );
+      // 音频响应电平 (0.0 ~ 1.0)
+      final val = levels[h].clamp(0.0, 1.0);
+      final litCount = (val * segmentCount).round();
 
-      // 磁头微型标牌文字
-      final tp = TextPainter(
+      final innerTop = hRect.top + 5.0;
+      final innerBottom = hRect.bottom - 10.0;
+      final innerH = innerBottom - innerTop;
+      final segH = (innerH / segmentCount) - 1.2;
+
+      // 逐级绘制数显梯级 (自底向上：底区温暖琥珀金，中区亮金，顶区+3dB红色峰值)
+      for (int s = 0; s < segmentCount; ++s) {
+        final segY = innerBottom - (s + 1) * (innerH / segmentCount);
+        final segRect = Rect.fromLTWH(hRect.left + 3.5, segY, slotWidth - 7.0, segH);
+
+        final isLit = s < litCount;
+        Color segColor;
+        if (s >= 10) {
+          // 红色过载峰值区 (+3dB ~ +6dB)
+          segColor = isLit ? const Color(0xFFEF4444) : const Color(0x18EF4444);
+        } else if (s >= 7) {
+          // 黄金过渡区 (0dB ~ +2dB)
+          segColor = isLit ? const Color(0xFFFBBF24) : const Color(0x18FBBF24);
+        } else {
+          // 安全温暖基调区 (-20dB ~ -1dB)
+          segColor = isLit ? (accentColor ?? const Color(0xFFF59E0B)) : const Color(0x15FFFFFF);
+        }
+
+        final segPaint = Paint()..color = segColor;
+        canvas.drawRRect(RRect.fromRectAndRadius(segRect, const Radius.circular(1.2)), segPaint);
+
+        // 如果是最高亮起的一格 (Peak Hold)，添加发光光晕
+        if (isLit && s == litCount - 1 && isPlaying) {
+          final glowPaint = Paint()
+            ..color = segColor.withValues(alpha: 0.65)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
+          canvas.drawRRect(RRect.fromRectAndRadius(segRect, const Radius.circular(1.5)), glowPaint);
+        }
+      }
+
+      // 中央高精微隙光柱 (动态高度随声音大小实时律动)
+      final beamH = innerH * val;
+      if (beamH > 1.0) {
+        final beamY = innerBottom - beamH;
+        final beamPaint = Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [
+              (accentColor ?? const Color(0xFFF59E0B)).withValues(alpha: 0.7),
+              val > 0.8 ? const Color(0xFFEF4444) : const Color(0xFFFBBF24),
+            ],
+          ).createShader(Rect.fromLTWH(hx - 1.0, beamY, 2.0, beamH))
+          ..strokeWidth = 2.0
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(Offset(hx, innerBottom), Offset(hx, beamY), beamPaint);
+      }
+
+      // 顶部微型标尺刻度
+      final dbText = h == 1 ? (val > 0.8 ? '+3' : '0') : (h == 0 ? 'L' : 'R');
+      final dbTp = TextPainter(
         text: TextSpan(
-          text: headLabels[h - 1],
-          style: const TextStyle(
-            color: Color(0xFF8A9FB4),
-            fontSize: 7.5,
+          text: dbText,
+          style: TextStyle(
+            color: (val > 0.8) ? const Color(0xFFEF4444) : const Color(0xFF64748B),
+            fontSize: 6.2,
             fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      dbTp.paint(canvas, Offset(hx - dbTp.width * 0.5, hRect.top + 1.2));
+
+      // 底部数显主标牌 (CH-L / PEAK / CH-R)
+      final mainTp = TextPainter(
+        text: TextSpan(
+          text: headLabels[h],
+          style: TextStyle(
+            color: (litCount > 0) ? (accentColor ?? const Color(0xFFFF9E3D)) : const Color(0xFF94A3B8),
+            fontSize: 7.8,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.4,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      mainTp.paint(canvas, Offset(hx - mainTp.width * 0.5, hRect.bottom + 2.5));
+
+      // 次标牌 (ERASE / REC / PLAY)
+      final subTp = TextPainter(
+        text: TextSpan(
+          text: headSubLabels[h],
+          style: const TextStyle(
+            color: Color(0xFF64748B),
+            fontSize: 6.0,
             letterSpacing: 0.5,
           ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset(hx - tp.width * 0.5, hRect.bottom + 2.0));
+      subTp.paint(canvas, Offset(hx - subTp.width * 0.5, hRect.bottom + 11.5));
     }
   }
 
@@ -398,6 +530,9 @@ class TapeReelPainter extends CustomPainter {
         oldDelegate.rightAngle != rightAngle ||
         oldDelegate.isPlaying != isPlaying ||
         oldDelegate.elapsedSec != elapsedSec ||
-        oldDelegate.accentColor != accentColor;
+        oldDelegate.accentColor != accentColor ||
+        oldDelegate.levelL != levelL ||
+        oldDelegate.levelCenter != levelCenter ||
+        oldDelegate.levelR != levelR;
   }
 }

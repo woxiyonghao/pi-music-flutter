@@ -45,9 +45,12 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
   double _accuphaseValL = 0.0;
   double _accuphaseValR = 0.0;
 
-  // 磁带轮旋转角度
+  // 磁带轮旋转角度与卡座动态三条数显柱平滑物理电平 (左声道, 中间/峰值, 右声道)
   double _tapeLeftAngle = 0.0;
   double _tapeRightAngle = 0.0;
+  double _tapeLevelL = 0.0;
+  double _tapeLevelCenter = 0.0;
+  double _tapeLevelR = 0.0;
 
   // 峰值保持数组
   final List<double> _peakHold = List.filled(12, 0.0);
@@ -201,10 +204,35 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
       _accuphaseValR += (accNormR - _accuphaseValR) * 0.07;
     }
 
-    // 3. 磁带轮旋转物理模型 (线速度恒定，角速度与当前带卷半径成反比)
+    // 3. 磁带轮旋转物理模型 (线速度恒定，角速度与当前带卷半径成反比) 与卡座三条数显柱电平动态响应
     if (state.isPlaying) {
       _tapeLeftAngle += (1.5 + (1.0 - state.progress) * 1.5) * dt;
       _tapeRightAngle += (1.5 + state.progress * 1.5) * dt;
+    }
+
+    double targetTapeL = 0.0;
+    double targetTapeCenter = 0.0;
+    double targetTapeR = 0.0;
+    if (state.isPlaying && levels.isNotEmpty) {
+      targetTapeL = pow(rawL.clamp(0.0, 1.0), 0.85).toDouble();
+      targetTapeR = pow(rawR.clamp(0.0, 1.0), 0.85).toDouble();
+      targetTapeCenter = pow(((rawL + rawR) * 0.52).clamp(0.0, 1.0), 0.85).toDouble();
+    }
+    // Attack / Decay 拟真荧光数显电平表瞬态物理弹跳与重力释放
+    if (targetTapeL > _tapeLevelL) {
+      _tapeLevelL += (targetTapeL - _tapeLevelL) * 0.45;
+    } else {
+      _tapeLevelL += (targetTapeL - _tapeLevelL) * 0.09;
+    }
+    if (targetTapeCenter > _tapeLevelCenter) {
+      _tapeLevelCenter += (targetTapeCenter - _tapeLevelCenter) * 0.45;
+    } else {
+      _tapeLevelCenter += (targetTapeCenter - _tapeLevelCenter) * 0.09;
+    }
+    if (targetTapeR > _tapeLevelR) {
+      _tapeLevelR += (targetTapeR - _tapeLevelR) * 0.45;
+    } else {
+      _tapeLevelR += (targetTapeR - _tapeLevelR) * 0.09;
     }
 
     // 4. LED 频谱峰值保持与重力回落
@@ -304,6 +332,10 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           isPlaying: state.isPlaying,
           elapsedSec: state.currentTime,
           accentColor: ThemeService.instance.accentColor,
+          levelL: _tapeLevelL,
+          levelCenter: _tapeLevelCenter,
+          levelR: _tapeLevelR,
+          spectrumLevels: state.spectrumLevels,
         );
         break;
       case VisualizerType.ledSpectrum:
