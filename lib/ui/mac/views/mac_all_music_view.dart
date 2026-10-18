@@ -211,6 +211,15 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
             t.format != AudioFormat.mp3)
         .toList();
 
+    final allFormatTracks = [
+      ...dsdTracks,
+      ...flacTracks,
+      ...wavTracks,
+      ...alacTracks,
+      ...mp3Tracks,
+      ...otherTracks,
+    ];
+
     return ListView(
       physics: const BouncingScrollPhysics(),
       children: [
@@ -220,6 +229,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
             badge: 'DSD',
             title: 'DSD 原生母带 (DSF / DFF)',
             tracks: dsdTracks,
+            allViewTracks: allFormatTracks,
           ),
         if (flacTracks.isNotEmpty)
           _buildGroup(
@@ -227,6 +237,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
             badge: 'FLAC',
             title: 'FLAC 高解析无损母带',
             tracks: flacTracks,
+            allViewTracks: allFormatTracks,
           ),
         if (wavTracks.isNotEmpty)
           _buildGroup(
@@ -234,6 +245,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
             badge: 'WAV',
             title: 'WAV 广播级线性母带',
             tracks: wavTracks,
+            allViewTracks: allFormatTracks,
           ),
         if (alacTracks.isNotEmpty)
           _buildGroup(
@@ -241,6 +253,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
             badge: 'ALAC',
             title: 'Apple Lossless (ALAC)',
             tracks: alacTracks,
+            allViewTracks: allFormatTracks,
           ),
         if (mp3Tracks.isNotEmpty)
           _buildGroup(
@@ -248,6 +261,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
             badge: 'MP3',
             title: 'MP3 经典流行音频',
             tracks: mp3Tracks,
+            allViewTracks: allFormatTracks,
           ),
         if (otherTracks.isNotEmpty)
           _buildGroup(
@@ -255,6 +269,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
             badge: 'RAW',
             title: '其它发烧音轨',
             tracks: otherTracks,
+            allViewTracks: allFormatTracks,
           ),
       ],
     );
@@ -267,6 +282,10 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
       artistMap.putIfAbsent(art, () => []).add(t);
     }
 
+    final allArtistTracks = [
+      for (final entry in artistMap.entries) ...entry.value,
+    ];
+
     return ListView(
       physics: const BouncingScrollPhysics(),
       children: [
@@ -276,6 +295,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
             badge: '歌手',
             title: entry.key,
             tracks: entry.value,
+            allViewTracks: allArtistTracks,
           ),
       ],
     );
@@ -289,6 +309,10 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
       dirMap.putIfAbsent(dir, () => []).add(t);
     }
 
+    final allDirTracks = [
+      for (final entry in dirMap.entries) ...entry.value,
+    ];
+
     return ListView(
       physics: const BouncingScrollPhysics(),
       children: [
@@ -298,6 +322,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
             badge: '目录',
             title: entry.key,
             tracks: entry.value,
+            allViewTracks: allDirTracks,
           ),
       ],
     );
@@ -308,6 +333,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
     required String badge,
     required String title,
     required List<Track> tracks,
+    required List<Track> allViewTracks,
   }) {
     final isOpen = _isGroupOpen(key);
 
@@ -397,7 +423,11 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                   // 播放全部按钮
                   GestureDetector(
                     onTap: () {
-                      HifiAudioService.instance.playTracks(tracks, 0);
+                      final startIndex = allViewTracks.indexWhere((t) => t.matches(tracks.first));
+                      HifiAudioService.instance.playTracks(
+                        allViewTracks,
+                        startIndex != -1 ? startIndex : 0,
+                      );
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -431,7 +461,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
               child: Column(
                 children: [
                   for (int i = 0; i < tracks.length; i++)
-                    _buildTrackRow(tracks[i], i, tracks),
+                    _buildTrackRow(tracks[i], i, allViewTracks),
                 ],
               ),
             ),
@@ -468,7 +498,8 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
               setState(() {
                 _selectedTrackId = track.id;
               });
-              service.playTracks(queueContext, index);
+              final playIndex = queueContext.indexWhere((t) => t.matches(track));
+              service.playTracks(queueContext, playIndex != -1 ? playIndex : index);
             },
             borderRadius: BorderRadius.circular(6.0),
             child: Container(
@@ -598,7 +629,8 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                       setState(() {
                         _selectedTrackId = track.id;
                       });
-                      service.playTracks(queueContext, index);
+                      final playIndex = queueContext.indexWhere((t) => t.matches(track));
+                      service.playTracks(queueContext, playIndex != -1 ? playIndex : index);
                     },
                     borderRadius: BorderRadius.circular(4.0),
                     child: Container(

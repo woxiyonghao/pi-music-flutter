@@ -126,6 +126,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
     Icons.graphic_eq_rounded,          // 电光霓虹声波
     Icons.grid_4x4_rounded,            // 赛博粒子网格
     Icons.access_time_filled_rounded,  // 液态玻璃时钟
+    Icons.developer_board_rounded,     // 树莓派硬件数据大屏
   ];
 
   /// 毛玻璃板块卡片容器
@@ -435,6 +436,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                 case VisualizerType.siriWave: sIdx = 4; break;
                 case VisualizerType.bubbles: sIdx = 5; break;
                 case VisualizerType.glassClock: sIdx = 6; break;
+                case VisualizerType.piTelemetryDashboard: sIdx = 7; break;
                 default: sIdx = 0; break;
               }
               MusicDatabaseService.instance.setSetting('setting_idle_screensaver_theme', sIdx.toString());

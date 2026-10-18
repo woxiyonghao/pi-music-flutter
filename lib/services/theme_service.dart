@@ -123,6 +123,7 @@ class ThemeService extends ChangeNotifier {
     '电光霓虹声波',
     '赛博粒子网格',
     '液态玻璃时钟',
+    '树莓派硬件数据大屏',
   ];
 
   int _currentThemeId = 0;

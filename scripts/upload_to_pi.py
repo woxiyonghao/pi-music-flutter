@@ -32,12 +32,12 @@ encoded_name = urllib.parse.quote(filename)
 # 1. 查询远端断点信息
 start_byte = 0
 try:
-    status_url = f"http://{HOST}:{PORT}/upload_status?filename={encoded_name}"
+    status_url = f"http://{HOST}:{PORT}/upload_status?filename={encoded_name}&size={total_bytes}"
     req = urllib.request.Request(status_url)
     with urllib.request.urlopen(req, timeout=5) as resp:
         info = json.loads(resp.read().decode('utf-8'))
-        if info.get('exists') and info.get('finalBytes') == total_bytes:
-            print(f"✨ 文件已完整存在于设备: {filename} ({total_bytes / 1024 / 1024:.1f} MB)，无需重复上传！")
+        if info.get('alreadyExists') or (info.get('exists') and info.get('finalBytes') == total_bytes):
+            print(f"✨ 文件已存在且大小完全一致，自动跳过写入: {filename} ({total_bytes / 1024 / 1024:.1f} MB)！")
             sys.exit(0)
         if info.get('hasPartial') and info.get('partialBytes', 0) > 0:
             part_size = info['partialBytes']

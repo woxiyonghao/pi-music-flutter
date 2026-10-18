@@ -96,8 +96,8 @@ input[type="file"] { display: none; }
 .file-status { font-size: 12px; color: var(--text-muted); }
 .progress-bar-bg { width: 100%; height: 6px; background: var(--progress-bg); border-radius: 3px; overflow: hidden; }
 .progress-bar-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 3px; transition: width 0.15s ease; }
-.queue-bottom { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-top: 6px; }
 .status-success { color: var(--accent) !important; font-weight: 600; }
+.status-skipped { color: #38bdf8 !important; font-weight: 600; }
 .status-error { color: var(--danger) !important; }
 .empty-tip { text-align: center; color: var(--text-muted); padding: 24px; font-size: 14px; }
 </style>
@@ -204,7 +204,7 @@ function renderQueue() {
     const div = document.createElement('div');
     div.className = 'queue-item';
     let pct = item.total > 0 ? Math.round((item.loaded / item.total) * 100) : 0;
-    if (item.status === 'success') pct = 100;
+    if (item.status === 'success' || item.status === 'skipped') pct = 100;
 
     let statusText = '等待上传';
     let statusClass = 'file-status';
@@ -213,6 +213,9 @@ function renderQueue() {
     } else if (item.status === 'success') {
       statusText = '已入库 ✓';
       statusClass = 'file-status status-success';
+    } else if (item.status === 'skipped') {
+      statusText = '已存在 (大小一致跳过) ✓';
+      statusClass = 'file-status status-skipped';
     } else if (item.status === 'error') {
       statusText = item.errorMsg ? `失败: ${item.errorMsg} ✗` : '上传失败 ✗';
       statusClass = 'file-status status-error';
@@ -283,17 +286,18 @@ async function uploadSingleFile(item) {
   const file = item.file;
   const encodedName = encodeURIComponent(file.name);
 
-  // 1. 探测远端服务断点信息 (支持断点续传秒验)
+  // 1. 探测远端服务断点信息与去重校验 (支持同名同大小秒级跳过)
   let startByte = 0;
   try {
-    const statusResp = await fetch(`/upload_status?filename=${encodedName}`);
+    const statusResp = await fetch(`/upload_status?filename=${encodedName}&size=${file.size}`);
     if (statusResp.ok) {
       const info = await statusResp.json();
-      if (info.exists && info.finalBytes === file.size) {
-        // 文件已存在且完整，秒级入库
-        item.status = 'success';
+      if ((info.exists && info.finalBytes === file.size) || info.alreadyExists) {
+        // 🌟 文件已存在且大小完全一致，跳过重复写入
+        item.status = 'skipped';
         item.loaded = file.size;
-        overallSpeed.textContent = `秒传完成: ${file.name} 已存在于音乐库`;
+        item.speed = '已跳过 (文件一致)';
+        overallSpeed.textContent = `跳过写入: ${file.name} 已存在且大小完全一致`;
         renderQueue();
         return;
       }
@@ -311,10 +315,21 @@ async function uploadSingleFile(item) {
 
   // 2. 超小文件 (<= 512KB 且无断点) 走单片快速传输
   if (file.size <= CHUNK_SIZE && startByte === 0) {
-    return uploadSingleChunk(file, file.name, 0, 1, file.size, 0, (loaded) => {
+    const res = await uploadSingleChunk(file, file.name, 0, 1, file.size, 0, (loaded) => {
       item.loaded = loaded;
       renderQueue();
     });
+    if (res && res.skipped) {
+      item.status = 'skipped';
+      item.loaded = file.size;
+      item.speed = '已跳过 (文件一致)';
+      overallSpeed.textContent = `跳过写入: ${file.name} 已存在且大小完全一致`;
+    } else {
+      item.status = 'success';
+      item.loaded = file.size;
+    }
+    renderQueue();
+    return;
   }
 
   // 3. 超大无损母带/镜像分片流式上传
@@ -334,7 +349,7 @@ async function uploadSingleFile(item) {
     // 每个分片最多自动重试 5 次 (智能规避 2.4G WiFi 丢包或短暂信道拥堵)
     for (let attempt = 1; attempt <= 5; attempt++) {
       try {
-        await uploadSingleChunk(chunkBlob, file.name, chunkIdx, totalChunks, file.size, start, (chunkLoaded) => {
+        const chunkRes = await uploadSingleChunk(chunkBlob, file.name, chunkIdx, totalChunks, file.size, start, (chunkLoaded) => {
           item.loaded = start + chunkLoaded;
           let now = Date.now();
           let elapsed = (now - startTime) / 1000;
@@ -349,6 +364,14 @@ async function uploadSingleFile(item) {
             renderQueue();
           }
         });
+        if (chunkRes && chunkRes.skipped) {
+          item.status = 'skipped';
+          item.loaded = file.size;
+          item.speed = '已跳过 (文件一致)';
+          overallSpeed.textContent = `跳过写入: ${file.name} 已存在且大小完全一致`;
+          renderQueue();
+          return;
+        }
         success = true;
         break;
       } catch (err) {
@@ -383,7 +406,12 @@ function uploadSingleChunk(blob, filename, chunkIdx, totalChunks, totalBytes, of
 
     xhr.onload = () => {
       if (xhr.status === 200) {
-        resolve();
+        let isSkipped = false;
+        try {
+          const resp = JSON.parse(xhr.responseText);
+          if (resp && resp.skipped) isSkipped = true;
+        } catch (_) {}
+        resolve({ skipped: isSkipped });
       } else {
         let msg = `HTTP ${xhr.status}`;
         try {

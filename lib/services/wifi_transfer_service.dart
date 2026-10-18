@@ -222,7 +222,7 @@ class WifiTransferService extends ChangeNotifier {
     await request.response.close();
   }
 
-  /// 查询特定文件当前传输状态 (支持断点续传秒验)
+  /// 查询特定文件当前传输状态 (支持断点续传秒验与同名大小一致去重)
   Future<void> _handleUploadStatus(HttpRequest request) async {
     final query = request.uri.queryParameters;
     String filename = query['filename'] ?? '';
@@ -239,19 +239,25 @@ class WifiTransferService extends ChangeNotifier {
     final tempFile = File('${targetDir.path}/$filename.part');
     final finalFile = File('${targetDir.path}/$filename');
 
+    final int clientSize = int.tryParse(query['size'] ?? query['totalBytes'] ?? '') ?? 0;
     final bool exists = finalFile.existsSync();
     final int finalBytes = exists ? finalFile.lengthSync() : 0;
     final bool hasPartial = tempFile.existsSync();
     final int partialBytes = hasPartial ? tempFile.lengthSync() : 0;
+
+    // 🌟 用户需求：同名且文件大小完全一致，判定已存在，跳过重新写入
+    final bool alreadyExists = exists && clientSize > 0 && finalBytes == clientSize;
 
     request.response.headers.contentType = ContentType.json;
     request.response.write(jsonEncode({
       'status': 'ok',
       'filename': filename,
       'exists': exists,
+      'alreadyExists': alreadyExists,
       'finalBytes': finalBytes,
       'hasPartial': hasPartial,
       'partialBytes': partialBytes,
+      'message': alreadyExists ? '文件已存在且大小一致，跳过写入' : null,
     }));
     await request.response.close();
   }
@@ -295,6 +301,25 @@ class WifiTransferService extends ChangeNotifier {
 
     final tempFile = File('${targetDir.path}/$filename.part');
     final finalFile = File('${targetDir.path}/$filename');
+
+    // 🌟 用户需求：如果已存在同名且大小完全一样的文件，跳过写入，避免重复写入
+    if (finalFile.existsSync() && totalBytes > 0 && finalFile.lengthSync() == totalBytes) {
+      if (tempFile.existsSync()) {
+        try { tempFile.deleteSync(); } catch (_) {}
+      }
+      debugPrint('[WifiTransferService] 检测到同名且大小一致的文件，跳过写入: $filename ($totalBytes bytes)');
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'status': 'ok',
+        'completed': true,
+        'skipped': true,
+        'filename': filename,
+        'bytes': totalBytes,
+        'message': '文件已存在且大小完全一致，已跳过写入',
+      }));
+      await request.response.close();
+      return;
+    }
 
     try {
       // 仅在明确传入 reset=true 或全新第0分片且未指定 offset 时清理历史残余
@@ -426,6 +451,24 @@ class WifiTransferService extends ChangeNotifier {
 
     final tempFile = File('${targetDir.path}/$filename.part');
     final finalFile = File('${targetDir.path}/$filename');
+
+    // 🌟 用户需求：单流上传同名同大小去重跳过
+    final reqLen = request.contentLength;
+    if (finalFile.existsSync() && reqLen > 0 && finalFile.lengthSync() == reqLen) {
+      await request.drain();
+      debugPrint('[WifiTransferService] 单流上传：文件已存在且大小一致，跳过写入: $filename');
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'status': 'ok',
+        'completed': true,
+        'skipped': true,
+        'filename': filename,
+        'bytes': reqLen,
+        'message': '文件已存在且大小完全一致，已跳过写入',
+      }));
+      await request.response.close();
+      return;
+    }
 
     try {
       final sink = tempFile.openWrite();

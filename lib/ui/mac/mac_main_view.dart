@@ -252,6 +252,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                             case 4: effectiveVisualizer = VisualizerType.siriWave; break;
                             case 5: effectiveVisualizer = VisualizerType.bubbles; break;
                             case 6: effectiveVisualizer = VisualizerType.glassClock; break;
+                            case 7: effectiveVisualizer = VisualizerType.piTelemetryDashboard; break;
                             default: effectiveVisualizer = activeVisualizer; break;
                           }
                         } else {
@@ -449,6 +450,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                                   case VisualizerType.siriWave: sIdx = 4; break;
                                                   case VisualizerType.bubbles: sIdx = 5; break;
                                                   case VisualizerType.glassClock: sIdx = 6; break;
+                                                  case VisualizerType.piTelemetryDashboard: sIdx = 7; break;
                                                   default: sIdx = 0; break;
                                                 }
                                                 db.setSetting('setting_idle_screensaver_theme', sIdx.toString());

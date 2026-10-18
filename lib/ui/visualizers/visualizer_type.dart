@@ -10,7 +10,8 @@ enum VisualizerType {
   pureBlack,    // 极简纯黑纯音直通
   neonWave,     // 电光霓虹声波
   cyberGrid,    // 赛博粒子网格
-  glassClock,   // 液态玻璃时钟
+  glassClock,            // 液态玻璃时钟
+  piTelemetryDashboard,  // 树莓派硬件数据大屏 (Big Data Telemetry Dashboard)
 }
 
 extension VisualizerTypeExtension on VisualizerType {
@@ -38,6 +39,8 @@ extension VisualizerTypeExtension on VisualizerType {
         return '赛博粒子网格 (Cyber Grid)';
       case VisualizerType.glassClock:
         return '液态玻璃时钟 (Glass Clock)';
+      case VisualizerType.piTelemetryDashboard:
+        return '树莓派硬件数据大屏';
     }
   }
 
@@ -65,6 +68,8 @@ extension VisualizerTypeExtension on VisualizerType {
         return 'Perspective Audio Matrix Plane';
       case VisualizerType.glassClock:
         return 'Frosted Glass Precision Audio Clock';
+      case VisualizerType.piTelemetryDashboard:
+        return 'BCM2712 Quad-Core · Real-time Telemetry & Hardware Matrix';
     }
   }
 }

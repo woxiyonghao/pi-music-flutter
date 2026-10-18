@@ -43,7 +43,7 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
     _screenBrightness = double.tryParse(db.getSetting('setting_brightness', '0.85'))?.clamp(0.1, 1.0) ?? 0.85;
     _screenTimeoutMode = int.tryParse(db.getSetting('setting_screen_timeout', '0'))?.clamp(0, 3) ?? 0;
     _idleFullscreenMode = int.tryParse(db.getSetting('setting_idle_fullscreen', '4'))?.clamp(0, 4) ?? 4;
-    _idleScreensaverTheme = int.tryParse(db.getSetting('setting_idle_screensaver_theme', '0'))?.clamp(0, 6) ?? 0;
+    _idleScreensaverTheme = int.tryParse(db.getSetting('setting_idle_screensaver_theme', '0'))?.clamp(0, 7) ?? 0;
   }
 
   @override
@@ -205,6 +205,7 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                           'Siri 流光',
                           '微光气泡',
                           '玻璃时钟',
+                          '硬件数据大屏',
                         ],
                         selectedIndex: _idleScreensaverTheme,
                         onSelected: (idx) {

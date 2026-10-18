@@ -689,10 +689,11 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
         <div class="theme-card" data-theme="8"><div class="theme-dot" style="background:#EF4444;"></div><div class="theme-name">马克莱文森赤晶</div></div>
       </div>
 
-      <div class="section-title">数播大屏全景动效模式 (11 种)</div>
+      <div class="section-title">数播大屏全景动效模式 (12 种)</div>
       <div class="grid-2col" id="visualsGrid">
         <div class="theme-card active" data-vmode="2"><div class="theme-name">金嗓子精密大表头</div></div>
         <div class="theme-card" data-vmode="1"><div class="theme-name">麦景图动圈双表头</div></div>
+        <div class="theme-card" data-vmode="11"><div class="theme-name">树莓派硬件数据大屏</div></div>
         <div class="theme-card" data-vmode="0"><div class="theme-name">48列全景LED频谱</div></div>
         <div class="theme-card" data-vmode="3"><div class="theme-name">复古开盘磁带机</div></div>
         <div class="theme-card" data-vmode="4"><div class="theme-name">Siri流光正弦波</div></div>
