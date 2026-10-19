@@ -9,7 +9,7 @@ import 'package:hide_player_flutter/services/web_remote_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  final track1 = Track(
+  const track1 = Track(
     id: 1,
     title: '海阔天空',
     artist: 'Beyond',
@@ -21,7 +21,7 @@ void main() {
     bitDepth: 16,
   );
 
-  final track2 = Track(
+  const track2 = Track(
     id: 2,
     title: '光辉岁月',
     artist: 'Beyond',
