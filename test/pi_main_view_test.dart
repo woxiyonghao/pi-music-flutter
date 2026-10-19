@@ -108,9 +108,10 @@ void main() {
       await tester.pump();
 
       expect(find.byType(MacDACSettingView), findsOneWidget);
-      expect(find.text('DAC 设置'), findsOneWidget);
-      expect(find.text('AK4499EX'), findsOneWidget);
-      expect(find.text('ES9038PRO'), findsOneWidget);
+      expect(find.textContaining('DAC 物理硬件与解码设置'), findsOneWidget);
+      expect(find.text('本机解码器'), findsOneWidget);
+      expect(find.text('外接解码器'), findsOneWidget);
+      expect(find.text('TOPPING DX12'), findsOneWidget);
     });
 
     testWidgets('PiScreensaverOverlay displays and wakes on touch', (tester) async {

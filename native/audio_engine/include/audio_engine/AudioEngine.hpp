@@ -10,7 +10,9 @@
 #include <atomic>
 #include <thread>
 #include <functional>
+#include "audio_engine/DacDeviceCatalog.hpp"
 #include <mutex>
+#include <vector>
 
 namespace audio_engine {
 
@@ -73,6 +75,13 @@ public:
     void applyHardwareSampleRate(uint32_t sample_rate);
     std::string getActiveHardwareDeviceName() const;
     uint32_t getActiveHardwareSampleRate() const;
+
+    // 动态外设识别与硬件 DAC 画像
+    std::vector<AudioDeviceInfo> getConnectedAudioDevices();
+    std::string getConnectedDevicesJson();
+    bool selectOutputDevice(const std::string& device_id);
+    void setExternalDeviceMock(bool enable);
+    bool isExternalDeviceMock() const;
 
     // 状态查询
     bool isPlaying() const;

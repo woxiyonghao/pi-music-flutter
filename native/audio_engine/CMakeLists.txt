@@ -18,6 +18,7 @@ if(ANDROID)
 else()
     set(AUDIO_ENGINE_SOURCES
         src/AudioEngine.cpp
+        src/DacDeviceCatalog.cpp
         src/DsfParser.cpp
         src/decoders/FlacDecoder.cpp
         src/decoders/WavDecoder.cpp

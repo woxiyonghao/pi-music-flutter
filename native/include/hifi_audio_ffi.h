@@ -61,6 +61,12 @@ HIFI_EXPORT void hifi_audio_get_device_name(char* out_buf, int max_len);
 typedef void (*HifiEofCallback)();
 HIFI_EXPORT void hifi_audio_set_eof_callback(HifiEofCallback callback);
 
+// 9. 动态 DAC 外设与芯片画像识别 (返回 JSON 字符串数组)
+HIFI_EXPORT const char* hifi_audio_get_connected_devices_json();
+HIFI_EXPORT bool hifi_audio_select_output_device(const char* device_id);
+HIFI_EXPORT void hifi_audio_set_external_device_mock(bool enable);
+HIFI_EXPORT bool hifi_audio_is_external_device_mock();
+
 #ifdef __cplusplus
 }
 #endif

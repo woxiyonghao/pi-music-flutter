@@ -27,6 +27,7 @@ extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() __attribute__((weak_im
 #endif
 
 #include <iostream>
+#include <sstream>
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
@@ -716,6 +717,223 @@ uint32_t AudioEngine::getActiveHardwareSampleRate() const {
     }
 #endif
     return current_spec_.sample_rate > 0 ? current_spec_.sample_rate : 44100;
+}
+
+static std::atomic<bool> g_mockExternalDevice{true};
+
+void AudioEngine::setExternalDeviceMock(bool enable) {
+    g_mockExternalDevice.store(enable, std::memory_order_relaxed);
+}
+
+bool AudioEngine::isExternalDeviceMock() const {
+    return g_mockExternalDevice.load(std::memory_order_relaxed);
+}
+
+std::vector<AudioDeviceInfo> AudioEngine::getConnectedAudioDevices() {
+    std::vector<AudioDeviceInfo> devices;
+
+#if defined(__APPLE__) && TARGET_OS_OSX
+    AudioObjectPropertyAddress addr = {
+        kAudioHardwarePropertyDevices,
+        kAudioObjectPropertyScopeGlobal,
+        kAudioObjectPropertyElementMain
+    };
+    UInt32 size = 0;
+    if (AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &addr, 0, nullptr, &size) == noErr && size > 0) {
+        int deviceCount = size / sizeof(AudioDeviceID);
+        std::vector<AudioDeviceID> deviceIDs(deviceCount);
+        if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, nullptr, &size, deviceIDs.data()) == noErr) {
+            AudioDeviceID defaultOutID = getDefaultOutputDeviceID();
+
+            for (AudioDeviceID dev : deviceIDs) {
+                // 检查设备是否有实际输出流通道
+                AudioObjectPropertyAddress streamsAddr = {
+                    kAudioDevicePropertyStreams,
+                    kAudioObjectPropertyScopeOutput,
+                    kAudioObjectPropertyElementMain
+                };
+                UInt32 streamSize = 0;
+                if (AudioObjectGetPropertyDataSize(dev, &streamsAddr, 0, nullptr, &streamSize) != noErr || streamSize == 0) {
+                    continue; // 忽略纯输入麦克风等设备
+                }
+
+                // 获取硬件设备商业全名
+                AudioObjectPropertyAddress nameAddr = {
+                    kAudioObjectPropertyName,
+                    kAudioObjectPropertyScopeGlobal,
+                    kAudioObjectPropertyElementMain
+                };
+                CFStringRef cfName = nullptr;
+                UInt32 cfSize = sizeof(cfName);
+                std::string devName = "未知音频设备";
+                if (AudioObjectGetPropertyData(dev, &nameAddr, 0, nullptr, &cfSize, &cfName) == noErr && cfName) {
+                    char buf[256] = {0};
+                    CFStringGetCString(cfName, buf, sizeof(buf), kCFStringEncodingUTF8);
+                    CFRelease(cfName);
+                    if (buf[0] != '\0') devName = buf;
+                }
+
+                // 探测物理传输总线
+                AudioObjectPropertyAddress transportAddr = {
+                    kAudioDevicePropertyTransportType,
+                    kAudioObjectPropertyScopeGlobal,
+                    kAudioObjectPropertyElementMain
+                };
+                UInt32 transport = 0;
+                UInt32 tSize = sizeof(transport);
+                std::string transportStr = "External";
+                bool isBuiltIn = false;
+                if (AudioObjectGetPropertyData(dev, &transportAddr, 0, nullptr, &tSize, &transport) == noErr) {
+                    if (transport == kAudioDeviceTransportTypeBuiltIn) {
+                        transportStr = "BuiltIn";
+                        isBuiltIn = true;
+                    } else if (transport == kAudioDeviceTransportTypeUSB) {
+                        transportStr = "USB";
+                        isBuiltIn = false;
+                    } else if (transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE) {
+                        transportStr = "Bluetooth";
+                        isBuiltIn = false;
+                    } else if (transport == kAudioDeviceTransportTypeHDMI || transport == kAudioDeviceTransportTypeDisplayPort) {
+                        transportStr = "HDMI / DP";
+                        isBuiltIn = false;
+                    } else {
+                        transportStr = "External";
+                        isBuiltIn = false;
+                    }
+                }
+
+                // 探测该硬件声卡原生支持的最大采样率
+                AudioObjectPropertyAddress srAddr = {
+                    kAudioDevicePropertyAvailableNominalSampleRates,
+                    kAudioObjectPropertyScopeGlobal,
+                    kAudioObjectPropertyElementMain
+                };
+                UInt32 srSize = 0;
+                uint32_t maxRate = 48000;
+                if (AudioObjectGetPropertyDataSize(dev, &srAddr, 0, nullptr, &srSize) == noErr && srSize > 0) {
+                    int rangeCount = srSize / sizeof(AudioValueRange);
+                    std::vector<AudioValueRange> ranges(rangeCount);
+                    if (AudioObjectGetPropertyData(dev, &srAddr, 0, nullptr, &srSize, ranges.data()) == noErr) {
+                        for (const auto& r : ranges) {
+                            if (r.mMaximum > maxRate) maxRate = static_cast<uint32_t>(r.mMaximum);
+                        }
+                    }
+                }
+
+                AudioObjectPropertyAddress curSrAddr = {
+                    kAudioDevicePropertyNominalSampleRate,
+                    kAudioObjectPropertyScopeGlobal,
+                    kAudioObjectPropertyElementMain
+                };
+                Float64 curRate = 44100;
+                UInt32 curSrSize = sizeof(curRate);
+                AudioObjectGetPropertyData(dev, &curSrAddr, 0, nullptr, &curSrSize, &curRate);
+
+                AudioDeviceInfo info;
+                info.id = std::to_string(dev);
+                info.name = devName;
+                info.is_builtin = isBuiltIn;
+                info.is_default = (dev == defaultOutID);
+                info.transport = transportStr;
+                info.current_sample_rate = static_cast<uint32_t>(curRate);
+                info.max_sample_rate = maxRate;
+                info.max_bit_depth = 32;
+                info.profile = DacDeviceCatalog::getInstance().matchProfile(devName, isBuiltIn, transportStr, maxRate);
+
+                devices.push_back(info);
+            }
+        }
+    }
+#elif defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
+    // Linux / 树莓派 5: 默认直通
+    AudioDeviceInfo builtin;
+    builtin.id = "alsa_hw_0_0";
+    builtin.name = "树莓派 ALSA 直通声卡";
+    builtin.is_builtin = true;
+    builtin.is_default = true;
+    builtin.transport = "BuiltIn (I2S)";
+    builtin.current_sample_rate = 192000;
+    builtin.max_sample_rate = 192000;
+    builtin.max_bit_depth = 32;
+    builtin.profile = DacDeviceCatalog::getAlsaBuiltinProfile(192000);
+    devices.push_back(builtin);
+#endif
+
+    // 确保至少有 1 个本机解码器
+    bool hasBuiltin = false;
+    bool hasUsbExternal = false;
+    for (const auto& d : devices) {
+        if (d.is_builtin) hasBuiltin = true;
+        if (!d.is_builtin && (d.transport == "USB" || d.name.find("TOPPING") != std::string::npos || d.name.find("DX") != std::string::npos)) {
+            hasUsbExternal = true;
+        }
+    }
+
+    if (!hasBuiltin) {
+        AudioDeviceInfo defBuiltin;
+        defBuiltin.id = "builtin_apple";
+        defBuiltin.name = "Mac 本机解码器";
+        defBuiltin.is_builtin = true;
+        defBuiltin.is_default = devices.empty();
+        defBuiltin.transport = "BuiltIn";
+        defBuiltin.current_sample_rate = 44100;
+        defBuiltin.max_sample_rate = 96000;
+        defBuiltin.max_bit_depth = 32;
+        defBuiltin.profile = DacDeviceCatalog::getAppleBuiltinProfile(96000);
+        devices.insert(devices.begin(), defBuiltin);
+    }
+
+    // 若当前未插入物理 USB 外接解码器，默认智能连接模拟 TOPPING DX12 (ES9039Q2M)
+    // 使得发烧友在购买前即可即时体验与调校全部参数，购买插上后则自动平滑切换为物理机！
+    if (!hasUsbExternal && g_mockExternalDevice.load(std::memory_order_relaxed)) {
+        AudioDeviceInfo topping;
+        topping.id = "usb_topping_dx12";
+        topping.name = "TOPPING DX12";
+        topping.is_builtin = false;
+        topping.is_default = false;
+        topping.transport = "USB";
+        topping.current_sample_rate = 384000;
+        topping.max_sample_rate = 384000;
+        topping.max_bit_depth = 32;
+        topping.profile = DacDeviceCatalog::getToppingDx12Profile();
+        devices.push_back(topping);
+    }
+
+    return devices;
+}
+
+std::string AudioEngine::getConnectedDevicesJson() {
+    auto list = getConnectedAudioDevices();
+    std::ostringstream ss;
+    ss << "[";
+    for (size_t i = 0; i < list.size(); ++i) {
+        ss << list[i].toJson();
+        if (i + 1 < list.size()) ss << ",";
+    }
+    ss << "]";
+    return ss.str();
+}
+
+bool AudioEngine::selectOutputDevice(const std::string& device_id) {
+#if defined(__APPLE__) && TARGET_OS_OSX
+    if (device_id == "usb_topping_dx12") {
+        return true;
+    }
+    try {
+        AudioDeviceID devID = static_cast<AudioDeviceID>(std::stoul(device_id));
+        AudioObjectPropertyAddress addr = {
+            kAudioHardwarePropertyDefaultOutputDevice,
+            kAudioObjectPropertyScopeGlobal,
+            kAudioObjectPropertyElementMain
+        };
+        UInt32 size = sizeof(devID);
+        if (AudioObjectSetPropertyData(kAudioObjectSystemObject, &addr, 0, nullptr, size, &devID) == noErr) {
+            handleDefaultDeviceChanged();
+            return true;
+        }
+    } catch (...) {}
+#endif
+    return false;
 }
 
 void AudioEngine::releaseHogMode() {

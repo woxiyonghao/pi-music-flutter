@@ -54,6 +54,18 @@ typedef _HifiAudioSetEqBandsDart = void Function(Pointer<Float>);
 typedef _HifiAudioGetEqBandsC = Void Function(Pointer<Float>);
 typedef _HifiAudioGetEqBandsDart = void Function(Pointer<Float>);
 
+typedef _HifiAudioGetDevicesJsonC = Pointer<Utf8> Function();
+typedef _HifiAudioGetDevicesJsonDart = Pointer<Utf8> Function();
+
+typedef _HifiAudioSelectDeviceC = Bool Function(Pointer<Utf8>);
+typedef _HifiAudioSelectDeviceDart = bool Function(Pointer<Utf8>);
+
+typedef _HifiAudioSetMockExternalC = Void Function(Bool);
+typedef _HifiAudioSetMockExternalDart = void Function(bool);
+
+typedef _HifiAudioIsMockExternalC = Bool Function();
+typedef _HifiAudioIsMockExternalDart = bool Function();
+
 /// FFI 绑定底层 C++ audio_engine
 class HifiAudioBindings {
   static HifiAudioBindings? _instance;
@@ -90,6 +102,10 @@ class HifiAudioBindings {
   late final _HifiAudioIsEqEnabledDart _isEqEnabled;
   late final _HifiAudioSetEqBandsDart _setEqBands;
   late final _HifiAudioGetEqBandsDart _getEqBands;
+  late final _HifiAudioGetDevicesJsonDart _getConnectedDevicesJson;
+  late final _HifiAudioSelectDeviceDart _selectOutputDevice;
+  late final _HifiAudioSetMockExternalDart _setExternalDeviceMock;
+  late final _HifiAudioIsMockExternalDart _isExternalDeviceMock;
 
   // 内存复用：12 频段频谱指针与 10 频段 EQ 指针 (避免每帧内存分配与 GC 压力)
   late final Pointer<Float> _spectrumBuffer;
@@ -177,6 +193,10 @@ class HifiAudioBindings {
       _isEqEnabled = _lib.lookupFunction<_HifiAudioIsEqEnabledC, _HifiAudioIsEqEnabledDart>('hifi_audio_is_eq_enabled');
       _setEqBands = _lib.lookupFunction<_HifiAudioSetEqBandsC, _HifiAudioSetEqBandsDart>('hifi_audio_set_eq_bands');
       _getEqBands = _lib.lookupFunction<_HifiAudioGetEqBandsC, _HifiAudioGetEqBandsDart>('hifi_audio_get_eq_bands');
+      _getConnectedDevicesJson = _lib.lookupFunction<_HifiAudioGetDevicesJsonC, _HifiAudioGetDevicesJsonDart>('hifi_audio_get_connected_devices_json');
+      _selectOutputDevice = _lib.lookupFunction<_HifiAudioSelectDeviceC, _HifiAudioSelectDeviceDart>('hifi_audio_select_output_device');
+      _setExternalDeviceMock = _lib.lookupFunction<_HifiAudioSetMockExternalC, _HifiAudioSetMockExternalDart>('hifi_audio_set_external_device_mock');
+      _isExternalDeviceMock = _lib.lookupFunction<_HifiAudioIsMockExternalC, _HifiAudioIsMockExternalDart>('hifi_audio_is_external_device_mock');
 
       _isLoaded = true;
     } catch (e, stack) {
@@ -262,6 +282,30 @@ class HifiAudioBindings {
     if (!_isLoaded) return List.filled(10, 0.0);
     _getEqBands(_eqBuffer);
     return List.generate(10, (i) => _eqBuffer[i]);
+  }
+
+  String getConnectedDevicesJson() {
+    if (!_isLoaded) return '[]';
+    final ptr = _getConnectedDevicesJson();
+    if (ptr == nullptr) return '[]';
+    return ptr.toDartString();
+  }
+
+  bool selectOutputDevice(String deviceId) {
+    if (!_isLoaded) return false;
+    final nativeId = deviceId.toNativeUtf8();
+    final res = _selectOutputDevice(nativeId);
+    calloc.free(nativeId);
+    return res;
+  }
+
+  void setExternalDeviceMock(bool enable) {
+    if (_isLoaded) _setExternalDeviceMock(enable);
+  }
+
+  bool isExternalDeviceMock() {
+    if (!_isLoaded) return true;
+    return _isExternalDeviceMock();
   }
 
   void dispose() {

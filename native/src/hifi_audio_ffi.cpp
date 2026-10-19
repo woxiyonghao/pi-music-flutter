@@ -139,4 +139,24 @@ void hifi_audio_set_eof_callback(HifiEofCallback callback) {
     }
 }
 
+static std::string g_devices_json_cache;
+
+const char* hifi_audio_get_connected_devices_json() {
+    g_devices_json_cache = audio_engine::AudioEngine::getInstance().getConnectedDevicesJson();
+    return g_devices_json_cache.c_str();
+}
+
+bool hifi_audio_select_output_device(const char* device_id) {
+    if (!device_id) return false;
+    return audio_engine::AudioEngine::getInstance().selectOutputDevice(device_id);
+}
+
+void hifi_audio_set_external_device_mock(bool enable) {
+    audio_engine::AudioEngine::getInstance().setExternalDeviceMock(enable);
+}
+
+bool hifi_audio_is_external_device_mock() {
+    return audio_engine::AudioEngine::getInstance().isExternalDeviceMock();
+}
+
 } // extern "C"
