@@ -1,4 +1,3 @@
-import 'dart:io';
 import '../../core/platform_helper.dart';
 
 /// 发烧动效主题类型定义 (1:1 对齐 C++ BackgroundVisualMode)

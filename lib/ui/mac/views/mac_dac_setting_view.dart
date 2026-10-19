@@ -44,6 +44,8 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         final currentDev = dac.currentDevice;
 
         return GlassCard(
+          width: double.infinity,
+          height: double.infinity,
           borderRadius: UIConfig.containerRounding,
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
           child: Column(

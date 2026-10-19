@@ -501,6 +501,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
     final idx = _currentTab.index.clamp(0, SidebarTab.values.length - 1);
     return IndexedStack(
       index: idx,
+      sizing: StackFit.expand,
       children: [
         // 0: allMusic
         MacAllMusicView(
