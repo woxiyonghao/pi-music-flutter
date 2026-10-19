@@ -299,12 +299,15 @@ class HifiAudioBindings {
     return res;
   }
 
+  bool _mockExternalFallback = false;
+
   void setExternalDeviceMock(bool enable) {
+    _mockExternalFallback = enable;
     if (_isLoaded) _setExternalDeviceMock(enable);
   }
 
   bool isExternalDeviceMock() {
-    if (!_isLoaded) return true;
+    if (!_isLoaded) return _mockExternalFallback;
     return _isExternalDeviceMock();
   }
 

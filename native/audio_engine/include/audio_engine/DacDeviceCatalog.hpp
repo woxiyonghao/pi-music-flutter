@@ -63,9 +63,14 @@ public:
     static DacProfile getToppingDx12Profile();
 
     /**
-     * @brief 获取 Apple 直通原生声卡配置画像
+     * @brief 获取 Apple 直通原生声卡配置画像 (macOS 桌面)
      */
     static DacProfile getAppleBuiltinProfile(uint32_t max_sr = 96000);
+
+    /**
+     * @brief 获取 iPad / iOS AOP 原生音频架构配置画像
+     */
+    static DacProfile getIpadBuiltinProfile(uint32_t max_sr = 48000);
 
     /**
      * @brief 获取 Linux ALSA 直通声卡配置画像

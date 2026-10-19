@@ -48,12 +48,20 @@ void main() {
       expect(info.digitalFilters.length, equals(2));
     });
 
-    test('DacSettingService device enumeration and selection', () {
+    test('DacSettingService device enumeration and selection with opt-in mock', () {
       final service = DacSettingService.instance;
+      service.toggleMockExternal(false);
       service.refreshDevices();
 
-      expect(service.connectedDevices.length, greaterThanOrEqualTo(2));
+      // 默认状态下：未连接外接解码器，仅显示本机解码器
+      expect(service.connectedDevices.length, equals(1));
       expect(service.builtinDevice, isNotNull);
+      expect(service.externalDevice, isNull);
+      expect(service.hasExternalDac, isFalse);
+
+      // 显式开启模拟接入 (或物理插入外设)
+      service.toggleMockExternal(true);
+      expect(service.connectedDevices.length, equals(2));
       expect(service.externalDevice, isNotNull);
       expect(service.hasExternalDac, isTrue);
 
@@ -64,6 +72,11 @@ void main() {
 
       expect(service.selectedDeviceIndex, equals(externalIdx));
       expect(service.currentDevice?.name, contains('TOPPING'));
+
+      // 移除模拟外设后恢复只有本机解码器
+      service.toggleMockExternal(false);
+      expect(service.connectedDevices.length, equals(1));
+      expect(service.hasExternalDac, isFalse);
     });
 
     Widget createDacViewApp() {
@@ -79,13 +92,31 @@ void main() {
       );
     }
 
-    testWidgets('MacDACSettingView renders only connected devices and TOPPING DX12 settings', (tester) async {
+    testWidgets('MacDACSettingView default renders ONLY built-in decoder when no external DAC is connected', (tester) async {
       tester.view.physicalSize = const Size(1024, 600);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       final service = DacSettingService.instance;
-      service.refreshDevices();
+      service.toggleMockExternal(false);
+
+      await tester.pumpWidget(createDacViewApp());
+      await tester.pumpAndSettle();
+
+      // 默认未接外接 DAC 时：仅显示【本机解码器】，绝不显示【外接解码器】
+      expect(find.text('本机解码器'), findsOneWidget);
+      expect(find.text('外接解码器'), findsNothing);
+      expect(find.text('TOPPING DX12'), findsNothing);
+      expect(find.text('模拟接入 TOPPING DX12 调校'), findsOneWidget);
+    });
+
+    testWidgets('MacDACSettingView renders TOPPING DX12 settings when external DAC is connected/mocked', (tester) async {
+      tester.view.physicalSize = const Size(1024, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final service = DacSettingService.instance;
+      service.toggleMockExternal(true);
 
       // 先选择外接解码器 (TOPPING DX12)
       final externalIdx = service.connectedDevices.indexWhere((d) => !d.isBuiltIn);
@@ -94,7 +125,7 @@ void main() {
       await tester.pumpWidget(createDacViewApp());
       await tester.pumpAndSettle();
 
-      // 1. 验证仅显示已连接的解码器选项卡 (本机解码器 与 外接解码器)
+      // 1. 验证显示已连接的解码器选项卡 (本机解码器 与 外接解码器)
       expect(find.text('本机解码器'), findsOneWidget);
       expect(find.text('外接解码器'), findsOneWidget);
       expect(find.text('TOPPING DX12'), findsWidgets);
@@ -140,6 +171,9 @@ void main() {
       expect(find.text('声卡硬件缓冲区深度 (Hardware Buffer Size)'), findsOneWidget);
       expect(find.text('64 帧 (1.4ms)'), findsOneWidget);
       expect(find.text('32-Bit Float 浮点直通 (推荐)'), findsOneWidget);
+
+      // 还原状态
+      service.toggleMockExternal(false);
     });
   });
 }

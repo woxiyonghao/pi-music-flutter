@@ -264,12 +264,17 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Cortex-A76 四核',
-                style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.7)),
+              Flexible(
+                child: Text(
+                  'Cortex-A76 四核',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10.5, color: Colors.white.withValues(alpha: 0.7)),
+                ),
               ),
+              const SizedBox(width: 4),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
@@ -277,7 +282,7 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
                 ),
                 child: Text(
                   '${piSys.cpuFreqMHz.toStringAsFixed(0)} MHz',
-                  style: TextStyle(fontSize: 10, color: accent, fontWeight: FontWeight.bold, fontFamily: _fontMono),
+                  style: TextStyle(fontSize: 9.5, color: accent, fontWeight: FontWeight.bold, fontFamily: _fontMono),
                 ),
               ),
             ],
@@ -375,11 +380,18 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
   Widget _buildMetricDotRow(Color dotColor, String label, String value) {
     return Row(
       children: [
-        Container(width: 6, height: 6, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
-        const SizedBox(width: 5),
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.6))),
-        const Spacer(),
-        Text(value, style: TextStyle(fontSize: 10, color: Colors.white.withValues(alpha: 0.9), fontFamily: _fontMono)),
+        Container(width: 5, height: 5, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.6)),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(value, style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.9), fontFamily: _fontMono)),
       ],
     );
   }
@@ -409,7 +421,15 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(p['name'] as String, style: TextStyle(fontSize: 9.5, color: Colors.white.withValues(alpha: 0.65))),
+                  Expanded(
+                    child: Text(
+                      p['name'] as String,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 9.5, color: Colors.white.withValues(alpha: 0.65)),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
                   Text(p['val'] as String, style: TextStyle(fontSize: 9.5, color: accent, fontFamily: _fontMono)),
                 ],
               ),
@@ -554,7 +574,7 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
 
   Widget _buildSingleKpiBox(String title, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
         color: const Color(0xFF0C1425),
         borderRadius: BorderRadius.circular(6),
@@ -565,17 +585,24 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: TextStyle(fontSize: 9.5, color: Colors.white.withValues(alpha: 0.6))),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: color,
-              fontFamily: _fontMono,
-              letterSpacing: 0.5,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(title, style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.6))),
+          ),
+          const SizedBox(height: 1),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: color,
+                fontFamily: _fontMono,
+                letterSpacing: 0.5,
+              ),
             ),
           ),
         ],
@@ -716,7 +743,7 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
 
   Widget _buildHealthBadge(String title, String val, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       decoration: BoxDecoration(
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(4),
@@ -725,8 +752,20 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: TextStyle(fontSize: 9, color: Colors.white.withValues(alpha: 0.6))),
-          Text(val, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: color, fontFamily: _fontMono)),
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 8, color: Colors.white.withValues(alpha: 0.6)),
+            ),
+          ),
+          const SizedBox(width: 2),
+          Text(
+            val,
+            maxLines: 1,
+            style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: color, fontFamily: _fontMono),
+          ),
         ],
       ),
     );
@@ -769,13 +808,17 @@ class _TechBorderCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFE2E8F0),
-                    letterSpacing: 0.5,
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFE2E8F0),
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
               ],

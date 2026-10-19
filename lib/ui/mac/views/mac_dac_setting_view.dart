@@ -145,7 +145,38 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
             ],
           ),
         ),
-        // 刷新与调试动作
+        // 模拟/物理外接设备调试开关 (方便用户在买到真机前调校)
+        if (!dac.hasExternalDac)
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.05),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            ),
+            icon: Icon(Icons.add_circle_outline_rounded, size: 14, color: accent),
+            label: Text(
+              '模拟接入 TOPPING DX12 调校',
+              style: TextStyle(color: accent, fontSize: 11),
+            ),
+            onPressed: () {
+              dac.toggleMockExternal(true);
+            },
+          )
+        else
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.05),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            ),
+            icon: const Icon(Icons.usb_off_rounded, size: 14, color: Colors.white54),
+            label: const Text(
+              '移除模拟外设',
+              style: TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+            onPressed: () {
+              dac.toggleMockExternal(false);
+            },
+          ),
+        const SizedBox(width: 8),
         IconButton(
           tooltip: '重新探测已连接的音频设备',
           icon: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 20),

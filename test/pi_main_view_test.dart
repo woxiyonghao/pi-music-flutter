@@ -110,8 +110,20 @@ void main() {
       expect(find.byType(MacDACSettingView), findsOneWidget);
       expect(find.textContaining('DAC 物理硬件与解码设置'), findsOneWidget);
       expect(find.text('本机解码器'), findsOneWidget);
+      expect(find.text('外接解码器'), findsNothing);
+
+      // 点击模拟接入按钮后，外接解码器选项卡动态出现
+      await tester.tap(find.text('模拟接入 TOPPING DX12 调校'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
       expect(find.text('外接解码器'), findsOneWidget);
-      expect(find.text('TOPPING DX12'), findsOneWidget);
+      expect(find.text('TOPPING DX12'), findsWidgets);
+
+      // 还原
+      await tester.tap(find.text('移除模拟外设'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('外接解码器'), findsNothing);
     });
 
     testWidgets('PiScreensaverOverlay displays and wakes on touch', (tester) async {

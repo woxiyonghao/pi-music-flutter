@@ -141,80 +141,113 @@ class DacSettingService extends ChangeNotifier {
       debugPrint('[DacSettingService] refreshDevices error: $e');
     }
 
-    // 降级回退或测试模式默认设备列表 (提供 Mac 本机与 TOPPING DX12 两个标准 Item)
-    _connectedDevices = [
+    // 降级回退或测试模式默认设备列表 (根据当前操作系统智能匹配本机解码器)
+    final isIos = Platform.isIOS;
+    final isLinux = Platform.isLinux;
+    final builtinName = isIos
+        ? 'iPad 本机解码器'
+        : (isLinux ? '树莓派 ALSA 直通声卡' : 'Mac 本机解码器');
+    final builtinModel = isIos
+        ? 'iPad 原生发烧音频总线'
+        : (isLinux ? '树莓派 ALSA 硬件直通' : 'Apple 内置音频输出');
+    final builtinChip = isIos
+        ? 'Apple Studio Grade AOP (Audio Output Processor)'
+        : (isLinux ? 'BCM2712 Direct / I2S Master Clock' : 'Apple Studio Grade CoreAudio Engine');
+    final builtinTransport = isIos ? 'BuiltIn (AOP)' : (isLinux ? 'BuiltIn (I2S)' : 'BuiltIn');
+
+    final fallbackList = <DacDeviceInfo>[
       DacDeviceInfo(
-        id: 'builtin_apple',
-        name: Platform.isLinux ? '树莓派 ALSA 直通声卡' : 'Mac 本机解码器',
+        id: isIos ? 'builtin_ipad' : (isLinux ? 'alsa_hw_0_0' : 'builtin_apple'),
+        name: builtinName,
         isBuiltIn: true,
         isDefault: true,
-        transport: Platform.isLinux ? 'BuiltIn (I2S)' : 'BuiltIn',
-        currentSampleRate: Platform.isLinux ? 192000 : 44100,
-        maxSampleRate: Platform.isLinux ? 192000 : 96000,
+        transport: builtinTransport,
+        currentSampleRate: isLinux ? 192000 : 48000,
+        maxSampleRate: isLinux ? 192000 : 96000,
         maxBitDepth: 32,
-        brand: Platform.isLinux ? 'Raspberry Pi / Linux' : 'Apple Inc.',
-        model: Platform.isLinux ? '树莓派 ALSA 硬件直通' : 'Apple 内置音频输出',
-        chipModel: Platform.isLinux ? 'BCM2712 Direct / I2S Master Clock' : 'Apple Studio Grade CoreAudio Engine',
-        usbInterface: Platform.isLinux ? 'Broadcom I2S / DMA Direct' : 'Apple Silicon Direct Bus',
+        brand: isLinux ? 'Raspberry Pi / Linux' : 'Apple Inc.',
+        model: builtinModel,
+        chipModel: builtinChip,
+        usbInterface: isIos
+            ? 'Apple Silicon Direct AOP 零延迟总线'
+            : (isLinux ? 'Broadcom I2S / DMA Direct' : 'Apple Silicon Direct Bus'),
         maxDsdRate: '无',
         supportsDsd: false,
-        supportsHogMode: true,
+        supportsHogMode: !isIos,
         supportsUacMode: false,
         supportsDpll: false,
         supportsGainControl: false,
         supportsLineOutBypass: true,
-        digitalFilters: const [
-          'Apple 原生 64-bit 浮点线性滤波 (Bit-Perfect)',
+        digitalFilters: [
+          isIos ? 'Apple AOP 原生 64-bit 浮点无损滤波' : 'Apple 原生 64-bit 浮点线性滤波 (Bit-Perfect)',
           '系统自适应低延迟模式',
         ],
         filterDescriptions: const [
-          'macOS 核心音频底层 64 位浮点超高保真抗混叠直通',
+          '苹果底层极低失真浮点抗混叠直通',
           '优化系统响应延迟，适合快速监听与多任务',
         ],
       ),
-      const DacDeviceInfo(
-        id: 'usb_topping_dx12',
-        name: 'TOPPING DX12',
-        isBuiltIn: false,
-        isDefault: false,
-        transport: 'USB',
-        currentSampleRate: 384000,
-        maxSampleRate: 384000,
-        maxBitDepth: 32,
-        brand: 'TOPPING (拓品)',
-        model: 'DX12 / DX1 II (桌面平衡解码耳放)',
-        chipModel: 'ESS Sabre (ES9039Q2M)',
-        usbInterface: 'XMOS XU316 超低抖动异步传输',
-        maxDsdRate: 'DSD256 (Native / DoP)',
-        supportsDsd: true,
-        supportsHogMode: true,
-        supportsUacMode: true,
-        supportsDpll: true,
-        supportsGainControl: true,
-        supportsLineOutBypass: true,
-        digitalFilters: [
-          '最小相位快速滚降 (Fast Roll-off, Minimum Phase)',
-          '线性相位快速滚降 (Fast Roll-off, Linear Phase)',
-          '最小相位慢速滚降 (Slow Roll-off, Minimum Phase)',
-          '线性相位慢速滚降 (Slow Roll-off, Linear Phase)',
-          '切趾快速滚降 (Apodizing Fast Roll-off)',
-          '混合滤波 (Hybrid)',
-          '砖墙滤波 (Brickwall)',
-          '低色散滤波 (Low Dispersion)',
-        ],
-        filterDescriptions: [
-          '[默认推荐] 瞬态极佳，无预振铃，人声与现代流行音乐首选',
-          '声场开阔自然，交响乐、大编制与古典弦乐首选',
-          '温暖醇厚，消除高频数码毛刺，听感柔和耐听',
-          '模拟黑胶唱片般的温润质感，音质厚实自然',
-          '抑制瞬态冲激预振铃失真，极高保真母带重现',
-          '兼顾空间结像深度与低频瞬态打击力度',
-          '极陡峭阻带截止，高频细节与线条感极强',
-          '全音频频带降低群延迟与相位失真',
-        ],
-      ),
     ];
+
+    // 仅在显式开启外接模拟模式时才追加 TOPPING DX12
+    if (HifiAudioBindings.instance.isExternalDeviceMock()) {
+      fallbackList.add(
+        const DacDeviceInfo(
+          id: 'usb_topping_dx12',
+          name: 'TOPPING DX12',
+          isBuiltIn: false,
+          isDefault: false,
+          transport: 'USB',
+          currentSampleRate: 384000,
+          maxSampleRate: 384000,
+          maxBitDepth: 32,
+          brand: 'TOPPING (拓品)',
+          model: 'DX12 / DX1 II (桌面平衡解码耳放)',
+          chipModel: 'ESS Sabre (ES9039Q2M)',
+          usbInterface: 'XMOS XU316 超低抖动异步传输',
+          maxDsdRate: 'DSD256 (Native / DoP)',
+          supportsDsd: true,
+          supportsHogMode: true,
+          supportsUacMode: true,
+          supportsDpll: true,
+          supportsGainControl: true,
+          supportsLineOutBypass: true,
+          digitalFilters: [
+            '最小相位快速滚降 (Fast Roll-off, Minimum Phase)',
+            '线性相位快速滚降 (Fast Roll-off, Linear Phase)',
+            '最小相位慢速滚降 (Slow Roll-off, Minimum Phase)',
+            '线性相位慢速滚降 (Slow Roll-off, Linear Phase)',
+            '切趾快速滚降 (Apodizing Fast Roll-off)',
+            '混合滤波 (Hybrid)',
+            '砖墙滤波 (Brickwall)',
+            '低色散滤波 (Low Dispersion)',
+          ],
+          filterDescriptions: [
+            '[默认推荐] 瞬态极佳，无预振铃，人声与现代流行音乐首选',
+            '声场开阔自然，交响乐、大编制与古典弦乐首选',
+            '温暖醇厚，消除高频数码毛刺，听感柔和耐听',
+            '模拟黑胶唱片般的温润质感，音质厚实自然',
+            '抑制瞬态冲激预振铃失真，极高保真母带重现',
+            '兼顾空间结像深度与低频瞬态打击力度',
+            '极陡峭阻带截止，高频细节与线条感极强',
+            '全音频频带降低群延迟与相位失真',
+          ],
+        ),
+      );
+    }
+
+    _connectedDevices = fallbackList;
+    if (_selectedDeviceIndex >= _connectedDevices.length) {
+      _selectedDeviceIndex = 0;
+    }
     notifyListeners();
+  }
+
+  bool get isMockExternalEnabled => HifiAudioBindings.instance.isExternalDeviceMock();
+
+  void toggleMockExternal(bool enable) {
+    HifiAudioBindings.instance.setExternalDeviceMock(enable);
+    refreshDevices();
   }
 
   void selectDevice(int index) {

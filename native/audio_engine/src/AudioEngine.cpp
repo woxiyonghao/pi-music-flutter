@@ -719,7 +719,7 @@ uint32_t AudioEngine::getActiveHardwareSampleRate() const {
     return current_spec_.sample_rate > 0 ? current_spec_.sample_rate : 44100;
 }
 
-static std::atomic<bool> g_mockExternalDevice{true};
+static std::atomic<bool> g_mockExternalDevice{false};
 
 void AudioEngine::setExternalDeviceMock(bool enable) {
     g_mockExternalDevice.store(enable, std::memory_order_relaxed);
@@ -844,6 +844,19 @@ std::vector<AudioDeviceInfo> AudioEngine::getConnectedAudioDevices() {
             }
         }
     }
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    // iOS / iPadOS 原生音频总线探测
+    AudioDeviceInfo builtin;
+    builtin.id = "builtin_ipad";
+    builtin.name = "iPad 本机解码器";
+    builtin.is_builtin = true;
+    builtin.is_default = true;
+    builtin.transport = "BuiltIn (AOP)";
+    builtin.current_sample_rate = 48000;
+    builtin.max_sample_rate = 96000;
+    builtin.max_bit_depth = 32;
+    builtin.profile = DacDeviceCatalog::getIpadBuiltinProfile(48000);
+    devices.push_back(builtin);
 #elif defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
     // Linux / 树莓派 5: 默认直通
     AudioDeviceInfo builtin;
@@ -871,15 +884,27 @@ std::vector<AudioDeviceInfo> AudioEngine::getConnectedAudioDevices() {
 
     if (!hasBuiltin) {
         AudioDeviceInfo defBuiltin;
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+        defBuiltin.id = "builtin_ipad";
+        defBuiltin.name = "iPad 本机解码器";
+        defBuiltin.transport = "BuiltIn (AOP)";
+        defBuiltin.profile = DacDeviceCatalog::getIpadBuiltinProfile(48000);
+#elif defined(__APPLE__) && TARGET_OS_OSX
         defBuiltin.id = "builtin_apple";
         defBuiltin.name = "Mac 本机解码器";
+        defBuiltin.transport = "BuiltIn";
+        defBuiltin.profile = DacDeviceCatalog::getAppleBuiltinProfile(96000);
+#else
+        defBuiltin.id = "builtin_alsa";
+        defBuiltin.name = "树莓派 ALSA 直通声卡";
+        defBuiltin.transport = "BuiltIn (I2S)";
+        defBuiltin.profile = DacDeviceCatalog::getAlsaBuiltinProfile(192000);
+#endif
         defBuiltin.is_builtin = true;
         defBuiltin.is_default = devices.empty();
-        defBuiltin.transport = "BuiltIn";
-        defBuiltin.current_sample_rate = 44100;
+        defBuiltin.current_sample_rate = 48000;
         defBuiltin.max_sample_rate = 96000;
         defBuiltin.max_bit_depth = 32;
-        defBuiltin.profile = DacDeviceCatalog::getAppleBuiltinProfile(96000);
         devices.insert(devices.begin(), defBuiltin);
     }
 

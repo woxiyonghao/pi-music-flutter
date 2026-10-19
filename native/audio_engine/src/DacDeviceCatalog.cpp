@@ -1,6 +1,9 @@
 #include "audio_engine/DacDeviceCatalog.hpp"
 #include <sstream>
 #include <algorithm>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 
 namespace audio_engine {
 
@@ -140,6 +143,35 @@ DacProfile DacDeviceCatalog::getAppleBuiltinProfile(uint32_t max_sr) {
     return p;
 }
 
+DacProfile DacDeviceCatalog::getIpadBuiltinProfile(uint32_t max_sr) {
+    DacProfile p;
+    p.brand = "Apple Inc.";
+    p.model = "iPad 本机音频直通";
+    p.chip_model = "Apple Studio Grade AOP (Audio Output Processor)";
+    p.usb_interface = "Apple Silicon Direct AOP 零延迟总线";
+    p.max_sample_rate = max_sr > 0 ? max_sr : 48000;
+    p.max_bit_depth = 32;
+    p.max_dsd_rate = "无 (自动无损转换为高解析 PCM)";
+    p.supports_dsd = false;
+    p.supports_hog_mode = false;
+    p.supports_uac_mode = false;
+    p.supports_dpll = false;
+    p.supports_gain_control = false;
+    p.supports_line_out_bypass = true;
+
+    p.digital_filters = {
+        "Apple AOP 原生 64-bit 浮点无损滤波",
+        "低延迟硬件抗混叠模式"
+    };
+
+    p.filter_descriptions = {
+        "iPadOS 硬件音频处理器原生 64 位浮点超低失真直出",
+        "针对触控多媒体与发烧母带优化的极低延迟硬件滤波"
+    };
+
+    return p;
+}
+
 DacProfile DacDeviceCatalog::getAlsaBuiltinProfile(uint32_t max_sr) {
     DacProfile p;
     p.brand = "Raspberry Pi / Linux";
@@ -209,8 +241,10 @@ static std::string toLower(const std::string& s) {
 DacProfile DacDeviceCatalog::matchProfile(const std::string& device_name, bool is_builtin, const std::string& transport, uint32_t detected_max_sr) {
     std::string lower = toLower(device_name);
 
-    if (is_builtin || transport == "BuiltIn") {
-#if defined(__APPLE__)
+    if (is_builtin || transport == "BuiltIn" || transport == "BuiltIn (AOP)") {
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+        return getIpadBuiltinProfile(detected_max_sr > 0 ? detected_max_sr : 48000);
+#elif defined(__APPLE__)
         return getAppleBuiltinProfile(detected_max_sr > 0 ? detected_max_sr : 96000);
 #else
         return getAlsaBuiltinProfile(detected_max_sr > 0 ? detected_max_sr : 192000);
