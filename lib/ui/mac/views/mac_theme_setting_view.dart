@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../core/platform_helper.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
@@ -10,11 +11,13 @@ import '../../visualizers/visualizer_type.dart';
 class MacThemeSettingView extends StatefulWidget {
   final VisualizerType currentVisualizer;
   final ValueChanged<VisualizerType> onVisualizerChanged;
+  final HifiPlatformType? platform;
 
   const MacThemeSettingView({
     super.key,
     required this.currentVisualizer,
     required this.onVisualizerChanged,
+    this.platform,
   });
 
   @override
@@ -399,6 +402,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
 
   /// 背景律动网格 (4列)
   Widget _buildVisualizerModesGrid(ThemeService theme) {
+    final modeLabels = ThemeService.getVisualModeLabels(widget.platform);
     return LayoutBuilder(builder: (context, constraints) {
       final cols = constraints.maxWidth < 620 ? 3 : 4;
       return GridView.builder(
@@ -410,10 +414,10 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
           crossAxisSpacing: 10.0,
           mainAxisExtent: 34.0,
         ),
-        itemCount: ThemeService.visualModeLabels.length,
+        itemCount: modeLabels.length,
         itemBuilder: (context, i) {
           final isCur = theme.backgroundVisualMode == i;
-          final label = ThemeService.visualModeLabels[i];
+          final label = modeLabels[i];
           final accent = theme.accentColor;
           final iconData = i < _visualModeIcons.length
               ? _visualModeIcons[i]

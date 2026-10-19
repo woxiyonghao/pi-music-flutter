@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../core/platform_helper.dart';
 
 /// 表头多品牌发烧视觉调色板 (1:1 严格对齐 C++ VUMeterRenderer.cpp 8大品牌名机 + Custom HSV 动态调色)
 class _MeterPalette {
@@ -63,6 +64,7 @@ class McIntoshMeterPainter extends CustomPainter {
   final String? title;
   final int themeId;
   final Color? accentColor;
+  final HifiPlatformType? platform;
 
   static const double minAngle = -pi * 0.74;
   static const double sweepAngle = pi * 0.48;
@@ -73,9 +75,10 @@ class McIntoshMeterPainter extends CustomPainter {
     this.title,
     this.themeId = 1,
     this.accentColor,
+    this.platform,
   });
 
-  static _MeterPalette _resolvePalette(int themeId, Color? customCol) {
+  static _MeterPalette _resolvePalette(int themeId, Color? customCol, [HifiPlatformType? platform]) {
     if (themeId == 4 || (customCol != null && themeId != 0 && themeId != 1 && themeId != 2 && themeId != 3 && themeId != 5 && themeId != 6 && themeId != 7 && themeId != 8)) {
       final col = customCol ?? const Color(0xFF00B4D8);
       final rf = col.r;
@@ -310,6 +313,9 @@ class McIntoshMeterPainter extends CustomPainter {
         );
       case 1: // McIntosh 麦景图湖蓝
       default:
+        final currentPlat = platform ?? PlatformHelper.currentPlatform;
+        final isIpad = currentPlat == HifiPlatformType.ipad || (PlatformHelper.overridePlatform == null && Platform.isIOS);
+        final isMac = currentPlat == HifiPlatformType.mac || (PlatformHelper.overridePlatform == null && Platform.isMacOS);
         return _MeterPalette(
           chassisBg: const Color(0xFF030712),
           meterBgDark: const Color(0xFF010E20),
@@ -332,23 +338,23 @@ class McIntoshMeterPainter extends CustomPainter {
           footerBadge: const Color(0xB438BDF8),
           pgLedGreen: const Color(0xFF00F5D4),
           subLabel: 'DECIBELS / WATTS',
-          footerLeft: Platform.isLinux
-              ? 'McIntosh Precision Power Output Meter · Bit-Perfect 192kHz/24Bit ALSA'
-              : (Platform.isIOS
-                  ? 'McIntosh Precision Power Output Meter · Apple Silicon AOP Direct'
-                  : 'McIntosh Precision Power Output Meter · Bit-Perfect CoreAudio Engine'),
-          footerRight: Platform.isLinux
-              ? 'AK4191EQ + AK4499EX VELVET SOUND · FEMTOSECOND CLOCK'
-              : (Platform.isIOS
-                  ? 'APPLE SILICON AOP · STUDIO GRADE MASTER CLOCK'
-                  : 'APPLE STUDIO GRADE DIRECT BUS · FEMTOSECOND MASTER CLOCK'),
+          footerLeft: isIpad
+              ? 'McIntosh Precision Power Output Meter · Apple Silicon AOP Direct'
+              : (isMac
+                  ? 'McIntosh Precision Power Output Meter · Bit-Perfect CoreAudio Engine'
+                  : 'McIntosh Precision Power Output Meter · Bit-Perfect 192kHz/24Bit ALSA'),
+          footerRight: isIpad
+              ? 'APPLE SILICON AOP · STUDIO GRADE MASTER CLOCK'
+              : (isMac
+                  ? 'APPLE STUDIO GRADE DIRECT BUS · FEMTOSECOND MASTER CLOCK'
+                  : 'AK4191EQ + AK4499EX VELVET SOUND · FEMTOSECOND CLOCK'),
         );
     }
   }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final pal = _resolvePalette(themeId, accentColor);
+    final pal = _resolvePalette(themeId, accentColor, platform);
 
     // 1. 底板：微拉丝质感深空机架底色
     final bgPaint = Paint()..color = pal.chassisBg;

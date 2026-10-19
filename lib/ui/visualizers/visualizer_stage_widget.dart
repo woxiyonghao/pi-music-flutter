@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../../core/hifi_audio_service.dart';
+import '../../core/platform_helper.dart';
 import '../../services/theme_service.dart';
 import '../../theme/hifi_theme.dart';
 import 'visualizer_type.dart';
@@ -23,6 +24,7 @@ class VisualizerStageWidget extends StatefulWidget {
   final VisualizerType initialType;
   final ValueChanged<VisualizerType>? onTypeChanged;
   final bool showSelector;
+  final HifiPlatformType? platform;
 
   const VisualizerStageWidget({
     super.key,
@@ -30,6 +32,7 @@ class VisualizerStageWidget extends StatefulWidget {
     this.initialType = VisualizerType.mcIntosh,
     this.onTypeChanged,
     this.showSelector = false,
+    this.platform,
   });
 
   @override
@@ -311,6 +314,7 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           rightAngle: _rightAngle,
           themeId: ThemeService.instance.currentThemeId,
           accentColor: ThemeService.instance.accentColor,
+          platform: widget.platform,
         );
         break;
       case VisualizerType.accuphase:
@@ -421,7 +425,7 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
     }
 
     final Widget mainContent = (effectiveType == VisualizerType.piTelemetryDashboard)
-        ? const PiTelemetryDashboardWidget()
+        ? PiTelemetryDashboardWidget(platform: widget.platform)
         : CustomPaint(painter: painter);
 
     return Stack(

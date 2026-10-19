@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hide_player_flutter/core/platform_helper.dart';
 import 'package:hide_player_flutter/models/dac_device_info.dart';
 import 'package:hide_player_flutter/services/dac_setting_service.dart';
 import 'package:hide_player_flutter/theme/hifi_theme.dart';
@@ -170,10 +171,60 @@ void main() {
       expect(find.text('CoreAudio 独占模式 (Exclusive Hog Mode)'), findsOneWidget);
       expect(find.text('声卡硬件缓冲区深度 (Hardware Buffer Size)'), findsOneWidget);
       expect(find.text('64 帧 (1.4ms)'), findsOneWidget);
-      expect(find.text('32-Bit Float 浮点直通 (推荐)'), findsOneWidget);
-
       // 还原状态
       service.toggleMockExternal(false);
+    });
+
+    testWidgets('MacDACSettingView renders iPad-specific settings when platform is iPad', (tester) async {
+      tester.view.physicalSize = const Size(1024, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final service = DacSettingService.instance;
+      service.toggleMockExternal(false);
+
+      await tester.pumpWidget(MaterialApp(
+        theme: HifiTheme.darkTheme,
+        home: const Scaffold(
+          body: SizedBox(
+            width: 1024,
+            height: 600,
+            child: MacDACSettingView(platform: HifiPlatformType.ipad),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('iPadOS 硬件音频会话直通 (AVAudio Direct Session)'), findsOneWidget);
+      expect(find.text('iPad 硬件 I/O 缓冲区深度 (Hardware Buffer Size)'), findsOneWidget);
+      expect(find.text('iPadOS 数字音频输出位深'), findsOneWidget);
+      expect(find.text('CoreAudio 独占模式 (Exclusive Hog Mode)'), findsNothing);
+    });
+
+    testWidgets('MacDACSettingView renders Pi-specific settings when platform is Pi', (tester) async {
+      tester.view.physicalSize = const Size(1024, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final service = DacSettingService.instance;
+      service.toggleMockExternal(false);
+
+      await tester.pumpWidget(MaterialApp(
+        theme: HifiTheme.darkTheme,
+        home: const Scaffold(
+          body: SizedBox(
+            width: 1024,
+            height: 600,
+            child: MacDACSettingView(platform: HifiPlatformType.pi),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ALSA 硬件直通与独占 (Direct Hardware hw:)'), findsOneWidget);
+      expect(find.text('ALSA Ring Buffer 环形缓冲区深度'), findsOneWidget);
+      expect(find.text('ALSA 数字音频输出位深'), findsOneWidget);
+      expect(find.text('CoreAudio 独占模式 (Exclusive Hog Mode)'), findsNothing);
     });
   });
 }

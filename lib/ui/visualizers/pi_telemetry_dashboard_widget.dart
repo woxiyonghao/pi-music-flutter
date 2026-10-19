@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../core/hifi_audio_service.dart';
+import '../../core/platform_helper.dart';
 import '../../services/music_database_service.dart';
 import '../../services/pi_system_service.dart';
 import '../../services/theme_service.dart';
@@ -16,7 +17,9 @@ const String _fontMono = 'monospace';
 /// - 右侧：存储与曲库气泡分布图 (Bubble Chart)、音轨采样直方图、硬件总线健康网格
 /// - 全局：全要素严格跟随系统主题色 (麦景图湖蓝、金嗓子香槟金、现代玫红等) 动态变色
 class PiTelemetryDashboardWidget extends StatefulWidget {
-  const PiTelemetryDashboardWidget({super.key});
+  final HifiPlatformType? platform;
+
+  const PiTelemetryDashboardWidget({super.key, this.platform});
 
   @override
   State<PiTelemetryDashboardWidget> createState() => _PiTelemetryDashboardWidgetState();
@@ -25,6 +28,12 @@ class PiTelemetryDashboardWidget extends StatefulWidget {
 class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
+
+  HifiPlatformType get _currentPlatform => widget.platform ?? PlatformHelper.currentPlatform;
+  bool get _isIpad => _currentPlatform == HifiPlatformType.ipad || (PlatformHelper.overridePlatform == null && Platform.isIOS);
+  bool get _isMac => _currentPlatform == HifiPlatformType.mac || (PlatformHelper.overridePlatform == null && Platform.isMacOS);
+  bool get _isPi => _currentPlatform == HifiPlatformType.pi || (PlatformHelper.overridePlatform == null && Platform.isLinux);
+  bool get _isApple => _isIpad || _isMac;
 
   @override
   void initState() {
@@ -193,9 +202,9 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  Platform.isMacOS
+                  _isMac
                       ? 'macOS · Apple Silicon 硬件遥测'
-                      : (Platform.isIOS ? 'iPadOS · Studio AOP 硬件遥测' : '树莓派 5 · 硬件遥测直通'),
+                      : (_isIpad ? 'iPadOS · Studio AOP 硬件遥测' : '树莓派 5 · 硬件遥测直通'),
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.white.withValues(alpha: 0.75),
@@ -215,9 +224,9 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
               height: 36,
               alignment: Alignment.center,
               child: Text(
-                Platform.isMacOS
+                _isMac
                     ? 'Mac 硬件运行监控大屏'
-                    : (Platform.isIOS ? 'iPad 硬件运行监控大屏' : '树莓派硬件运行监控大屏'),
+                    : (_isIpad ? 'iPad 硬件运行监控大屏' : '树莓派硬件运行监控大屏'),
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
@@ -271,9 +280,9 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
             children: [
               Flexible(
                 child: Text(
-                  Platform.isMacOS
+                  _isMac
                       ? 'Apple Silicon M-Series'
-                      : (Platform.isIOS ? 'Apple Bionic / M-Series' : 'Cortex-A76 四核'),
+                      : (_isIpad ? 'Apple Bionic / M-Series' : 'Cortex-A76 四核'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 10.5, color: Colors.white.withValues(alpha: 0.7)),
@@ -337,7 +346,7 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
   // --------------------------------------------------------------------------
   Widget _buildMemoryDonutCard(Color accent, PiSystemService piSys) {
     return _TechBorderCard(
-      title: (Platform.isMacOS || Platform.isIOS) ? 'Apple 统一内存 (UMA)' : '内存与交换矩阵',
+      title: _isApple ? 'Apple 统一内存 (UMA)' : '内存与交换矩阵',
       accentColor: accent,
       child: Row(
         children: [
@@ -407,14 +416,14 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
   // 卡片 3 (左下)：系统核心进程能耗 (水平条形图)
   // --------------------------------------------------------------------------
   Widget _buildProcessLoadCard(Color accent, PiSystemService piSys) {
-    final processes = Platform.isLinux
+    final processes = _isPi
         ? [
             {'name': 'HiFi 音频引擎 (AudioEngine)', 'cpu': 0.65, 'val': '12.4%'},
             {'name': 'Cage 视窗合成 (Wayland)', 'cpu': 0.22, 'val': '2.1%'},
             {'name': 'Linux 内核直通 (Kernel/IRQ)', 'cpu': 0.15, 'val': '1.2%'},
             {'name': 'Web 遥控与无线传歌中枢', 'cpu': 0.08, 'val': '0.6%'},
           ]
-        : (Platform.isIOS
+        : (_isIpad
             ? [
                 {'name': 'HiFi 音频引擎 (AudioEngine)', 'cpu': 0.55, 'val': '8.2%'},
                 {'name': 'Apple Studio AOP 硬件处理', 'cpu': 0.25, 'val': '2.8%'},
@@ -477,12 +486,9 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
   Widget _buildCentralHoloCore(Color accent, PiSystemService piSys, HifiAudioService audio, double t) {
     final temp = piSys.socTemperature;
     final tempColor = temp > 70 ? const Color(0xFFEF4444) : (temp > 55 ? const Color(0xFFF59E0B) : accent);
-    final isMac = Platform.isMacOS;
-    final isIOS = Platform.isIOS;
-    final isApple = isMac || isIOS;
 
     return _TechBorderCard(
-      title: isApple ? 'SoC 核心态势与系统温控中枢' : 'SoC 核心态势与主动散热中枢',
+      title: _isApple ? 'SoC 核心态势与系统温控中枢' : 'SoC 核心态势与主动散热中枢',
       accentColor: accent,
       child: Row(
         children: [
@@ -494,18 +500,18 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 _buildOrbitPill(
-                  isMac ? 'Apple Silicon' : (isIOS ? 'Apple A/M SoC' : 'BCM2712 SoC'),
-                  isMac ? 'ARM64 统一架构' : (isIOS ? '高能效 AOP 架构' : '四核 A76 64-bit'),
+                  _isMac ? 'Apple Silicon' : (_isIpad ? 'Apple A/M SoC' : 'BCM2712 SoC'),
+                  _isMac ? 'ARM64 统一架构' : (_isIpad ? '高能效 AOP 架构' : '四核 A76 64-bit'),
                   accent,
                 ),
                 _buildOrbitPill(
                   '供电模式',
-                  isApple ? '系统智能电源管理' : '5V/5A USB-PD',
+                  _isApple ? (_isIpad ? '智能电池与电源管理' : '系统智能电源管理') : '5V/5A USB-PD',
                   const Color(0xFF10B981),
                 ),
                 _buildOrbitPill(
                   '音频直通',
-                  isMac ? 'CoreAudio HAL' : (isIOS ? 'AVAudio Direct' : 'ALSA hw:0,0'),
+                  _isMac ? 'CoreAudio HAL' : (_isIpad ? 'AVAudio Direct' : 'ALSA hw:0,0'),
                   accent,
                 ),
               ],
@@ -558,17 +564,17 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
               children: [
                 _buildOrbitPill(
                   '温控状态',
-                  isApple ? '静音智能温控' : '主动散热开 (L${piSys.fanLevel})',
+                  _isApple ? '静音智能温控' : '主动散热开 (L${piSys.fanLevel})',
                   const Color(0xFF10B981),
                 ),
                 _buildOrbitPill(
                   '调度模式',
-                  isApple ? '能效+性能核协同' : '0x0 正常全频',
+                  _isApple ? '能效+性能核协同' : '0x0 正常全频',
                   accent,
                 ),
                 _buildOrbitPill(
-                  isApple ? '音频低延迟' : '风扇 PWM',
-                  isApple ? 'Direct I/O 开启' : '${piSys.fanPwm} / 255',
+                  _isApple ? '音频低延迟' : '风扇 PWM',
+                  _isApple ? 'Direct I/O 开启' : '${piSys.fanPwm} / 255',
                   const Color(0xFF38BDF8),
                 ),
               ],
@@ -764,7 +770,6 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
   // 卡片 6 (右下)：硬件总线健康与负载网格
   // --------------------------------------------------------------------------
   Widget _buildHardwareHealthCard(Color accent, PiSystemService piSys) {
-    final isApple = Platform.isMacOS || Platform.isIOS;
     return _TechBorderCard(
       title: '系统总线与硬件健康度',
       accentColor: accent,
@@ -775,16 +780,16 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
             children: [
               Expanded(
                 child: _buildHealthBadge(
-                  isApple ? 'CoreAudio 总线' : 'I2S 飞秒时钟',
-                  isApple ? 'Direct HAL' : '锁定直通',
+                  _isApple ? (_isIpad ? 'AVAudio 总线' : 'CoreAudio 总线') : 'I2S 飞秒时钟',
+                  _isApple ? 'Direct HAL' : '锁定直通',
                   const Color(0xFF10B981),
                 ),
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: _buildHealthBadge(
-                  isApple ? 'Apple Fabric' : 'PCIe 2.0 总线',
-                  isApple ? '超高带宽 UMA' : '5.0 GT/s',
+                  _isApple ? 'Apple Fabric' : 'PCIe 2.0 总线',
+                  _isApple ? '超高带宽 UMA' : '5.0 GT/s',
                   accent,
                 ),
               ),
@@ -794,8 +799,8 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
             children: [
               Expanded(
                 child: _buildHealthBadge(
-                  isApple ? 'Metal 图形' : 'RP1 南桥 I/O',
-                  isApple ? '硬件加速渲染' : '状态正常',
+                  _isApple ? 'Metal 图形' : 'RP1 南桥 I/O',
+                  _isApple ? '硬件加速渲染' : '状态正常',
                   const Color(0xFF38BDF8),
                 ),
               ),
@@ -803,7 +808,7 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
               Expanded(
                 child: _buildHealthBadge(
                   '电源供电输入',
-                  isApple ? '智能电源管理' : '5.1V 稳定',
+                  _isApple ? (_isIpad ? '智能电池管理' : '智能电源管理') : '5.1V 稳定',
                   const Color(0xFF10B981),
                 ),
               ),

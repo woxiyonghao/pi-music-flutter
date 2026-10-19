@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../core/hifi_audio_bindings.dart';
+import '../core/platform_helper.dart';
 import '../models/dac_device_info.dart';
 import 'music_database_service.dart';
 
@@ -67,23 +67,23 @@ class DacSettingService extends ChangeNotifier {
     if (currentDevice != null) {
       return currentDevice!.name;
     }
-    if (_selectedChip == 0 && Platform.isLinux) {
+    if (_selectedChip == 0 && PlatformHelper.isPi) {
       return 'ALSA 直通';
     }
-    if (Platform.isLinux) {
+    if (PlatformHelper.isPi) {
       return '树莓派 ALSA 纯音硬件';
     }
-    return Platform.isIOS ? 'iPad AOP 纯音硬件' : 'Mac Direct 纯音硬件';
+    return PlatformHelper.isIpad ? 'iPad AOP 纯音硬件' : 'Mac Direct 纯音硬件';
   }
 
   String get activeOutput {
     if (currentDevice != null) {
       return currentDevice!.isBuiltIn ? '本机音频直通' : '外接发烧解码器 (${currentDevice!.model})';
     }
-    if (Platform.isLinux) {
+    if (PlatformHelper.isPi) {
       return _selectedChip == 0 ? 'ALSA 物理硬件直通' : '外接音频 / 高保真 DAC';
     }
-    if (Platform.isIOS) {
+    if (PlatformHelper.isIpad) {
       return _selectedChip == 0 ? 'iPad 内置扬声器 / 耳机' : 'USB-C / 外部数字 DAC';
     }
     return _selectedChip == 0 ? 'Mac 内置扬声器' : '外接音频 / 高保真 DAC';
@@ -141,45 +141,45 @@ class DacSettingService extends ChangeNotifier {
       debugPrint('[DacSettingService] refreshDevices error: $e');
     }
 
-    // 降级回退或测试模式默认设备列表 (根据当前操作系统智能匹配本机解码器)
-    final isIos = Platform.isIOS;
-    final isLinux = Platform.isLinux;
-    final builtinName = isIos
+    // 降级回退或测试模式默认设备列表 (根据当前平台类型智能匹配本机解码器)
+    final isIpad = PlatformHelper.isIpad;
+    final isPi = PlatformHelper.isPi;
+    final builtinName = isIpad
         ? 'iPad 本机解码器'
-        : (isLinux ? '树莓派 ALSA 直通声卡' : 'Mac 本机解码器');
-    final builtinModel = isIos
+        : (isPi ? '树莓派 ALSA 直通声卡' : 'Mac 本机解码器');
+    final builtinModel = isIpad
         ? 'iPad 原生发烧音频总线'
-        : (isLinux ? '树莓派 ALSA 硬件直通' : 'Apple 内置音频输出');
-    final builtinChip = isIos
+        : (isPi ? '树莓派 ALSA 硬件直通' : 'Apple 内置音频输出');
+    final builtinChip = isIpad
         ? 'Apple Studio Grade AOP (Audio Output Processor)'
-        : (isLinux ? 'BCM2712 Direct / I2S Master Clock' : 'Apple Studio Grade CoreAudio Engine');
-    final builtinTransport = isIos ? 'BuiltIn (AOP)' : (isLinux ? 'BuiltIn (I2S)' : 'BuiltIn');
+        : (isPi ? 'BCM2712 Direct / I2S Master Clock' : 'Apple Studio Grade CoreAudio Engine');
+    final builtinTransport = isIpad ? 'BuiltIn (AOP)' : (isPi ? 'BuiltIn (I2S)' : 'BuiltIn');
 
     final fallbackList = <DacDeviceInfo>[
       DacDeviceInfo(
-        id: isIos ? 'builtin_ipad' : (isLinux ? 'alsa_hw_0_0' : 'builtin_apple'),
+        id: isIpad ? 'builtin_ipad' : (isPi ? 'alsa_hw_0_0' : 'builtin_apple'),
         name: builtinName,
         isBuiltIn: true,
         isDefault: true,
         transport: builtinTransport,
-        currentSampleRate: isLinux ? 192000 : 48000,
-        maxSampleRate: isLinux ? 192000 : 96000,
+        currentSampleRate: isPi ? 192000 : 48000,
+        maxSampleRate: isPi ? 192000 : 96000,
         maxBitDepth: 32,
-        brand: isLinux ? 'Raspberry Pi / Linux' : 'Apple Inc.',
+        brand: isPi ? 'Raspberry Pi / Linux' : 'Apple Inc.',
         model: builtinModel,
         chipModel: builtinChip,
-        usbInterface: isIos
+        usbInterface: isIpad
             ? 'Apple Silicon Direct AOP 零延迟总线'
-            : (isLinux ? 'Broadcom I2S / DMA Direct' : 'Apple Silicon Direct Bus'),
+            : (isPi ? 'Broadcom I2S / DMA Direct' : 'Apple Silicon Direct Bus'),
         maxDsdRate: '无',
         supportsDsd: false,
-        supportsHogMode: !isIos,
+        supportsHogMode: !isIpad,
         supportsUacMode: false,
         supportsDpll: false,
         supportsGainControl: false,
         supportsLineOutBypass: true,
         digitalFilters: [
-          isIos ? 'Apple AOP 原生 64-bit 浮点无损滤波' : 'Apple 原生 64-bit 浮点线性滤波 (Bit-Perfect)',
+          isIpad ? 'Apple AOP 原生 64-bit 浮点无损滤波' : 'Apple 原生 64-bit 浮点线性滤波 (Bit-Perfect)',
           '系统自适应低延迟模式',
         ],
         filterDescriptions: const [

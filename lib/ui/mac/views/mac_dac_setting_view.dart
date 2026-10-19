@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/platform_helper.dart';
 import '../../../models/dac_device_info.dart';
 import '../../../services/dac_setting_service.dart';
 import '../../../services/theme_service.dart';
@@ -9,13 +10,19 @@ import '../../common/glass_card.dart';
 /// 严格根据实际连接的物理硬件 (如【本机解码器】与【外接解码器: 拓品 TOPPING DX12】) 动态呈现，
 /// 彻底移除未连接芯片的冗余干扰项，专享高保真硬件参数配置。
 class MacDACSettingView extends StatefulWidget {
-  const MacDACSettingView({super.key});
+  final HifiPlatformType? platform;
+
+  const MacDACSettingView({super.key, this.platform});
 
   @override
   State<MacDACSettingView> createState() => _MacDACSettingViewState();
 }
 
 class _MacDACSettingViewState extends State<MacDACSettingView> {
+  HifiPlatformType get _currentPlatform => widget.platform ?? PlatformHelper.currentPlatform;
+  bool get _isIpad => _currentPlatform == HifiPlatformType.ipad;
+  bool get _isPi => _currentPlatform == HifiPlatformType.pi;
+
   @override
   void initState() {
     super.initState();
@@ -242,7 +249,11 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        dev.isBuiltIn ? Icons.laptop_mac_rounded : Icons.usb_rounded,
+                        dev.isBuiltIn
+                            ? (_isIpad
+                                ? Icons.tablet_mac_rounded
+                                : (_isPi ? Icons.memory_rounded : Icons.laptop_mac_rounded))
+                            : Icons.usb_rounded,
                         color: isSelected ? accent : Colors.white70,
                         size: 20,
                       ),
@@ -421,16 +432,52 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     final sampleRateMode = dac.getParam('apple_sample_rate', 0);
     final bitDepthMode = dac.getParam('apple_bit_depth', 0);
 
+    final sectionTitle = _isIpad
+        ? 'iPadOS 硬件音频协处理器与缓冲区控制 (AOP Direct)'
+        : (_isPi
+            ? '树莓派 ALSA 硬件直通与底层缓冲区控制 (Direct MMAP)'
+            : 'macOS CoreAudio 原生独占与硬件缓冲区控制');
+
+    final exclusiveTitle = _isIpad
+        ? 'iPadOS 硬件音频会话直通 (AVAudio Direct Session)'
+        : (_isPi
+            ? 'ALSA 硬件直通与独占 (Direct Hardware hw:)'
+            : 'CoreAudio 独占模式 (Exclusive Hog Mode)');
+
+    final exclusiveSubtitle = _isIpad
+        ? '启用高优先级实时音频单元 (RemoteIO)，直接推流至 Apple Silicon 音频协处理器并绕过系统混音，保证 100% Bit-Perfect 源码输出'
+        : (_isPi
+            ? '直接访问物理声卡硬件 (hw:X,Y)，绕过 dmix 混音器与 PulseAudio/PipeWire 软件重采样'
+            : '独占声卡物理访问权，彻底绕过系统音频混音器与格式二次重采样，保证 100% Bit-Perfect 源码输出');
+
+    final bufferTitle = _isIpad
+        ? 'iPad 硬件 I/O 缓冲区深度 (Hardware Buffer Size)'
+        : (_isPi
+            ? 'ALSA Ring Buffer 环形缓冲区深度'
+            : '声卡硬件缓冲区深度 (Hardware Buffer Size)');
+
+    final sampleRateTitle = _isIpad
+        ? 'iPad 硬件主时钟采样率策略'
+        : (_isPi
+            ? 'I2S/时钟晶振采样率策略'
+            : '硬件主时钟采样率策略');
+
+    final bitDepthTitle = _isIpad
+        ? 'iPadOS 数字音频输出位深'
+        : (_isPi
+            ? 'ALSA 数字音频输出位深'
+            : '数字信号输出位深');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('系统原生独占与硬件缓冲区控制', Icons.tune_rounded, accent),
+        _buildSectionTitle(sectionTitle, Icons.tune_rounded, accent),
         const SizedBox(height: 8),
 
-        // 1. CoreAudio Hog Mode 独占直通
+        // 1. 独占直通
         _buildSwitchTile(
-          title: 'CoreAudio 独占模式 (Exclusive Hog Mode)',
-          subtitle: '独占声卡物理访问权，彻底绕过系统音频混音器与格式二次重采样，保证 100% Bit-Perfect 源码输出',
+          title: exclusiveTitle,
+          subtitle: exclusiveSubtitle,
           value: exclusiveHog,
           accent: accent,
           onChanged: (val) {
@@ -441,7 +488,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
 
         // 2. 硬件缓冲区大小
         _buildCapsuleSelector(
-          title: '声卡硬件缓冲区深度 (Hardware Buffer Size)',
+          title: bufferTitle,
           subtitle: '控制推流时钟延迟，64 帧极速响应，256 帧发烧平衡推荐，1024 帧抗爆音断流',
           options: const ['64 帧 (1.4ms)', '128 帧 (2.9ms)', '256 帧 (5.8ms)', '512 帧 (11.6ms)', '1024 帧 (23.2ms)'],
           selectedIndex: bufferIdx,
@@ -454,7 +501,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
 
         // 3. 原生采样率跟踪
         _buildCapsuleSelector(
-          title: '硬件主时钟采样率策略',
+          title: sampleRateTitle,
           subtitle: '跟随正在播放的母带音频自动自适应物理切换声卡时钟，或强制锁定输出',
           options: const ['原生跟随母带 (44.1k - 192k)', '锁定 96kHz 超解析', '锁定 192kHz 母带直出'],
           selectedIndex: sampleRateMode,
@@ -467,7 +514,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
 
         // 4. 数字音频位深
         _buildCapsuleSelector(
-          title: '数字信号输出位深',
+          title: bitDepthTitle,
           subtitle: '32-Bit Float 浮点无损直通具备 1500dB 极高动态余量，杜绝数字削顶失真',
           options: const ['32-Bit Float 浮点直通 (推荐)', '24-Bit 定点高保真'],
           selectedIndex: bitDepthMode,

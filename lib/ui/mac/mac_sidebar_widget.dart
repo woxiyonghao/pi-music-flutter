@@ -1,13 +1,13 @@
-import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../core/platform_helper.dart';
 import '../../models/sidebar_tab.dart';
 import '../../models/track.dart';
 import '../../services/theme_service.dart';
 import '../../theme/ui_config.dart';
 import '../common/glass_card.dart';
 
-/// macOS / 树莓派专业发烧侧边栏 (1:1 严格对齐 C++ SidebarView.cpp / SidebarFeatureWidget.cpp / SidebarDacWidget.cpp)
+/// macOS / iPad / 树莓派专业发烧侧边栏 (1:1 严格对齐 C++ SidebarView.cpp / SidebarFeatureWidget.cpp / SidebarDacWidget.cpp)
 class MacSidebarWidget extends StatefulWidget {
   final SidebarTab currentTab;
   final int selectedPlaylistId;
@@ -20,6 +20,7 @@ class MacSidebarWidget extends StatefulWidget {
   final VoidCallback onCreatePlaylist;
   final ValueChanged<int>? onDeletePlaylist;
   final VoidCallback onDacClicked;
+  final HifiPlatformType? platform;
 
   const MacSidebarWidget({
     super.key,
@@ -34,6 +35,7 @@ class MacSidebarWidget extends StatefulWidget {
     required this.onCreatePlaylist,
     this.onDeletePlaylist,
     required this.onDacClicked,
+    this.platform,
   });
 
   @override
@@ -42,6 +44,7 @@ class MacSidebarWidget extends StatefulWidget {
 
 class _MacSidebarWidgetState extends State<MacSidebarWidget> {
   late final ScrollController _scrollController;
+  HifiPlatformType get _currentPlatform => widget.platform ?? PlatformHelper.currentPlatform;
 
   @override
   void initState() {
@@ -232,7 +235,7 @@ class _MacSidebarWidgetState extends State<MacSidebarWidget> {
                           ),
 
                         // 添加播放列表按钮 (树莓派屏幕无软键盘故在端侧隐藏，保留在 Web 遥控中枢通过手机/电脑创建)
-                        if (!Platform.isLinux)
+                        if (_currentPlatform != HifiPlatformType.pi)
                           _buildNavItem(
                             tab: null,
                             label: '添加播放列表',

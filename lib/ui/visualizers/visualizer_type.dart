@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../../core/platform_helper.dart';
 
 /// 发烧动效主题类型定义 (1:1 对齐 C++ BackgroundVisualMode)
 enum VisualizerType {
@@ -17,7 +18,8 @@ enum VisualizerType {
 }
 
 extension VisualizerTypeExtension on VisualizerType {
-  String get displayName {
+  String getDisplayName([HifiPlatformType? platform]) {
+    final p = platform ?? PlatformHelper.currentPlatform;
     switch (this) {
       case VisualizerType.ledSpectrum:
         return '48列全景 LED 频谱';
@@ -42,14 +44,17 @@ extension VisualizerTypeExtension on VisualizerType {
       case VisualizerType.glassClock:
         return '液态玻璃时钟 (Glass Clock)';
       case VisualizerType.piTelemetryDashboard:
-        if (Platform.isMacOS) return 'Mac 硬件数据大屏';
-        if (Platform.isIOS) return 'iPad 硬件数据大屏';
-        if (Platform.isLinux) return '树莓派硬件数据大屏';
+        if (p == HifiPlatformType.ipad) return 'iPad 硬件数据大屏';
+        if (p == HifiPlatformType.mac) return 'Mac 硬件数据大屏';
+        if (p == HifiPlatformType.pi) return '树莓派硬件数据大屏';
         return '系统硬件数据大屏';
     }
   }
 
-  String get subtitle {
+  String get displayName => getDisplayName();
+
+  String getSubtitle([HifiPlatformType? platform]) {
+    final p = platform ?? PlatformHelper.currentPlatform;
     switch (this) {
       case VisualizerType.ledSpectrum:
         return '48-Band Peak Hold · Real-time Audio Spectrum';
@@ -74,10 +79,12 @@ extension VisualizerTypeExtension on VisualizerType {
       case VisualizerType.glassClock:
         return 'Frosted Glass Precision Audio Clock';
       case VisualizerType.piTelemetryDashboard:
-        if (Platform.isMacOS) return 'Apple Silicon Architecture · Real-time Telemetry & Hardware Matrix';
-        if (Platform.isIOS) return 'Apple Studio AOP · Real-time Telemetry & Hardware Matrix';
-        if (Platform.isLinux) return 'BCM2712 Quad-Core · Real-time Telemetry & Hardware Matrix';
+        if (p == HifiPlatformType.ipad) return 'Apple Studio AOP · Real-time Telemetry & Hardware Matrix';
+        if (p == HifiPlatformType.mac) return 'Apple Silicon Architecture · Real-time Telemetry & Hardware Matrix';
+        if (p == HifiPlatformType.pi) return 'BCM2712 Quad-Core · Real-time Telemetry & Hardware Matrix';
         return 'System Hardware Telemetry & Audio Matrix';
     }
   }
+
+  String get subtitle => getSubtitle();
 }

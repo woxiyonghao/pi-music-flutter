@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
+import '../core/platform_helper.dart';
 import 'music_database_service.dart';
 
 /// 预设主题实体 (1:1 严格对齐 C++ ThemeManager::ThemePresetInfo)
@@ -112,24 +112,30 @@ class ThemeService extends ChangeNotifier {
     ),
   ];
 
-  static List<String> get visualModeLabels => [
-    '48列全景 LED 频谱',
-    '名机动圈大表头',
-    '金嗓子旗舰大表头',
-    '复古开盘磁带机',
-    'Siri 流光声波',
-    'Siri 悬浮微光球',
-    '音乐微光气泡',
-    '极简纯黑纯音直通',
-    '电光霓虹声波',
-    '赛博粒子网格',
-    '液态玻璃时钟',
-    Platform.isMacOS
+  static List<String> getVisualModeLabels([HifiPlatformType? platform]) {
+    final p = platform ?? PlatformHelper.currentPlatform;
+    final hwLabel = p == HifiPlatformType.mac
         ? 'Mac 硬件数据大屏'
-        : (Platform.isIOS
+        : (p == HifiPlatformType.ipad
             ? 'iPad 硬件数据大屏'
-            : (Platform.isLinux ? '树莓派硬件数据大屏' : '系统硬件数据大屏')),
-  ];
+            : (p == HifiPlatformType.pi ? '树莓派硬件数据大屏' : '系统硬件数据大屏'));
+    return [
+      '48列全景 LED 频谱',
+      '名机动圈大表头',
+      '金嗓子旗舰大表头',
+      '复古开盘磁带机',
+      'Siri 流光声波',
+      'Siri 悬浮微光球',
+      '音乐微光气泡',
+      '极简纯黑纯音直通',
+      '电光霓虹声波',
+      '赛博粒子网格',
+      '液态玻璃时钟',
+      hwLabel,
+    ];
+  }
+
+  static List<String> get visualModeLabels => getVisualModeLabels();
 
   int _currentThemeId = 0;
   Color _accentColor = const Color(0xFFFA2D48);

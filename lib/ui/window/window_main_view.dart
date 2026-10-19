@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/platform_helper.dart';
 import '../landscape/landscape_main_view.dart';
 
 /// Windows 桌面端发烧纯音横屏主视窗
@@ -8,6 +9,8 @@ class WindowMainView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const LandscapeMainView();
+    return const LandscapeMainView(
+      platform: HifiPlatformType.window,
+    );
   }
 }

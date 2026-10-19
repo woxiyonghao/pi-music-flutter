@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
+import 'package:hide_player_flutter/core/platform_helper.dart';
 import 'package:hide_player_flutter/ui/visualizers/visualizer_type.dart';
 import 'package:hide_player_flutter/ui/visualizers/visualizer_stage_widget.dart';
 import 'package:hide_player_flutter/ui/visualizers/audio_bubbles_painter.dart';
@@ -27,6 +28,15 @@ void main() {
       expect(VisualizerType.cyberGrid.displayName, contains('赛博'));
       expect(VisualizerType.glassClock.displayName, contains('时钟'));
       expect(VisualizerType.piTelemetryDashboard.displayName, contains('硬件数据大屏'));
+
+      // 验证根据平台字段动态显示专属大屏名称
+      expect(VisualizerType.piTelemetryDashboard.getDisplayName(HifiPlatformType.ipad), equals('iPad 硬件数据大屏'));
+      expect(VisualizerType.piTelemetryDashboard.getDisplayName(HifiPlatformType.mac), equals('Mac 硬件数据大屏'));
+      expect(VisualizerType.piTelemetryDashboard.getDisplayName(HifiPlatformType.pi), equals('树莓派硬件数据大屏'));
+
+      expect(ThemeService.getVisualModeLabels(HifiPlatformType.ipad), contains('iPad 硬件数据大屏'));
+      expect(ThemeService.getVisualModeLabels(HifiPlatformType.mac), contains('Mac 硬件数据大屏'));
+      expect(ThemeService.getVisualModeLabels(HifiPlatformType.pi), contains('树莓派硬件数据大屏'));
     });
 
     test('ThemeService updates backgroundVisualMode and accent color', () {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/platform_helper.dart';
 import '../../services/pi_system_service.dart';
 import '../landscape/landscape_main_view.dart';
 
@@ -13,6 +14,7 @@ class PiMainView extends StatelessWidget {
       listenable: PiSystemService.instance,
       builder: (context, _) {
         return LandscapeMainView(
+          platform: HifiPlatformType.pi,
           overrideDacName: PiSystemService.instance.dacDeviceName,
         );
       },

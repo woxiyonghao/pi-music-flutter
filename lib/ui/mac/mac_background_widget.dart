@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/hifi_audio_service.dart';
 import '../../services/theme_service.dart';
 import '../../theme/ui_config.dart';
+import '../../core/platform_helper.dart';
 import '../visualizers/visualizer_type.dart';
 import '../visualizers/visualizer_stage_widget.dart';
 
@@ -10,11 +11,13 @@ import '../visualizers/visualizer_stage_widget.dart';
 class MacBackgroundWidget extends StatelessWidget {
   final VisualizerType visualizerType;
   final double fullscreenProgress;
+  final HifiPlatformType platform;
 
   const MacBackgroundWidget({
     super.key,
     this.visualizerType = VisualizerType.ledSpectrum,
     this.fullscreenProgress = 0.0,
+    this.platform = HifiPlatformType.mac,
   });
 
   @override
@@ -57,6 +60,7 @@ class MacBackgroundWidget extends StatelessWidget {
                 child: VisualizerStageWidget(
                   key: ValueKey(visualizerType),
                   activeType: visualizerType,
+                  platform: platform,
                 ),
               ),
           ],

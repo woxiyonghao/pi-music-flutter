@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../core/platform_helper.dart';
 import '../../models/sidebar_tab.dart';
 import '../../services/music_database_service.dart';
 import '../../services/pi_system_service.dart';
@@ -21,13 +22,18 @@ import 'views/mac_scan_music_view.dart';
 import 'views/mac_system_settings_view.dart';
 import 'views/mac_web_service_view.dart';
 
-/// macOS 专业桌面端发烧纯音数播主视窗 (1:1 严格对齐 C++ Application.cpp 全景架构)
+/// macOS / iPad / 树莓派 专业桌面端发烧纯音数播主视窗 (1:1 严格对齐 C++ Application.cpp 全景架构)
 /// 具备：空闲时间全屏屏保检测 (15s/30s/1m/5m/永不)、四角板块平滑滑出动效 (0.4s 缓动插值)、
 /// 双击或点击胶囊栏无缝切换沉浸表头模式与鼠标活动自适应唤醒
 class MacMainView extends StatefulWidget {
   final String? overrideDacName;
+  final HifiPlatformType platform;
 
-  const MacMainView({super.key, this.overrideDacName});
+  const MacMainView({
+    super.key,
+    this.overrideDacName,
+    this.platform = HifiPlatformType.mac,
+  });
 
   @override
   State<MacMainView> createState() => _MacMainViewState();
@@ -191,15 +197,17 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
         final String activeDacName;
         if (widget.overrideDacName != null && widget.overrideDacName!.isNotEmpty) {
           activeDacName = widget.overrideDacName!;
-        } else if (Platform.isLinux) {
+        } else if (widget.platform == HifiPlatformType.pi) {
           activeDacName = piSys.dacDeviceName.isNotEmpty ? piSys.dacDeviceName : 'ALSA Direct';
-        } else if (Platform.isIOS) {
+        } else if (widget.platform == HifiPlatformType.ipad) {
           activeDacName = 'iPad Direct';
-        } else {
+        } else if (widget.platform == HifiPlatformType.mac) {
           activeDacName = 'Apple Direct';
+        } else {
+          activeDacName = 'WASAPI Direct';
         }
 
-        final String? tempText = (Platform.isLinux && piSys.socTemperature > 0)
+        final String? tempText = (widget.platform == HifiPlatformType.pi && piSys.socTemperature > 0)
             ? '${piSys.socTemperature.toStringAsFixed(1)}°C'
             : null;
 
@@ -267,6 +275,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                               child: MacBackgroundWidget(
                                 visualizerType: effectiveVisualizer,
                                 fullscreenProgress: progress,
+                                platform: widget.platform,
                               ),
                             ),
 
@@ -291,6 +300,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                           dacName: activeDacName,
                                           isDacConnected: true,
                                           temperatureText: tempText,
+                                          platform: widget.platform,
                                           onTabSelected: (tab) {
                                             setState(() {
                                               _currentTab = tab;
@@ -426,7 +436,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                               return DropdownMenuItem<VisualizerType>(
                                                 value: type,
                                                 child: Text(
-                                                  type.displayName,
+                                                  type.getDisplayName(widget.platform),
                                                   style: const TextStyle(
                                                     fontFamilyFallback: [
                                                       'WenQuanYi Micro Hei',
@@ -522,13 +532,16 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
         // 4: msebTuning
         const MacMagicTuningView(),
         // 5: dacSettings
-        const MacDACSettingView(),
+        MacDACSettingView(
+          platform: widget.platform,
+        ),
         // 6: themeSettings
         MacThemeSettingView(
           currentVisualizer: activeVisualizer,
           onVisualizerChanged: (type) {
             ThemeService.instance.setBackgroundVisualMode(type.index);
           },
+          platform: widget.platform,
         ),
         // 7: systemSettings
         const MacSystemSettingsView(),
