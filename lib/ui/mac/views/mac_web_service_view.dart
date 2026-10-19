@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/hifi_audio_service.dart';
+import '../../../core/platform_helper.dart';
 import '../../../services/ota_update_service.dart';
 import '../../../services/pi_system_service.dart';
 import '../../../services/theme_service.dart';
@@ -13,10 +14,12 @@ import '../../common/glass_card.dart';
 /// Web服务模块 (合并 Web 远程遥控与 WiFi 传歌，1:1 对齐 C++ WebServiceView.cpp 与 WifiTransferView.cpp)
 class MacWebServiceView extends StatefulWidget {
   final bool isWifiTransfer;
+  final HifiPlatformType? platform;
 
   const MacWebServiceView({
     super.key,
     this.isWifiTransfer = false,
+    this.platform,
   });
 
   @override
@@ -26,6 +29,18 @@ class MacWebServiceView extends StatefulWidget {
 class _MacWebServiceViewState extends State<MacWebServiceView> {
   int _activeSubModule = 0; // 0: Web 远程控制与数播中枢, 1: WiFi 局域网传歌
   late final TextEditingController _ipInputController;
+
+  HifiPlatformType get _currentPlatform => widget.platform ?? PlatformHelper.currentPlatform;
+  bool get _supportsGitOta => PlatformHelper.supportsGitOta(_currentPlatform);
+
+  String get _deviceDescription {
+    if (_currentPlatform == HifiPlatformType.pi) return '树莓派 5 发烧数播';
+    if (_currentPlatform == HifiPlatformType.ipad) return 'iPad 移动数播';
+    if (_currentPlatform == HifiPlatformType.iphone) return 'iPhone 随身数播';
+    if (_currentPlatform == HifiPlatformType.android) return 'Android 移动数播';
+    if (_currentPlatform == HifiPlatformType.window) return 'Windows 宽屏台机工作台';
+    return 'macOS 桌面工作台';
+  }
 
   @override
   void initState() {
@@ -142,7 +157,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                         Expanded(
                           child: Text(
                             _activeSubModule == 0
-                                ? '当前设备: ${Platform.isLinux ? "树莓派 5 发烧数播" : (Platform.isIOS ? "iPad 移动数播" : "macOS 桌面工作台")} · 支持手机扫码即时双向遥控'
+                                ? '当前设备: $_deviceDescription · 支持手机扫码即时双向遥控'
                                 : '同一局域网下电脑或手机免线拖拽传输 · 即传即播 · 自动扫描入库',
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
@@ -713,56 +728,58 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
       ),
       const SizedBox(height: 12.0),
 
-      // 卡片 5：系统在线 OTA 升级 (通过 Git 远程极速检查更新与一键热升级)
-      _buildCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.system_update_alt, size: 16.0, color: accent),
-                          const SizedBox(width: 8.0),
-                          const Text(
-                            '【系统在线 OTA 升级】Git 云端远程固件与应用热更新',
-                            style: TextStyle(
-                              fontSize: UIConfig.fontSmall,
-                              fontWeight: FontWeight.bold,
-                              color: UIConfig.textActive,
+      // 卡片 5：系统在线 OTA 升级 (仅在具备 Git 环境的 Linux / macOS 桌面端展示；iPad, iPhone, Android 无 Git 沙盒严禁显示)
+      if (_supportsGitOta) ...[
+        _buildCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.system_update_alt, size: 16.0, color: accent),
+                            const SizedBox(width: 8.0),
+                            const Text(
+                              '【系统在线 OTA 升级】Git 云端远程固件与应用热更新',
+                              style: TextStyle(
+                                fontSize: UIConfig.fontSmall,
+                                fontWeight: FontWeight.bold,
+                                color: UIConfig.textActive,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4.0),
-                      Text(
-                        Platform.isLinux
-                            ? '树莓派 Linux 硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署'
-                            : 'macOS 桌面端硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署',
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          color: UIConfig.textMuted,
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4.0),
+                        Text(
+                          _currentPlatform == HifiPlatformType.pi
+                              ? '树莓派 Linux 硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署'
+                              : 'macOS 桌面端硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: UIConfig.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16.0),
-                _buildOtaActionButton(accent),
-              ],
-            ),
-            const SizedBox(height: 12.0),
-            _buildOtaVersionBanner(accent),
-            ..._buildOtaDetails(accent),
-          ],
+                  const SizedBox(width: 16.0),
+                  _buildOtaActionButton(accent),
+                ],
+              ),
+              const SizedBox(height: 12.0),
+              _buildOtaVersionBanner(accent),
+              ..._buildOtaDetails(accent),
+            ],
+          ),
         ),
-      ),
+      ],
     ];
   }
 

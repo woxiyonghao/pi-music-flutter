@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/platform_helper.dart';
 import '../../../services/pi_system_service.dart';
 import '../../../services/web_remote_service.dart';
 import '../../../services/wifi_transfer_service.dart';
@@ -697,9 +698,10 @@ class _PiHardwareSettingsDrawerState extends State<PiHardwareSettingsDrawer> {
 
                                   const SizedBox(height: 8),
 
-                                  // 服务卡片 3：系统固件 OTA 在线升级
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
+                                  // 服务卡片 3：系统固件 OTA 在线升级 (仅在具备 Git 环境的硬件平台展示)
+                                  if (PlatformHelper.supportsGitOta()) ...[
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
                                       color: Colors.white.withValues(alpha: 0.04),
                                       borderRadius: BorderRadius.circular(10),
@@ -809,6 +811,7 @@ class _PiHardwareSettingsDrawerState extends State<PiHardwareSettingsDrawer> {
                                       },
                                     ),
                                   ),
+                                ],
                                 ],
                               ),
                             ),

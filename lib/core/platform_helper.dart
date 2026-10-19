@@ -60,10 +60,20 @@ class PlatformHelper {
     return currentPlatform;
   }
 
-  static bool get isIpad => currentPlatform == HifiPlatformType.ipad || (overridePlatform == null && Platform.isIOS);
-  static bool get isMac => currentPlatform == HifiPlatformType.mac || (overridePlatform == null && Platform.isMacOS);
-  static bool get isPi => currentPlatform == HifiPlatformType.pi || (overridePlatform == null && Platform.isLinux);
+  static bool get isIpad => (overridePlatform ?? currentPlatform) == HifiPlatformType.ipad;
+  static bool get isMac => (overridePlatform ?? currentPlatform) == HifiPlatformType.mac;
+  static bool get isPi => (overridePlatform ?? currentPlatform) == HifiPlatformType.pi;
   static bool get isApple => isIpad || isMac;
+
+  /// 判断当前平台环境是否支持基于 Git 命令行工具的在线 OTA 热更新
+  /// 移动端设备 (iPad, iPhone, Android) 处于无 Git 环境的封闭沙盒，严禁显示系统在线 OTA 升级
+  static bool supportsGitOta([HifiPlatformType? platform]) {
+    final p = platform ?? overridePlatform ?? currentPlatform;
+    if (p == HifiPlatformType.ipad || p == HifiPlatformType.iphone || p == HifiPlatformType.android) {
+      return false;
+    }
+    return p == HifiPlatformType.pi || p == HifiPlatformType.mac || p == HifiPlatformType.window;
+  }
 
   /// 获取平台友好名称
   static String getPlatformName([HifiPlatformType? type]) {

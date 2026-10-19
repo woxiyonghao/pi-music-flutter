@@ -547,9 +547,9 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
         // 7: systemSettings
         const MacSystemSettingsView(),
         // 8: webService
-        const MacWebServiceView(isWifiTransfer: false),
+        MacWebServiceView(isWifiTransfer: false, platform: widget.platform),
         // 9: wifiTransfer
-        const MacWebServiceView(isWifiTransfer: true),
+        MacWebServiceView(isWifiTransfer: true, platform: widget.platform),
         // 10: terminal
         const MacSystemSettingsView(),
       ],
