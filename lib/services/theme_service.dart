@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'music_database_service.dart';
 
@@ -111,7 +112,7 @@ class ThemeService extends ChangeNotifier {
     ),
   ];
 
-  static const List<String> visualModeLabels = [
+  static List<String> get visualModeLabels => [
     '48列全景 LED 频谱',
     '名机动圈大表头',
     '金嗓子旗舰大表头',
@@ -123,7 +124,11 @@ class ThemeService extends ChangeNotifier {
     '电光霓虹声波',
     '赛博粒子网格',
     '液态玻璃时钟',
-    '树莓派硬件数据大屏',
+    Platform.isMacOS
+        ? 'Mac 硬件数据大屏'
+        : (Platform.isIOS
+            ? 'iPad 硬件数据大屏'
+            : (Platform.isLinux ? '树莓派硬件数据大屏' : '系统硬件数据大屏')),
   ];
 
   int _currentThemeId = 0;

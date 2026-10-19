@@ -1,3 +1,5 @@
+import 'dart:io';
+
 /// 发烧动效主题类型定义 (1:1 对齐 C++ BackgroundVisualMode)
 enum VisualizerType {
   ledSpectrum,  // 48列全景 LED 频谱
@@ -11,7 +13,7 @@ enum VisualizerType {
   neonWave,     // 电光霓虹声波
   cyberGrid,    // 赛博粒子网格
   glassClock,            // 液态玻璃时钟
-  piTelemetryDashboard,  // 树莓派硬件数据大屏 (Big Data Telemetry Dashboard)
+  piTelemetryDashboard,  // 原生硬件遥测大屏 (Mac/iPad/树莓派自适应)
 }
 
 extension VisualizerTypeExtension on VisualizerType {
@@ -40,7 +42,10 @@ extension VisualizerTypeExtension on VisualizerType {
       case VisualizerType.glassClock:
         return '液态玻璃时钟 (Glass Clock)';
       case VisualizerType.piTelemetryDashboard:
-        return '树莓派硬件数据大屏';
+        if (Platform.isMacOS) return 'Mac 硬件数据大屏';
+        if (Platform.isIOS) return 'iPad 硬件数据大屏';
+        if (Platform.isLinux) return '树莓派硬件数据大屏';
+        return '系统硬件数据大屏';
     }
   }
 
@@ -69,7 +74,10 @@ extension VisualizerTypeExtension on VisualizerType {
       case VisualizerType.glassClock:
         return 'Frosted Glass Precision Audio Clock';
       case VisualizerType.piTelemetryDashboard:
-        return 'BCM2712 Quad-Core · Real-time Telemetry & Hardware Matrix';
+        if (Platform.isMacOS) return 'Apple Silicon Architecture · Real-time Telemetry & Hardware Matrix';
+        if (Platform.isIOS) return 'Apple Studio AOP · Real-time Telemetry & Hardware Matrix';
+        if (Platform.isLinux) return 'BCM2712 Quad-Core · Real-time Telemetry & Hardware Matrix';
+        return 'System Hardware Telemetry & Audio Matrix';
     }
   }
 }

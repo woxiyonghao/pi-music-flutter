@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 
@@ -309,30 +310,38 @@ class McIntoshMeterPainter extends CustomPainter {
         );
       case 1: // McIntosh 麦景图湖蓝
       default:
-        return const _MeterPalette(
-          chassisBg: Color(0xFF030712),
-          meterBgDark: Color(0xFF010E20),
-          meterBgMid: Color(0xFF021B38),
-          meterBgBottom: Color(0xFF03264C),
-          glowCore: Color(0xB800C4EF),
-          glowOuter: Color(0x400077B6),
-          topGlow: Color(0x3500B4D8),
-          bezelOuter: Color(0xFF253040),
-          bezelInner: Color(0xFF0B121C),
-          arcWattsColor: Color(0xFFBAE6FD),
-          arcDbColor: Color(0xCC7DD3FC),
-          tickSafe: Color(0xF0E0F2FE),
-          tickTextSafe: Color(0xEEBAE6FD),
-          overloadRed: Color(0xFFFF2519),
-          needleColor: Color(0xFFFF2B1D),
-          needleShadow: Color(0x80010E20),
-          pivotBase: Color(0xFF161E28),
-          pivotRing: Color(0xFF94A3B8),
-          footerBadge: Color(0xB438BDF8),
-          pgLedGreen: Color(0xFF00F5D4),
+        return _MeterPalette(
+          chassisBg: const Color(0xFF030712),
+          meterBgDark: const Color(0xFF010E20),
+          meterBgMid: const Color(0xFF021B38),
+          meterBgBottom: const Color(0xFF03264C),
+          glowCore: const Color(0xB800C4EF),
+          glowOuter: const Color(0x400077B6),
+          topGlow: const Color(0x3500B4D8),
+          bezelOuter: const Color(0xFF253040),
+          bezelInner: const Color(0xFF0B121C),
+          arcWattsColor: const Color(0xFFBAE6FD),
+          arcDbColor: const Color(0xCC7DD3FC),
+          tickSafe: const Color(0xF0E0F2FE),
+          tickTextSafe: const Color(0xEEBAE6FD),
+          overloadRed: const Color(0xFFFF2519),
+          needleColor: const Color(0xFFFF2B1D),
+          needleShadow: const Color(0x80010E20),
+          pivotBase: const Color(0xFF161E28),
+          pivotRing: const Color(0xFF94A3B8),
+          footerBadge: const Color(0xB438BDF8),
+          pgLedGreen: const Color(0xFF00F5D4),
           subLabel: 'DECIBELS / WATTS',
-          footerLeft: 'McIntosh Precision Power Output Meter · Bit-Perfect 192kHz/24Bit ALSA',
-          footerRight: 'AK4191EQ + AK4499EX VELVET SOUND · FEMTOSECOND CLOCK',
+          footerLeft: Platform.isLinux
+              ? 'McIntosh Precision Power Output Meter · Bit-Perfect 192kHz/24Bit ALSA'
+              : (Platform.isIOS
+                  ? 'McIntosh Precision Power Output Meter · Apple Silicon AOP Direct'
+                  : 'McIntosh Precision Power Output Meter · Bit-Perfect CoreAudio Engine'),
+          footerRight: Platform.isLinux
+              ? 'AK4191EQ + AK4499EX VELVET SOUND · FEMTOSECOND CLOCK'
+              : (Platform.isIOS
+                  ? 'APPLE SILICON AOP · STUDIO GRADE MASTER CLOCK'
+                  : 'APPLE STUDIO GRADE DIRECT BUS · FEMTOSECOND MASTER CLOCK'),
         );
     }
   }

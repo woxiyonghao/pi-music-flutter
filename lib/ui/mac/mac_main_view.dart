@@ -199,7 +199,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
           activeDacName = 'Apple Direct';
         }
 
-        final String? tempText = (Platform.isLinux || piSys.socTemperature > 0)
+        final String? tempText = (Platform.isLinux && piSys.socTemperature > 0)
             ? '${piSys.socTemperature.toStringAsFixed(1)}°C'
             : null;
 

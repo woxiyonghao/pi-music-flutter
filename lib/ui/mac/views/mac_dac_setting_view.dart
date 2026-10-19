@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../models/dac_device_info.dart';
 import '../../../services/dac_setting_service.dart';
 import '../../../services/theme_service.dart';
+import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
 
 /// 动态发烧 DAC 解码设置视图 (Master-Detail 架构)
@@ -35,8 +36,9 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         final devices = dac.connectedDevices;
         final currentDev = dac.currentDevice;
 
-        return Container(
-          color: Colors.transparent,
+        return GlassCard(
+          borderRadius: UIConfig.containerRounding,
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -306,8 +308,13 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
 
   /// 硬件规格全景名片
   Widget _buildHardwareBadgeCard(DacDeviceInfo dev, Color accent) {
-    return GlassCard(
+    return Container(
       padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141924).withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -489,8 +496,13 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         const SizedBox(height: 8),
 
         // 1. 核心数字滤波器选择 (ESS ES9039Q2M 官方 8 种滤波曲线)
-        GlassCard(
+        Container(
           padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141924).withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -687,8 +699,13 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     required Color accent,
     required ValueChanged<bool> onChanged,
   }) {
-    return GlassCard(
+    return Container(
       padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141924).withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -726,8 +743,13 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     required Color accent,
     required ValueChanged<int> onSelected,
   }) {
-    return GlassCard(
+    return Container(
       padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141924).withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
