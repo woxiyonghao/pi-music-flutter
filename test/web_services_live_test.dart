@@ -88,6 +88,39 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 50));
       expect(web.clientCount, 0);
     });
+
+    test('returns dynamic DAC devices and parameters on GET /api/dac', () async {
+      await web.start(port: testPort);
+      final client = HttpClient();
+      final req = await client.getUrl(Uri.parse('http://127.0.0.1:$testPort/api/dac'));
+      final resp = await req.close();
+
+      expect(resp.statusCode, HttpStatus.ok);
+      final body = await resp.transform(utf8.decoder).join();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+
+      expect(json['type'], 'dac');
+      expect(json.containsKey('devices'), isTrue);
+      expect(json.containsKey('selected_device_index'), isTrue);
+      expect(json.containsKey('params'), isTrue);
+      expect(json.containsKey('active_output'), isTrue);
+      client.close();
+    });
+
+    test('sets DAC parameter on GET /api/dac_param', () async {
+      await web.start(port: testPort);
+      final client = HttpClient();
+      final req = await client.getUrl(Uri.parse('http://127.0.0.1:$testPort/api/dac_param?key=topping_filter&val=3'));
+      final resp = await req.close();
+
+      expect(resp.statusCode, HttpStatus.ok);
+      final body = await resp.transform(utf8.decoder).join();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+
+      expect(json['status'], 'ok');
+      expect(json['params']['topping_filter'], 3);
+      client.close();
+    });
   });
 
   group('WifiTransferService Live Network Tests', () {

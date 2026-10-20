@@ -80,4 +80,29 @@ class DacDeviceInfo {
     final dsdPart = supportsDsd && maxDsdRate != '无' ? ' · $maxDsdRate' : '';
     return '${khz}kHz / ${maxBitDepth}Bit$dsdPart';
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'isBuiltIn': isBuiltIn,
+    'isDefault': isDefault,
+    'transport': transport,
+    'currentSampleRate': currentSampleRate,
+    'maxSampleRate': maxSampleRate,
+    'maxBitDepth': maxBitDepth,
+    'brand': brand,
+    'model': model,
+    'chipModel': chipModel,
+    'usbInterface': usbInterface,
+    'maxDsdRate': maxDsdRate,
+    'supportsDsd': supportsDsd,
+    'supportsHogMode': supportsHogMode,
+    'supportsUacMode': supportsUacMode,
+    'supportsDpll': supportsDpll,
+    'supportsGainControl': supportsGainControl,
+    'supportsLineOutBypass': supportsLineOutBypass,
+    'digitalFilters': digitalFilters,
+    'filterDescriptions': filterDescriptions,
+    'specBadge': specBadge,
+  };
 }

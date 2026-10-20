@@ -105,9 +105,9 @@ input[type="file"] { display: none; }
 <body>
 <div class="container">
   <div class="header">
-    <h1>PiHiFi 发烧纯音无线传歌中枢</h1>
-    <p>树莓派局域网极速无损传输 · 即传即播 · 自动扫描入库</p>
-    <div class="badge"><div class="badge-dot"></div><span>树莓派服务已就绪 · 本地直连</span></div>
+    <h1>{{PLATFORM_TITLE}} 发烧纯音无线传歌中枢</h1>
+    <p>{{PLATFORM_LABEL}}局域网极速无损传输 · 即传即播 · 自动扫描入库</p>
+    <div class="badge"><div class="badge-dot"></div><span>{{PLATFORM_LABEL}}服务已就绪 · 本地直连</span></div>
   </div>
 
   <div class="card">

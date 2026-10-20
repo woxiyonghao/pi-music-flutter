@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import '../core/app_paths.dart';
+import '../core/platform_helper.dart';
 import 'music_database_service.dart';
 import 'web_remote_service.dart';
 import 'wifi_transfer_html.dart';
@@ -69,25 +71,9 @@ class WifiTransferService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 智能探测默认音乐存储目录
+  /// 智能探测默认音乐存储目录 (严格遵循 AppPaths.musicDirectory，保障 iOS/iPadOS 沙盒写权限与曲库即传即播)
   static String _resolveDefaultMusicDir() {
-    final home = Platform.environment['HOME'] ?? '';
-    if (home.isNotEmpty) {
-      final downloadsMusic = '$home/Downloads/music';
-      if (Directory(downloadsMusic).existsSync()) return downloadsMusic;
-
-      final macMusic = '$home/Music';
-      if (Directory(macMusic).existsSync()) return macMusic;
-
-      final downloads = '$home/Downloads';
-      if (Directory(downloads).existsSync()) return downloads;
-
-      return macMusic;
-    }
-    if (Platform.isLinux) {
-      return '/home/pi/Music';
-    }
-    return '/tmp/music';
+    return AppPaths.musicDirectory;
   }
 
   /// 启动 WiFi 传歌 HTTP 服务 (默认端口 8080)
@@ -172,10 +158,16 @@ class WifiTransferService extends ChangeNotifier {
     // 1. GET / 或 /index.html: 返回 H5 拖拽传歌网页 (同时兼容 HEAD 请求)
     if ((request.method == 'GET' || request.method == 'HEAD') &&
         (path == '/' || path == '/index.html')) {
-      final platformLabel = Platform.isMacOS
-          ? 'Mac'
-          : (Platform.isLinux ? '树莓派' : 'HiFi主机');
-      final html = wifiTransferHtml.replaceAll('{{PLATFORM}}', platformLabel);
+      final platformLabel = PlatformHelper.isIpad
+          ? 'iPad'
+          : (PlatformHelper.isMac
+              ? 'Mac'
+              : (PlatformHelper.isPi ? '树莓派' : (Platform.isAndroid ? 'Android' : 'HiFi主机')));
+      final platformTitle = PlatformHelper.isPi ? 'PiHiFi' : 'MyHiFi';
+      final html = wifiTransferHtml
+          .replaceAll('{{PLATFORM}}', platformLabel)
+          .replaceAll('{{PLATFORM_LABEL}}', platformLabel)
+          .replaceAll('{{PLATFORM_TITLE}}', platformTitle);
 
       request.response.headers.contentType = ContentType.html;
       if (request.method == 'GET') {

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../core/app_paths.dart';
 import '../core/hifi_audio_bindings.dart';
 import '../core/hifi_audio_service.dart';
+import '../core/platform_helper.dart';
 import '../models/playback_state.dart';
 import '../models/track.dart';
 import 'dac_setting_service.dart';
@@ -275,6 +276,38 @@ class WebRemoteService extends ChangeNotifier {
       request.response.write(jsonEncode({
         'status': 'ok',
         'wifi_running': WifiTransferService.instance.isRunning,
+      }));
+      await request.response.close();
+      return;
+    }
+
+    // 5.4 GET /api/dac: 查询或切换当前连接的物理 DAC 设备
+    if (request.method == 'GET' && path == '/api/dac') {
+      final select = request.uri.queryParameters['select'];
+      if (select != null) {
+        final idx = int.tryParse(select) ?? 0;
+        DacSettingService.instance.selectDevice(idx);
+        broadcastDac();
+      }
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode(_buildDacMap()));
+      await request.response.close();
+      return;
+    }
+
+    // 5.5 GET /api/dac_param: 调整 DAC 硬件参数
+    if (request.method == 'GET' && path == '/api/dac_param') {
+      final key = request.uri.queryParameters['key'];
+      final valStr = request.uri.queryParameters['val'];
+      if (key != null && valStr != null) {
+        final val = int.tryParse(valStr) ?? 0;
+        DacSettingService.instance.setParam(key, val);
+        broadcastDac();
+      }
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'status': 'ok',
+        'params': DacSettingService.instance.allParams,
       }));
       await request.response.close();
       return;
@@ -632,6 +665,13 @@ class WebRemoteService extends ChangeNotifier {
             broadcastDac();
           }
           break;
+        case 'select_dac_device':
+          final index = (cmd['index'] as num?)?.toInt();
+          if (index != null) {
+            DacSettingService.instance.selectDevice(index);
+            broadcastDac();
+          }
+          break;
         case 'set_dac_param':
           final key = cmd['key'] as String?;
           final val = ((cmd['val'] ?? cmd['value']) as num?)?.toInt();
@@ -787,17 +827,20 @@ class WebRemoteService extends ChangeNotifier {
   Map<String, dynamic> _buildDacMap() {
     final dac = DacSettingService.instance;
     final piSys = PiSystemService.instance;
+    final curDev = dac.currentDevice;
     return {
       'type': 'dac',
-      'platform': Platform.operatingSystem,
+      'platform': PlatformHelper.isPi ? 'linux' : (PlatformHelper.isIpad ? 'ios' : (PlatformHelper.isMac ? 'macos' : Platform.operatingSystem)),
       'temperature': piSys.socTemperature,
       'has_external_dac': dac.hasExternalDac,
-      'dac_name': Platform.isLinux ? piSys.dacDeviceName : dac.dacName,
+      'dac_name': curDev != null ? curDev.name : (Platform.isLinux ? piSys.dacDeviceName : dac.dacName),
       'active_output': dac.activeOutput,
       'alsa_card': piSys.alsaCard,
       'detected_alsa_devices': piSys.getDetectedAlsaDevices(),
+      'selected_device_index': dac.selectedDeviceIndex,
+      'devices': dac.connectedDevices.map((d) => d.toJson()).toList(),
       'selected_chip': dac.selectedChip,
-      'chip_name': dac.dacName,
+      'chip_name': curDev != null ? curDev.name : dac.dacName,
       'params': dac.allParams,
     };
   }

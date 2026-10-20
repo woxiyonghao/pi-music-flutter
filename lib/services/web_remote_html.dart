@@ -639,37 +639,14 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
         </div>
       </div>
 
-      <div class="section-title">6 大名片解码芯片架构选择</div>
+      <div class="section-title">当前连接的解码器硬件 (实机在线感知)</div>
       <div class="dac-chips-grid" id="dacChipsGrid">
-        <div class="dac-chip-card active" data-chip="0" id="dacChipCard0">
-          <div class="dac-chip-name" id="dacChip0Name">ALSA / 硬件直通</div>
-          <div class="dac-chip-brand" id="dacChip0Desc">纯音硬件输出</div>
-        </div>
-        <div class="dac-chip-card" data-chip="1">
-          <div class="dac-chip-name">ESS Sabre</div>
-          <div class="dac-chip-brand">ES9038PRO 8-Ch并联</div>
-        </div>
-        <div class="dac-chip-card" data-chip="2">
-          <div class="dac-chip-name">AKM 旭化成</div>
-          <div class="dac-chip-brand">AK4499EX Velvet</div>
-        </div>
-        <div class="dac-chip-card" data-chip="3">
-          <div class="dac-chip-name">Cirrus Logic</div>
-          <div class="dac-chip-brand">CS43198 MasterHIFI</div>
-        </div>
-        <div class="dac-chip-card" data-chip="4">
-          <div class="dac-chip-name">R-2R 梯形电阻</div>
-          <div class="dac-chip-brand">纯分立 NOS/OS</div>
-        </div>
-        <div class="dac-chip-card" data-chip="5">
-          <div class="dac-chip-name">ROHM 罗姆</div>
-          <div class="dac-chip-brand">MUS-IC BD34301</div>
-        </div>
+        <!-- 由数播后端动态推送当前真实连接的设备 (未连接设备不显示) -->
       </div>
 
-      <div class="section-title">芯片专属发烧硬件参数配置</div>
+      <div class="section-title" id="dacOptionsTitle">解码器专属发烧参数微调</div>
       <div class="dac-opts-group" id="dacOptionsContainer">
-        <!-- 由 JS 动态根据当前选中的芯片渲染参数行 -->
+        <!-- 由 JS 动态根据当前选中的解码器渲染真实可调参数行 -->
       </div>
     </div>
   </div>
@@ -795,42 +772,63 @@ const eqPresets = {
   treble:  [-1.0, -0.5, 0, 0, 0.5, 1.0, 2.5, 4.0, 5.5, 6.0]
 };
 
-// DAC 参数项定义表
-const dacChipOptions = {
-  0: [ // 平台/系统硬件直通 (自适应 ALSA 物理声卡直通与 macOS CoreAudio)
-    { key: "apple_exclusive", label: "硬件直通模式", opts: ["Bit-Perfect 硬件直通 (hw:X,Y)", "系统混音共享"] },
-    { key: "apple_sample_rate", label: "采样率模式", opts: ["原生跟随母带", "固定 96kHz", "固定 192kHz"] },
-    { key: "apple_drive", label: "输出推力电平", opts: ["智能阻抗自适应", "强制高输出 3.0Vrms", "标准输出 1.25Vrms"] },
-    { key: "apple_bit_depth", label: "采样位深精度", opts: ["32-bit Float 直通", "24-bit 整数定点"] }
+// DAC 真实硬件参数项定义表 (对齐 C++ DacDeviceCatalog.cpp)
+const dacDeviceConfigs = {
+  // 拓品 TOPPING DX12 (ES9039Q2M 发烧解码芯片)
+  topping: [
+    {
+      key: "topping_filter",
+      label: "PCM 数字滤波器 (7 种发烧 FIR 滤波)",
+      opts: ["快速线性 (默认/中性发烧)", "慢速线性", "快速最小 (动态鲜活)", "慢速最小", "变迹滤波 (消除振铃)", "砖墙滤波 (极致衰减)", "低延时滤波"]
+    },
+    {
+      key: "topping_dpll",
+      label: "DPLL Jitter 抖动消除抑制",
+      opts: ["极低抖动模式 (默认/低抖动)", "标准抑制", "宽容度增强 (抗丢帧/兼容老设备)"]
+    },
+    {
+      key: "topping_dsd_cutoff",
+      label: "DSD 模拟截止滤波 (模拟前级频带)",
+      opts: ["47kHz 默认截止", "50kHz 宽频带", "60kHz 高通", "70kHz 超高频直通"]
+    },
+    {
+      key: "topping_uac_mode",
+      label: "UAC USB 音频模式",
+      opts: ["UAC 2.0 (最高 384kHz/DSD256 免驱)", "UAC 1.0 (全平台即插即用)"]
+    },
+    {
+      key: "topping_lineout_bypass",
+      label: "Line Out 模拟直通输出",
+      opts: ["纯解码模式 (Line Out 0dB 旁路前级)", "前级放大模式 (可调电位器音量)"]
+    },
+    {
+      key: "topping_gain",
+      label: "硬件输出增益",
+      opts: ["0dB 纯净无增益", "+6dB 高增益驱动"]
+    }
   ],
-  1: [ // ESS Sabre
-    { key: "pcm_filter", label: "PCM 数字滤波", opts: ["快速最小", "慢速最小", "快速线性", "慢速线性", "变迹滤波", "砖墙滤波", "混合滤波"] },
-    { key: "dsd_bypass", label: "DSD 直通通道", opts: ["Direct 1-Bit 直通", "FIR 模拟滤波"] },
-    { key: "pcm_dpll", label: "DPLL 抖动抑制带宽", opts: ["极窄带 (发烧低抖)", "标准平衡", "宽带 (兼容)"] },
-    { key: "mono_mode", label: "芯片输出架构", opts: ["双芯片 8-Ch 并联", "双芯片立体声"] },
-    { key: "output_mode", label: "模拟输出级", opts: ["固定后级 (Line-Out 4.2V)", "可调前级 (Pre-Out)"] },
-    { key: "phase", label: "绝对极性", opts: ["绝对正相 (0°)", "极性反转 (180°)"] }
-  ],
-  2: [ // AKM Velvet
-    { key: "akm_filter", label: "Velvet 数字滤波器", opts: ["短延时锐滚降", "短延时慢滚降", "锐滚降", "慢滚降", "超低群延迟", "低色散"] },
-    { key: "akm_color", label: "声音色彩调节", opts: ["自然温润", "细腻通透", "动感宽厚", "极简监听"] },
-    { key: "akm_dsd", label: "DSD 解码模式", opts: ["Direct 旁路调制", "Normal 滤波模式"] }
-  ],
-  3: [ // Cirrus Logic
-    { key: "cs_filter", label: "MasterHIFI 滤波", opts: ["快速最小", "慢速最小", "快速线性", "慢速线性", "NOS 无过采样"] },
-    { key: "cs_dsd", label: "DSD 处理通道", opts: ["Direct DSD 直通", "DoP 硬件解调"] },
-    { key: "cs_drive", label: "驱动推力电平", opts: ["高推力差分 (2Vrms)", "标准单端 (1Vrms)"] }
-  ],
-  4: [ // R-2R
-    { key: "r2r_mode", label: "超采样架构", opts: ["NOS 纯无过采样", "OS 线性相位", "OS 最小相位"] },
-    { key: "r2r_dsd", label: "DSD 解码方式", opts: ["独立 1-Bit 电阻网络", "转为 24-bit 阶梯解码"] },
-    { key: "r2r_clock", label: "飞秒 FIFO 重整", opts: ["本地 FIFO 重整", "跟随输入时钟"] },
-    { key: "r2r_phase", label: "相位输出", opts: ["绝对正相 (0°)", "极性反转 (180°)"] }
-  ],
-  5: [ // ROHM
-    { key: "rohm_filter", label: "MUS-IC 滤波器", opts: ["Sharp Roll-Off (高解析)", "Slow Roll-Off (自然松弛)"] },
-    { key: "rohm_clock", label: "调制器主时钟", opts: ["智能倍频匹配", "锁定 64x fs", "锁定 128x fs"] },
-    { key: "rohm_dsd", label: "模拟音频通道", opts: ["Direct Path 纯模拟", "标准多级滤波"] }
+  // 本机直通 / 内置声卡 (Mac / iPad / 树莓派 ALSA)
+  builtin: [
+    {
+      key: "apple_exclusive",
+      label: "硬件直通模式 (Bit-Perfect)",
+      opts: ["Bit-Perfect 硬件直通 (源码直出)", "系统混音共享"]
+    },
+    {
+      key: "apple_sample_rate",
+      label: "采样率动态锁定",
+      opts: ["原生跟随母带源码率 (推荐)", "锁定 44.1kHz (CD 标准)", "锁定 96kHz (高解析)", "锁定 192kHz (母带解析)"]
+    },
+    {
+      key: "builtin_buffer_size",
+      label: "驱动缓冲深度",
+      opts: ["超低延迟 (128 采样)", "发烧均衡 (512 采样)", "安全抗抖动 (1024 采样)"]
+    },
+    {
+      key: "builtin_bypass_volume",
+      label: "系统音量直通",
+      opts: ["硬件满幅 0dB 旁路", "允许软件音量随动"]
+    }
   ]
 };
 
@@ -1260,46 +1258,75 @@ function updateMseb(m) {
   }
 }
 
-// ==================== DAC 硬件与参数配置渲染 ====================
+// ==================== DAC 硬件与参数配置渲染 (动态实机在线感知) ====================
 function updateDac(d) {
   dacConfigData = d;
-  activeDacChip = d.selected_chip || 0;
 
-  // 自适应当前平台物理声卡标题与说明
-  const chip0Name = document.getElementById('dacChip0Name');
-  const chip0Desc = document.getElementById('dacChip0Desc');
-  if (chip0Name && chip0Desc) {
-    if (d.platform === 'linux') {
-      chip0Name.textContent = 'ALSA 直通';
-      chip0Desc.textContent = 'Linux 物理声卡直通 (I2S/USB)';
-    } else if (d.platform === 'ios') {
-      chip0Name.textContent = 'Apple Direct';
-      chip0Desc.textContent = 'iPad / iOS 硬件直通';
-    } else {
-      chip0Name.textContent = 'Apple Direct';
-      chip0Desc.textContent = 'Mac 硬件直通';
+  // 提取实际在线连接的硬件设备列表 (未连接的一律不造假展示)
+  const devices = (d.devices && d.devices.length > 0) ? d.devices : [
+    {
+      id: 'builtin_default',
+      name: d.platform === 'linux' ? '树莓派 ALSA 纯音硬件' : (d.platform === 'ios' ? 'iPad AOP 纯音硬件' : 'Mac Direct 纯音硬件'),
+      brand: d.platform === 'linux' ? 'Raspberry Pi' : 'Apple',
+      model: d.platform === 'linux' ? 'ALSA Direct' : 'CoreAudio Bit-Perfect',
+      chipModel: d.platform === 'linux' ? 'ALSA PCM' : 'Apple Silicon DSP',
+      isBuiltIn: true,
+      specBadge: '384kHz / 32Bit'
     }
-  }
+  ];
 
-  document.getElementById('dacDeviceName').textContent = d.dac_name || '系统默认声卡';
-  let desc = '活跃输出: ' + (d.active_output || '默认音频输出');
-  if (d.alsa_card) {
-    desc += ' · 声卡: ' + d.alsa_card;
+  const selectedIdx = (d.selected_device_index !== undefined) ? d.selected_device_index : 0;
+  const currentDev = devices[selectedIdx] || devices[0];
+
+  // 顶部硬件状态横幅
+  document.getElementById('dacDeviceName').textContent = currentDev.name || d.dac_name || '系统默认声卡';
+  let desc = '活跃输出: ' + (d.active_output || (currentDev.isBuiltIn ? '本机音频直通' : currentDev.model));
+  if (currentDev.specBadge) {
+    desc += ' · 规格: ' + currentDev.specBadge;
   }
   document.getElementById('dacDeviceDesc').textContent = desc;
   document.getElementById('dacStatusIcon').style.color = d.has_external_dac ? 'var(--accent)' : 'var(--text-muted)';
 
-  // 芯片卡片高亮
-  document.querySelectorAll('#dacChipsGrid .dac-chip-card').forEach(c => {
-    c.classList.toggle('active', parseInt(c.dataset.chip) === activeDacChip);
-  });
+  // 动态渲染连接设备卡片：只有连接的设备才显示，彻底告别写死芯片列表
+  const grid = document.getElementById('dacChipsGrid');
+  if (grid) {
+    grid.innerHTML = devices.map((dev, idx) => {
+      const isAct = (idx === selectedIdx);
+      const icon = dev.isBuiltIn ? '💻' : '⚡';
+      const label = dev.isBuiltIn ? '【本机解码器】' : '【外接发烧解码器】';
+      return `
+        <div class="dac-chip-card ${isAct ? 'active' : ''}" data-device-idx="${idx}">
+          <div class="dac-chip-name">${icon} ${label} ${dev.name}</div>
+          <div class="dac-chip-brand">${dev.brand} ${dev.model} · ${dev.specBadge || '384kHz/32Bit'}</div>
+        </div>
+      `;
+    }).join('');
 
-  renderDacOptions(activeDacChip, d.params || {});
+    grid.querySelectorAll('.dac-chip-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const idx = parseInt(card.dataset.deviceIdx);
+        sendAction({ action: 'select_dac_device', index: idx });
+      });
+    });
+  }
+
+  // 渲染选中设备的参数
+  renderDacOptionsForDevice(currentDev, d.params || {});
 }
 
-function renderDacOptions(chipIdx, params) {
+function renderDacOptionsForDevice(dev, params) {
   const container = document.getElementById('dacOptionsContainer');
-  const rows = dacChipOptions[chipIdx] || [];
+  const title = document.getElementById('dacOptionsTitle');
+  if (!container) return;
+
+  const isExternal = !dev.isBuiltIn;
+  if (title) {
+    title.textContent = isExternal
+      ? `外接解码器专属微调 (${dev.name} · ${dev.chipModel || 'ES9039Q2M'})`
+      : `本机解码器专属微调 (${dev.name})`;
+  }
+
+  const rows = isExternal ? dacDeviceConfigs.topping : dacDeviceConfigs.builtin;
   let html = '';
 
   rows.forEach(r => {
@@ -1424,18 +1451,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('btnResetMseb').addEventListener('click', () => {
     sendAction({ action: 'reset_mseb' });
-  });
-
-  // DAC 芯片切换点击
-  document.querySelectorAll('#dacChipsGrid .dac-chip-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const chip = parseInt(card.dataset.chip);
-      activeDacChip = chip;
-      document.querySelectorAll('#dacChipsGrid .dac-chip-card').forEach(c => c.classList.remove('active'));
-      card.classList.add('active');
-      sendAction({ action: 'set_dac_chip', chip: chip });
-      renderDacOptions(chip, dacConfigData ? (dacConfigData.params || {}) : {});
-    });
   });
 
   // 清空队列
