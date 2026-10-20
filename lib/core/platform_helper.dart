@@ -8,45 +8,115 @@ enum HifiPlatformType {
   ipad,
   mac,
   window,
+  linux,
 }
 
 class PlatformHelper {
+  /// Linux 桌面与树莓派共用系统内核，不能仅凭 Platform.isLinux 判断。
+  static final bool isRaspberryPiHost = _detectRaspberryPi();
+
+  static bool _detectRaspberryPi() {
+    if (!Platform.isLinux) return false;
+    if (Platform.environment['PI_KIOSK'] == '1' ||
+        const String.fromEnvironment('HIFI_DEVICE') == 'pi') {
+      return true;
+    }
+    try {
+      return File('/proc/device-tree/model')
+          .readAsStringSync()
+          .toLowerCase()
+          .contains('raspberry pi');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static bool get supportsRuntimeGitOta =>
+      !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
+
   /// 手动覆盖平台类型（方便在 Mac 开发期预览所有端界面）
   static HifiPlatformType? overridePlatform;
+
+  /// 全局当前生效的平台形态 (默认由 detect 自动推断更新)
+  static HifiPlatformType currentPlatform = HifiPlatformType.mac;
 
   /// 智能推断当前应激活的 UI 形态
   static HifiPlatformType detect(double screenWidth, double screenHeight) {
     if (overridePlatform != null) {
+      currentPlatform = overridePlatform!;
       return overridePlatform!;
     }
 
-    if (kIsWeb) return HifiPlatformType.mac;
+    if (kIsWeb) {
+      currentPlatform = HifiPlatformType.mac;
+      return currentPlatform;
+    }
 
     if (Platform.isIOS) {
-      return (screenWidth >= 600 || screenHeight >= 1000)
+      currentPlatform = (screenWidth >= 600 || screenHeight >= 1000)
           ? HifiPlatformType.ipad
           : HifiPlatformType.iphone;
+      return currentPlatform;
     }
 
     if (Platform.isAndroid) {
-      return (screenWidth >= 600) ? HifiPlatformType.ipad : HifiPlatformType.android;
+      currentPlatform = (screenWidth >= 600) ? HifiPlatformType.ipad : HifiPlatformType.android;
+      return currentPlatform;
     }
 
     if (Platform.isMacOS) {
-      return HifiPlatformType.mac;
+      currentPlatform = HifiPlatformType.mac;
+      return currentPlatform;
     }
 
     if (Platform.isWindows) {
-      return HifiPlatformType.window;
+      currentPlatform = HifiPlatformType.window;
+      return currentPlatform;
     }
 
     if (Platform.isLinux) {
-      // 树莓派微雪 7 寸通常是 1024x600 或检测环境变量
-      final isPiScreen = (screenWidth <= 1024 && screenHeight <= 600) ||
-          Platform.environment.containsKey('HIFI_PLATFORM_RPI');
-      return isPiScreen ? HifiPlatformType.pi : HifiPlatformType.mac;
+      currentPlatform = isRaspberryPiHost ? HifiPlatformType.pi : HifiPlatformType.linux;
+      return currentPlatform;
     }
 
-    return HifiPlatformType.mac;
+    currentPlatform = HifiPlatformType.mac;
+    return currentPlatform;
+  }
+
+  static bool get isIpad => (overridePlatform ?? currentPlatform) == HifiPlatformType.ipad;
+  static bool get isMac => (overridePlatform ?? currentPlatform) == HifiPlatformType.mac;
+  static bool get isPi => (overridePlatform ?? currentPlatform) == HifiPlatformType.pi;
+  static bool get isApple => isIpad || isMac;
+
+  /// 判断当前平台环境是否支持基于 Git 命令行工具的在线 OTA 热更新
+  /// 移动端设备 (iPad, iPhone, Android) 处于无 Git 环境的封闭沙盒，严禁显示系统在线 OTA 升级
+  static bool supportsGitOta([HifiPlatformType? platform]) {
+    final p = platform ?? overridePlatform ?? currentPlatform;
+    if (p == HifiPlatformType.ipad || p == HifiPlatformType.iphone || p == HifiPlatformType.android) {
+      return false;
+    }
+    return p == HifiPlatformType.pi || p == HifiPlatformType.mac ||
+        p == HifiPlatformType.window || p == HifiPlatformType.linux;
+  }
+
+  /// 获取平台友好名称
+  static String getPlatformName([HifiPlatformType? type]) {
+    final t = type ?? currentPlatform;
+    switch (t) {
+      case HifiPlatformType.ipad:
+        return 'iPad';
+      case HifiPlatformType.mac:
+        return 'macOS';
+      case HifiPlatformType.pi:
+        return '树莓派 5';
+      case HifiPlatformType.iphone:
+        return 'iPhone';
+      case HifiPlatformType.android:
+        return 'Android';
+      case HifiPlatformType.window:
+        return 'Windows';
+      case HifiPlatformType.linux:
+        return 'Linux';
+    }
   }
 }

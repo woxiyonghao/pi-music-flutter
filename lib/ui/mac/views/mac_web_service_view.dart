@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../../core/platform_helper.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../services/ota_update_service.dart';
 import '../../../services/theme_service.dart';
@@ -11,10 +12,12 @@ import '../../common/glass_card.dart';
 /// Web服务模块 (合并 Web 远程遥控与 WiFi 传歌，1:1 对齐 C++ WebServiceView.cpp 与 WifiTransferView.cpp)
 class MacWebServiceView extends StatefulWidget {
   final bool isWifiTransfer;
+  final HifiPlatformType? platform;
 
   const MacWebServiceView({
     super.key,
     this.isWifiTransfer = false,
+    this.platform,
   });
 
   @override
@@ -538,6 +541,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
       const SizedBox(height: 12.0),
 
       // 卡片 5：系统在线 OTA 升级 (通过 Git 远程极速检查更新与一键热升级)
+      if (PlatformHelper.supportsGitOta(widget.platform ?? PlatformHelper.currentPlatform))
       _buildCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
