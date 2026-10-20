@@ -33,6 +33,7 @@ HIFI_EXPORT void hifi_audio_seek(double target_seconds);
 HIFI_EXPORT bool hifi_audio_is_playing();
 HIFI_EXPORT bool hifi_audio_is_paused();
 HIFI_EXPORT bool hifi_audio_is_idle();
+HIFI_EXPORT bool hifi_audio_has_playback_completed();
 HIFI_EXPORT double hifi_audio_get_current_time();
 HIFI_EXPORT double hifi_audio_get_duration();
 HIFI_EXPORT float hifi_audio_get_progress();
@@ -66,6 +67,7 @@ HIFI_EXPORT const char* hifi_audio_get_connected_devices_json();
 HIFI_EXPORT bool hifi_audio_select_output_device(const char* device_id);
 HIFI_EXPORT void hifi_audio_set_external_device_mock(bool enable);
 HIFI_EXPORT bool hifi_audio_is_external_device_mock();
+HIFI_EXPORT const char* hifi_audio_get_diagnostics_json();
 
 #ifdef __cplusplus
 }

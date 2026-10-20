@@ -27,7 +27,7 @@ flutter pub get
 ### 2. 在 Mac 电脑上即时运行与模拟
 ```bash
 # 启动 macOS 桌面端运行（默认即进入树莓派 7 寸台机发烧视窗，可随时在右上角切换预览）
-flutter run -d macos
+zsh scripts/run_mac.sh
 
 # 或者执行全量自动化测试（保证全部 47 个测试用例通过）
 flutter test

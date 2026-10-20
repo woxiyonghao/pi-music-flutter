@@ -51,6 +51,10 @@ bool hifi_audio_is_idle() {
     return audio_engine::AudioEngine::getInstance().isIdle();
 }
 
+bool hifi_audio_has_playback_completed() {
+    return audio_engine::AudioEngine::getInstance().hasPlaybackCompleted();
+}
+
 double hifi_audio_get_current_time() {
     return audio_engine::AudioEngine::getInstance().getCurrentTimeSec();
 }
@@ -157,6 +161,12 @@ void hifi_audio_set_external_device_mock(bool enable) {
 
 bool hifi_audio_is_external_device_mock() {
     return audio_engine::AudioEngine::getInstance().isExternalDeviceMock();
+}
+
+const char* hifi_audio_get_diagnostics_json() {
+    static thread_local std::string diagnostics;
+    diagnostics = audio_engine::AudioEngine::getInstance().getDiagnosticsJson();
+    return diagnostics.c_str();
 }
 
 } // extern "C"

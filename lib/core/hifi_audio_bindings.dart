@@ -108,6 +108,8 @@ class HifiAudioBindings {
   late final _HifiAudioSetMockExternalDart _setExternalDeviceMock;
   late final _HifiAudioIsMockExternalDart _isExternalDeviceMock;
   bool _hasDeviceCatalog = false;
+  _HifiAudioGetDevicesJsonDart? _getDiagnosticsJson;
+  _HifiAudioBoolDart? _hasPlaybackCompleted;
 
   // 内存复用：12 频段频谱指针与 10 频段 EQ 指针 (避免每帧内存分配与 GC 压力)
   late final Pointer<Float> _spectrumBuffer;
@@ -208,6 +210,14 @@ class HifiAudioBindings {
       }
 
       _isLoaded = true;
+      try {
+        _hasPlaybackCompleted = _lib.lookupFunction<_HifiAudioBoolC,
+            _HifiAudioBoolDart>('hifi_audio_has_playback_completed');
+      } catch (_) {}
+      try {
+        _getDiagnosticsJson = _lib.lookupFunction<_HifiAudioGetDevicesJsonC,
+            _HifiAudioGetDevicesJsonDart>('hifi_audio_get_diagnostics_json');
+      } catch (_) {}
     } catch (e, stack) {
       loadError = 'LOOKUP_ERROR: $e\n$stack';
       _isLoaded = false;
@@ -251,6 +261,9 @@ class HifiAudioBindings {
   bool isPlaying() => _isLoaded ? _isPlaying() : false;
   bool isPaused() => _isLoaded ? _isPaused() : false;
   bool isIdle() => _isLoaded ? _isIdle() : true;
+  // Older libraries cannot prove natural completion. Do not infer it from a
+  // transient stopped state, which can also mean a device is being reopened.
+  bool hasPlaybackCompleted() => _isLoaded && (_hasPlaybackCompleted?.call() ?? false);
   double getCurrentTime() => _isLoaded ? _getCurrentTime() : 0.0;
   double getDuration() => _isLoaded ? _getDuration() : 0.0;
   double getProgress() => _isLoaded ? _getProgress() : 0.0;
@@ -302,6 +315,13 @@ class HifiAudioBindings {
     final ptr = _getConnectedDevicesJson();
     if (ptr == nullptr) return '[]';
     return ptr.toDartString();
+  }
+
+  String getDiagnosticsJson() {
+    final getter = _getDiagnosticsJson;
+    if (!_isLoaded || getter == null) return '{}';
+    final ptr = getter();
+    return ptr == nullptr ? '{}' : ptr.toDartString();
   }
 
   bool selectOutputDevice(String deviceId) {

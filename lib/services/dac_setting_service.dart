@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../core/hifi_audio_bindings.dart';
 import '../core/platform_helper.dart';
@@ -12,17 +13,19 @@ class DacSettingService extends ChangeNotifier {
   static final DacSettingService instance = DacSettingService._();
 
   List<DacDeviceInfo> _connectedDevices = [];
-  List<DacDeviceInfo> get connectedDevices => List.unmodifiable(_connectedDevices);
+  List<DacDeviceInfo> get connectedDevices =>
+      List.unmodifiable(_connectedDevices);
 
   int _selectedDeviceIndex = 0;
   int get selectedDeviceIndex => _selectedDeviceIndex;
 
   DacDeviceInfo? get currentDevice {
     if (_connectedDevices.isEmpty) return null;
-    if (_selectedDeviceIndex >= 0 && _selectedDeviceIndex < _connectedDevices.length) {
+    if (_selectedDeviceIndex >= 0 &&
+        _selectedDeviceIndex < _connectedDevices.length) {
       return _connectedDevices[_selectedDeviceIndex];
     }
-    return _connectedDevices.first;
+    return followsSystemOutput ? null : _connectedDevices.first;
   }
 
   DacDeviceInfo? get builtinDevice {
@@ -46,8 +49,37 @@ class DacSettingService extends ChangeNotifier {
 
   VoidCallback? onBroadcastNeeded;
 
-  DacSettingService._() {
+  final String Function()? _readDevices;
+  final bool Function(String)? _selectOutput;
+  final bool? _followsSystemOutputOverride;
+
+  /// macOS 的播放设备由系统管理；列表用于显示连接状态，不在播放中试切声卡。
+  bool get followsSystemOutput =>
+      _followsSystemOutputOverride ??
+      (Platform.isMacOS && HifiAudioBindings.instance.isLoaded);
+
+  bool canSelectDevice(int index) =>
+      !followsSystemOutput &&
+      index >= 0 &&
+      index < _connectedDevices.length &&
+      index != _selectedDeviceIndex;
+
+  DacSettingService._()
+      : _readDevices = null,
+        _selectOutput = null,
+        _followsSystemOutputOverride = null {
     _loadFromDatabase();
+    refreshDevices();
+  }
+
+  @visibleForTesting
+  DacSettingService.forTesting({
+    required String Function() readDevices,
+    required bool Function(String) selectOutput,
+    required bool followsSystemOutput,
+  })  : _readDevices = readDevices,
+        _selectOutput = selectOutput,
+        _followsSystemOutputOverride = followsSystemOutput {
     refreshDevices();
   }
 
@@ -61,6 +93,11 @@ class DacSettingService extends ChangeNotifier {
   ];
 
   String get dacName {
+    if (HifiAudioBindings.instance.isLoaded &&
+        !PlatformHelper.isPi &&
+        currentDevice != null) {
+      return currentDevice!.name;
+    }
     if (_selectedChip > 0 && _selectedChip < chips.length) {
       return chips[_selectedChip];
     }
@@ -78,7 +115,9 @@ class DacSettingService extends ChangeNotifier {
 
   String get activeOutput {
     if (currentDevice != null) {
-      return currentDevice!.isBuiltIn ? '本机音频直通' : '外接发烧解码器 (${currentDevice!.model})';
+      return currentDevice!.isBuiltIn
+          ? '本机音频直通'
+          : '外接发烧解码器 (${currentDevice!.model})';
     }
     if (PlatformHelper.isPi) {
       return _selectedChip == 0 ? 'ALSA 物理硬件直通' : '外接音频 / 高保真 DAC';
@@ -91,19 +130,26 @@ class DacSettingService extends ChangeNotifier {
 
   void _loadFromDatabase() {
     final db = MusicDatabaseService.instance;
-    _selectedChip = int.tryParse(db.getSetting('setting_dac_selected_chip', '0'))?.clamp(0, 5) ?? 0;
-    _selectedDeviceIndex = int.tryParse(db.getSetting('setting_dac_device_index', '0')) ?? 0;
+    _selectedChip =
+        int.tryParse(db.getSetting('setting_dac_selected_chip', '0'))
+                ?.clamp(0, 5) ??
+            0;
+    _selectedDeviceIndex =
+        int.tryParse(db.getSetting('setting_dac_device_index', '0')) ?? 0;
 
     // 常用参数列表
     final keys = [
       // 拓品 TOPPING DX12 (ES9039Q2M)
-      'topping_filter', 'topping_dpll', 'topping_dsd_cutoff', 'topping_uac_mode',
+      'topping_filter', 'topping_dpll', 'topping_dsd_cutoff',
+      'topping_uac_mode',
       'topping_lineout_bypass', 'topping_gain',
       // Apple / 本机直通
-      'apple_exclusive', 'apple_sample_rate', 'apple_drive', 'apple_bit_depth', 'selected_device',
+      'apple_exclusive', 'apple_sample_rate', 'apple_drive', 'apple_bit_depth',
+      'selected_device',
       'builtin_buffer_size', 'builtin_bypass_volume',
       // ESS 老参数兼容
-      'pcm_filter', 'dsd_bypass', 'dsd_cutoff', 'pcm_dpll', 'thd_comp', 'mono_mode', 'output_mode', 'phase',
+      'pcm_filter', 'dsd_bypass', 'dsd_cutoff', 'pcm_dpll', 'thd_comp',
+      'mono_mode', 'output_mode', 'phase',
       // AKM
       'akm_filter', 'akm_color', 'akm_dsd', 'akm_exdf',
       // CS
@@ -124,15 +170,21 @@ class DacSettingService extends ChangeNotifier {
   void refreshDevices() {
     try {
       final bindings = HifiAudioBindings.instance;
-      final jsonStr = bindings.getConnectedDevicesJson();
-      if (jsonStr.isNotEmpty && jsonStr != '[]') {
+      final jsonStr =
+          _readDevices?.call() ?? bindings.getConnectedDevicesJson();
+      if (jsonStr.isNotEmpty) {
         final List<dynamic> list = jsonDecode(jsonStr);
-        final parsed = list.map((item) => DacDeviceInfo.fromJson(item as Map<String, dynamic>)).toList();
-        if (parsed.isNotEmpty) {
+        final parsed = list
+            .map((item) => DacDeviceInfo.fromJson(item as Map<String, dynamic>))
+            .where((device) => !device.isDisplayOutput)
+            .toList();
+        if (parsed.isNotEmpty || bindings.isLoaded || _readDevices != null) {
           _connectedDevices = parsed;
-          if (_selectedDeviceIndex >= _connectedDevices.length) {
-            _selectedDeviceIndex = 0;
-          }
+          // 原生列表里的 default 才是实际输出；持久化的数组下标会随热插拔变化。
+          final activeIndex = parsed.indexWhere((device) => device.isDefault);
+          _selectedDeviceIndex = activeIndex >= 0
+              ? activeIndex
+              : (followsSystemOutput || parsed.isEmpty ? -1 : 0);
           notifyListeners();
           return;
         }
@@ -144,16 +196,17 @@ class DacSettingService extends ChangeNotifier {
     // 降级回退或测试模式默认设备列表 (根据当前平台类型智能匹配本机解码器)
     final isIpad = PlatformHelper.isIpad;
     final isPi = PlatformHelper.isPi;
-    final builtinName = isIpad
-        ? 'iPad 本机解码器'
-        : (isPi ? '树莓派 ALSA 直通声卡' : 'Mac 本机解码器');
-    final builtinModel = isIpad
-        ? 'iPad 原生发烧音频总线'
-        : (isPi ? '树莓派 ALSA 硬件直通' : 'Apple 内置音频输出');
+    final builtinName =
+        isIpad ? 'iPad 本机解码器' : (isPi ? '树莓派 ALSA 直通声卡' : 'Mac 本机解码器');
+    final builtinModel =
+        isIpad ? 'iPad 原生发烧音频总线' : (isPi ? '树莓派 ALSA 硬件直通' : 'Apple 内置音频输出');
     final builtinChip = isIpad
         ? 'Apple Studio Grade AOP (Audio Output Processor)'
-        : (isPi ? 'BCM2712 Direct / I2S Master Clock' : 'Apple Studio Grade CoreAudio Engine');
-    final builtinTransport = isIpad ? 'BuiltIn (AOP)' : (isPi ? 'BuiltIn (I2S)' : 'BuiltIn');
+        : (isPi
+            ? 'BCM2712 Direct / I2S Master Clock'
+            : 'Apple Studio Grade CoreAudio Engine');
+    final builtinTransport =
+        isIpad ? 'BuiltIn (AOP)' : (isPi ? 'BuiltIn (I2S)' : 'BuiltIn');
 
     final fallbackList = <DacDeviceInfo>[
       DacDeviceInfo(
@@ -179,7 +232,9 @@ class DacSettingService extends ChangeNotifier {
         supportsGainControl: false,
         supportsLineOutBypass: true,
         digitalFilters: [
-          isIpad ? 'Apple AOP 原生 64-bit 浮点无损滤波' : 'Apple 原生 64-bit 浮点线性滤波 (Bit-Perfect)',
+          isIpad
+              ? 'Apple AOP 原生 64-bit 浮点无损滤波'
+              : 'Apple 原生 64-bit 浮点线性滤波 (Bit-Perfect)',
           '系统自适应低延迟模式',
         ],
         filterDescriptions: const [
@@ -243,7 +298,8 @@ class DacSettingService extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool get isMockExternalEnabled => HifiAudioBindings.instance.isExternalDeviceMock();
+  bool get isMockExternalEnabled =>
+      HifiAudioBindings.instance.isExternalDeviceMock();
 
   void toggleMockExternal(bool enable) {
     HifiAudioBindings.instance.setExternalDeviceMock(enable);
@@ -251,17 +307,27 @@ class DacSettingService extends ChangeNotifier {
   }
 
   void selectDevice(int index) {
-    if (index < 0 || index >= _connectedDevices.length) return;
-    _selectedDeviceIndex = index;
+    // 同时保护本机界面、HTTP 和 WebSocket，禁止绕过置灰卡片切换系统输出。
+    if (!canSelectDevice(index)) return;
     final dev = _connectedDevices[index];
-    HifiAudioBindings.instance.selectOutputDevice(dev.id);
-    MusicDatabaseService.instance.setSetting('setting_dac_device_index', index.toString());
+    final bindings = HifiAudioBindings.instance;
+    final selected = _selectOutput?.call(dev.id) ??
+        (!bindings.isLoaded || bindings.selectOutputDevice(dev.id));
+    if (!selected) {
+      refreshDevices();
+      return;
+    }
+    _selectedDeviceIndex = index;
+    MusicDatabaseService.instance
+        .setSetting('setting_dac_device_index', index.toString());
     notifyListeners();
     onBroadcastNeeded?.call();
   }
 
   int getParam(String key, [int defaultVal = 0]) {
-    final cleanKey = key.startsWith('setting_dac_') ? key.substring('setting_dac_'.length) : key;
+    final cleanKey = key.startsWith('setting_dac_')
+        ? key.substring('setting_dac_'.length)
+        : key;
     return _params[cleanKey] ?? defaultVal;
   }
 
@@ -269,16 +335,20 @@ class DacSettingService extends ChangeNotifier {
     final c = chip.clamp(0, 5);
     if (_selectedChip == c) return;
     _selectedChip = c;
-    MusicDatabaseService.instance.setSetting('setting_dac_selected_chip', c.toString());
+    MusicDatabaseService.instance
+        .setSetting('setting_dac_selected_chip', c.toString());
     notifyListeners();
     onBroadcastNeeded?.call();
   }
 
   void setParam(String key, int val) {
-    final cleanKey = key.startsWith('setting_dac_') ? key.substring('setting_dac_'.length) : key;
+    final cleanKey = key.startsWith('setting_dac_')
+        ? key.substring('setting_dac_'.length)
+        : key;
     if (_params[cleanKey] == val) return;
     _params[cleanKey] = val;
-    MusicDatabaseService.instance.setSetting('setting_dac_$cleanKey', val.toString());
+    MusicDatabaseService.instance
+        .setSetting('setting_dac_$cleanKey', val.toString());
     notifyListeners();
     onBroadcastNeeded?.call();
   }

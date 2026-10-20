@@ -55,6 +55,6 @@ if [[ "$OSTYPE" == "linux"* ]]; then
     echo "========================================================================"
 else
     echo "ℹ️ 当前宿主机为非 Linux 系统 (${OSTYPE})。"
-    echo "   本地可直接运行: flutter run -d macos (使用顶部平台切换器选择 Pi 预览 1024x600 布局)"
+    echo "   本地可直接运行: zsh scripts/run_mac.sh (Release 模式)"
     echo "   若需部署至树莓派，请通过 git 将本分支推送到树莓派并在树莓派上执行: ./scripts/build_pi.sh"
 fi

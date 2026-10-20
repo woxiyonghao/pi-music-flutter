@@ -111,6 +111,6 @@ cmake --build build -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
 ### 2. 运行 Flutter App
 ```bash
 flutter pub get
-flutter run -d macos
+zsh scripts/run_mac.sh
 ```
 在 Mac 上运行时，右上角配有浮动切换器，可一键实时预览 iPhone、iPad、树莓派 7寸屏、Android 等各个平台的专属 UI！

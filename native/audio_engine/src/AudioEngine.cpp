@@ -6,6 +6,7 @@
 
 #if defined(__APPLE__)
 #include "audio_engine/decoders/AppleAudioDecoder.hpp"
+#include "audio_engine/decoders/CoreAudioPcmDecoder.hpp"
 #include <TargetConditionals.h>
 #endif
 
@@ -36,30 +37,17 @@ extern "C" uint32_t HifiPadGetBluetoothOutputSampleRate() __attribute__((weak_im
 #if defined(__APPLE__)
 #if TARGET_OS_OSX
 #include <CoreAudio/CoreAudio.h>
+#include "audio_engine/MacAudioOutput.hpp"
 #endif
 #include <AudioToolbox/AudioToolbox.h>
 #include <unistd.h>
 
 #if TARGET_OS_OSX
-static AudioDeviceID getDefaultOutputDeviceID() {
-    AudioDeviceID dev = kAudioObjectUnknown;
-    UInt32 size = sizeof(dev);
-    AudioObjectPropertyAddress addr = {
-        kAudioHardwarePropertyDefaultOutputDevice,
-        kAudioObjectPropertyScopeGlobal,
-        kAudioObjectPropertyElementMain
-    };
-    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, nullptr, &size, &dev) == noErr) {
-        return dev;
-    }
-    return kAudioObjectUnknown;
-}
-
 static OSStatus onDefaultDeviceChangedThunk(AudioObjectID /*inObjectID*/, UInt32 /*inNumberAddresses*/,
                                            const AudioObjectPropertyAddress /*inAddresses*/[], void* inClientData) {
     auto* self = static_cast<audio_engine::AudioEngine*>(inClientData);
     if (self) {
-        self->handleDefaultDeviceChanged();
+        self->notifyOutputDeviceChanged();
     }
     return noErr;
 }
@@ -86,7 +74,7 @@ AudioEngine::AudioEngine() : ring_buffer_(1048576) {
     // 原生支持 AirPods Pro / 蓝牙无线耳机热插拔、立体声/空间音频、自动采样率自适应
     sink_ = std::make_unique<AudioQueueSink>();
 #if TARGET_OS_OSX
-    last_active_device_id_ = getDefaultOutputDeviceID();
+    last_active_device_id_ = getPlaybackOutputDeviceID();
 #endif
 #else
     // Linux / 树莓派平台：使用低延迟 SdlAudioSink
@@ -96,8 +84,8 @@ AudioEngine::AudioEngine() : ring_buffer_(1048576) {
 }
 
 AudioEngine::~AudioEngine() {
-    stop();
     unregisterDeviceListener();
+    stop();
 #if defined(__APPLE__) && TARGET_OS_OSX
     releaseHogMode();
 #endif
@@ -167,6 +155,7 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
     }
 
     if (is_same_file) {
+        sink_->stop();
         // 极速同文件切歌：无需重新开辟硬件声卡设备
         is_playing_.store(false, std::memory_order_release);
         is_decoding_.store(false, std::memory_order_release);
@@ -189,6 +178,7 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
             }
 
             decoder_->seek(start_sec);
+            equalizer_.reset();
             ring_buffer_.reset();
             frames_consumed_by_sink_.store(0, std::memory_order_relaxed);
             seek_base_time_.store(0.0, std::memory_order_relaxed);
@@ -225,7 +215,7 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
 
         decode_thread_ = std::jthread([this](std::stop_token st) { decodeWorker(st); });
         sink_->start();
-        return true;
+        return !sink_->hasError();
     }
 
     stop();
@@ -271,6 +261,40 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
     }
 #endif
 
+#if defined(__APPLE__) && TARGET_OS_OSX
+    // Feed AudioQueue the current device's native PCM rate. In particular,
+    // AirPods must not convert 192/384 kHz on their real-time output thread.
+    releaseHogMode();
+    const auto source_spec = new_decoder->getSpec();
+    auto output_spec = source_spec;
+    output_spec.sample_rate = getActiveHardwareSampleRate();
+    output_spec.channels = std::min<uint32_t>(source_spec.channels, 2);
+    AudioObjectPropertyAddress channels_address{kAudioDevicePropertyStreamConfiguration,
+        kAudioObjectPropertyScopeOutput, kAudioObjectPropertyElementMain};
+    UInt32 channels_size = 0;
+    const auto device = getPlaybackOutputDeviceID();
+    if (AudioObjectGetPropertyDataSize(device, &channels_address, 0, nullptr, &channels_size) == noErr &&
+        channels_size >= sizeof(AudioBufferList)) {
+        std::vector<uint8_t> storage(channels_size);
+        auto* list = reinterpret_cast<AudioBufferList*>(storage.data());
+        if (AudioObjectGetPropertyData(device, &channels_address, 0, nullptr, &channels_size, list) == noErr) {
+            uint32_t count = 0;
+            for (UInt32 i = 0; i < list->mNumberBuffers; ++i) count += list->mBuffers[i].mNumberChannels;
+            if (count > 0) output_spec.channels = std::min(output_spec.channels, count);
+        }
+    }
+    const bool conversion = source_spec.sample_rate != output_spec.sample_rate ||
+                            source_spec.channels != output_spec.channels;
+    is_resampling_.store(conversion);
+    if (conversion) {
+        auto pcm = std::make_unique<CoreAudioPcmDecoder>(std::move(new_decoder), output_spec);
+        if (!pcm->configure()) return false;
+        new_decoder = std::move(pcm);
+        std::cout << "[AudioEngine] Device-compatible PCM: " << source_spec.sample_rate
+                  << " -> " << output_spec.sample_rate << " Hz, " << output_spec.channels << " channels" << std::endl;
+    }
+#endif
+
     {
         std::lock_guard lock(decoder_mutex_);
         decoder_ = std::move(new_decoder);
@@ -292,6 +316,7 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
         }
 
         ring_buffer_.reset();
+        equalizer_.reset();
         frames_consumed_by_sink_.store(0, std::memory_order_relaxed);
         seek_base_time_.store(0.0, std::memory_order_relaxed);
         is_eof_.store(false, std::memory_order_relaxed);
@@ -307,12 +332,10 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
         section_frames_read_.store(0, std::memory_order_release);
     }
 
-    // 1. 在打开音频设备前，如果是非蓝牙物理硬件且开启了独占，先同步硬件采样率
+    // AudioQueue uses the shared system route; taking a process Hog lock can
+    // silence its output service. Hardware preferences must not block playback.
 #if defined(__APPLE__) && TARGET_OS_OSX
-    last_active_device_id_ = getDefaultOutputDeviceID();
-    if (is_exclusive_mode_.load(std::memory_order_acquire)) {
-        applyHardwareSampleRate(current_spec_.sample_rate);
-    }
+    last_active_device_id_ = getPlaybackOutputDeviceID();
     releaseHogMode();
 #endif
 
@@ -326,14 +349,6 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
             return false;
         }
     }
-
-    // 3. 打开流之后，如果是物理声卡且开启了独占模式，申请真正的 Hog Mode 硬件锁
-#if defined(__APPLE__) && TARGET_OS_OSX
-    last_active_device_id_ = getDefaultOutputDeviceID();
-    if (is_exclusive_mode_.load(std::memory_order_acquire)) {
-        applyHogMode(true);
-    }
-#endif
 
     is_playing_.store(true, std::memory_order_release);
     is_paused_.store(false, std::memory_order_release);
@@ -370,10 +385,15 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
     }
 
     sink_->start();
+    if (sink_->hasError()) {
+        stop();
+        return false;
+    }
     return true;
 }
 
 void AudioEngine::play() {
+    std::lock_guard device_lock(device_mutex_);
     if (is_playing_.load(std::memory_order_acquire)) {
         return;
     }
@@ -393,6 +413,7 @@ void AudioEngine::play() {
 }
 
 void AudioEngine::pause() {
+    std::lock_guard lock(device_mutex_);
     is_paused_.store(true, std::memory_order_release);
     is_playing_.store(false, std::memory_order_release);
     if (sink_) sink_->pause();
@@ -407,6 +428,7 @@ void AudioEngine::togglePlayPause() {
 }
 
 void AudioEngine::stop() {
+    std::lock_guard device_lock(device_mutex_);
     is_decoding_.store(false, std::memory_order_release);
     is_playing_.store(false, std::memory_order_release);
     is_paused_.store(false, std::memory_order_release);
@@ -445,6 +467,15 @@ void AudioEngine::stop() {
 }
 
 void AudioEngine::seek(double target_seconds) {
+    std::lock_guard device_lock(device_mutex_);
+    const bool was_playing = is_playing_.load();
+    is_decoding_.store(false);
+    if (decode_thread_.joinable()) {
+        decode_thread_.request_stop();
+        decode_thread_.join();
+    }
+    if (sink_) sink_->stop();
+    {
     std::lock_guard lock(decoder_mutex_);
     if (!decoder_) return;
 
@@ -452,13 +483,8 @@ void AudioEngine::seek(double target_seconds) {
     double abs_target = section_start_sec_.load(std::memory_order_relaxed) + clamped;
 
     if (decoder_->seek(abs_target)) {
+        equalizer_.reset();
         ring_buffer_.reset();
-        if (sink_) {
-            sink_->flush();
-            if (!is_playing_.load(std::memory_order_acquire)) {
-                sink_->pause();
-            }
-        }
         constexpr size_t SEEK_PREBUFFER = 32768;
         uint32_t rate = (current_spec_.sample_rate > 0) ? current_spec_.sample_rate : 44100;
         uint64_t new_read_frames = static_cast<uint64_t>(clamped * rate);
@@ -487,6 +513,10 @@ void AudioEngine::seek(double target_seconds) {
         is_eof_.store(false, std::memory_order_release);
         eof_reported_.store(false, std::memory_order_release);
     }
+    }
+    is_decoding_.store(true);
+    decode_thread_ = std::jthread([this](std::stop_token st) { decodeWorker(st); });
+    if (was_playing && sink_) sink_->start();
 }
 
 void AudioEngine::setVolume(float volume) {
@@ -510,31 +540,16 @@ bool AudioEngine::isBitPerfectDirect() const {
                       (volume_.load(std::memory_order_acquire) >= 0.9999f) &&
                       !is_eq_enabled_.load(std::memory_order_acquire);
 #if defined(__APPLE__) && TARGET_OS_OSX
-    if (is_exclusive_mode_.load(std::memory_order_acquire)) {
-        return soft_clean;
-    }
+    return soft_clean && !is_resampling_.load() && !isCurrentDeviceBluetooth();
 #endif
     return soft_clean;
 }
 
 void AudioEngine::setExclusiveMode(bool exclusive) {
+    std::lock_guard lock(device_mutex_);
     is_exclusive_mode_.store(exclusive, std::memory_order_release);
 #if defined(__APPLE__) && TARGET_OS_OSX
-    if (isCurrentDeviceBluetooth()) {
-        releaseHogMode();
-        return;
-    }
-
-    if (exclusive) {
-        if (current_spec_.sample_rate > 0) {
-            applyHardwareSampleRate(current_spec_.sample_rate);
-        }
-        if (sink_ && sink_->isOpen() && is_playing_.load(std::memory_order_acquire)) {
-            applyHogMode(true);
-        }
-    } else {
-        releaseHogMode();
-    }
+    releaseHogMode();
 #endif
 }
 
@@ -548,7 +563,7 @@ bool AudioEngine::isHogModeActive() const {
 
 AudioEngine::DeviceTransportType AudioEngine::getCurrentDeviceTransport() const {
 #if defined(__APPLE__) && TARGET_OS_OSX
-    AudioDeviceID dev = getDefaultOutputDeviceID();
+    AudioDeviceID dev = getPlaybackOutputDeviceID();
     if (dev == kAudioObjectUnknown) return DeviceTransportType::Unknown;
 
     UInt32 transport = 0;
@@ -617,11 +632,23 @@ void AudioEngine::registerDeviceListener() {
     if (err == noErr) {
         std::cout << "[AudioEngine] 已注册 CoreAudio 默认输出设备热插拔监听器" << std::endl;
     }
+    device_thread_ = std::jthread([this](std::stop_token token) {
+        while (!token.stop_requested()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            // Also catches a Bluetooth profile/rate change with the same ID.
+            device_change_pending_.exchange(false);
+            handleDefaultDeviceChanged();
+        }
+    });
 #endif
 }
 
 void AudioEngine::unregisterDeviceListener() {
 #if defined(__APPLE__) && TARGET_OS_OSX
+    if (device_thread_.joinable()) {
+        device_thread_.request_stop();
+        device_thread_.join();
+    }
     AudioObjectPropertyAddress addr = {
         kAudioHardwarePropertyDefaultOutputDevice,
         kAudioObjectPropertyScopeGlobal,
@@ -631,13 +658,25 @@ void AudioEngine::unregisterDeviceListener() {
 #endif
 }
 
+void AudioEngine::notifyOutputDeviceChanged() {
+    device_change_pending_.store(true);
+}
+
 void AudioEngine::handleDefaultDeviceChanged() {
 #if defined(__APPLE__) && TARGET_OS_OSX
     std::lock_guard lock(device_mutex_);
 
-    AudioDeviceID current_dev = getDefaultOutputDeviceID();
+    AudioDeviceID current_dev = getPlaybackOutputDeviceID();
     if (current_dev == kAudioObjectUnknown) return;
-    if (current_dev == last_active_device_id_) {
+    const auto system_device = getSystemDefaultOutputDeviceID();
+    if (system_device != last_system_output_device_id_ || current_dev != last_active_device_id_) {
+        last_system_output_device_id_ = system_device;
+        const auto status = synchronizeSystemOutputWithPlaybackDevice(system_device, current_dev);
+        if (status != noErr)
+            std::cerr << "[AudioEngine] 无法同步系统默认音频输出: " << status << std::endl;
+    }
+    if (current_dev == last_active_device_id_ &&
+        (!decoder_ || (current_spec_.sample_rate == getActiveHardwareSampleRate() && !sink_->hasError()))) {
         return; // 设备 ID 没变，忽略瞬态重复通知
     }
     last_active_device_id_ = current_dev;
@@ -647,31 +686,29 @@ void AudioEngine::handleDefaultDeviceChanged() {
     std::cout << "[AudioEngine] >>> 默认音频输出设备切换为: " << dev_name 
               << (is_bt ? " [蓝牙无线设备]" : " [物理硬件设备]") << std::endl;
 
-    if (sink_ && sink_->isOpen()) {
+    if (sink_ && sink_->isOpen() && decoder_) {
         bool was_playing = is_playing_.load(std::memory_order_acquire);
-        sink_->stop();
-        releaseHogMode();
+        const auto file = current_filepath_;
+        const double position = getCurrentTimeSec();
+        const double section_start = section_start_sec_.load();
+        const double section_end = section_end_sec_.load();
+        stop();
         sink_->close();
-        if (sink_->open(current_spec_, [this](float* output, size_t frame_count) {
-                onSinkDataNeeded(output, frame_count);
-            })) {
-            if (!is_bt && is_exclusive_mode_.load(std::memory_order_acquire)) {
-                applyHogMode(true);
-            }
-            if (was_playing) {
-                sink_->start();
-            }
+        if (openAndPlaySection(file, section_start, section_end)) {
+            seek(position);
+            if (!was_playing) pause();
             std::cout << "[AudioEngine] 已重新将推流管道绑定至新设备: " << dev_name << std::endl;
         }
     } else {
         releaseHogMode();
+        if (sink_) sink_->close();
     }
 #endif
 }
 
 std::string AudioEngine::getActiveHardwareDeviceName() const {
 #if defined(__APPLE__) && TARGET_OS_OSX
-    AudioDeviceID deviceID = getDefaultOutputDeviceID();
+    AudioDeviceID deviceID = getPlaybackOutputDeviceID();
     if (deviceID != kAudioObjectUnknown) {
         CFStringRef cfName = nullptr;
         UInt32 size = sizeof(cfName);
@@ -702,7 +739,7 @@ std::string AudioEngine::getActiveHardwareDeviceName() const {
 
 uint32_t AudioEngine::getActiveHardwareSampleRate() const {
 #if defined(__APPLE__) && TARGET_OS_OSX
-    AudioDeviceID deviceID = getDefaultOutputDeviceID();
+    AudioDeviceID deviceID = getPlaybackOutputDeviceID();
     if (deviceID != kAudioObjectUnknown) {
         Float64 sr = 0;
         UInt32 srSize = sizeof(sr);
@@ -729,6 +766,15 @@ bool AudioEngine::isExternalDeviceMock() const {
     return g_mockExternalDevice.load(std::memory_order_relaxed);
 }
 
+std::string AudioEngine::getDiagnosticsJson() const {
+    std::ostringstream out;
+    out << "{\"underruns\":" << underrun_count_.load()
+        << ",\"clipped_samples\":" << clipped_sample_count_.load()
+        << ",\"invalid_samples\":" << invalid_sample_count_.load()
+        << ",\"render_callbacks\":" << render_callback_count_.load() << "}";
+    return out.str();
+}
+
 std::vector<AudioDeviceInfo> AudioEngine::getConnectedAudioDevices() {
     std::vector<AudioDeviceInfo> devices;
 
@@ -743,7 +789,7 @@ std::vector<AudioDeviceInfo> AudioEngine::getConnectedAudioDevices() {
         int deviceCount = size / sizeof(AudioDeviceID);
         std::vector<AudioDeviceID> deviceIDs(deviceCount);
         if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, nullptr, &size, deviceIDs.data()) == noErr) {
-            AudioDeviceID defaultOutID = getDefaultOutputDeviceID();
+            AudioDeviceID defaultOutID = getPlaybackOutputDeviceID();
 
             for (AudioDeviceID dev : deviceIDs) {
                 // 检查设备是否有实际输出流通道
@@ -801,6 +847,10 @@ std::vector<AudioDeviceInfo> AudioEngine::getConnectedAudioDevices() {
                         isBuiltIn = false;
                     }
                 }
+
+                // Monitor audio is not a player output option, even when macOS
+                // advertises it as a valid HDMI / DisplayPort audio endpoint.
+                if (isDisplayOutputTransport(transport)) continue;
 
                 // 探测该硬件声卡原生支持的最大采样率
                 AudioObjectPropertyAddress srAddr = {
@@ -882,7 +932,12 @@ std::vector<AudioDeviceInfo> AudioEngine::getConnectedAudioDevices() {
         }
     }
 
-    if (!hasBuiltin) {
+    bool needsBuiltinFallback = !hasBuiltin;
+#if defined(__APPLE__) && TARGET_OS_OSX
+    // macOS must only list real audio hardware, never a synthetic speaker.
+    needsBuiltinFallback = false;
+#endif
+    if (needsBuiltinFallback) {
         AudioDeviceInfo defBuiltin;
 #if defined(__APPLE__) && TARGET_OS_IPHONE
         defBuiltin.id = "builtin_ipad";
@@ -987,7 +1042,6 @@ void AudioEngine::releaseHogMode() {
         clearHog(static_cast<AudioDeviceID>(hogged_device_id_));
         hogged_device_id_ = 0;
     }
-    clearHog(getDefaultOutputDeviceID());
     is_hog_active_.store(false, std::memory_order_release);
 #endif
 }
@@ -1007,7 +1061,7 @@ void AudioEngine::applyHogMode(bool enable) {
         return;
     }
 
-    AudioDeviceID deviceID = getDefaultOutputDeviceID();
+    AudioDeviceID deviceID = getPlaybackOutputDeviceID();
     if (deviceID == kAudioObjectUnknown) {
         releaseHogMode();
         return;
@@ -1065,87 +1119,9 @@ void AudioEngine::applyHogMode(bool enable) {
 }
 
 void AudioEngine::applyHardwareSampleRate(uint32_t sample_rate) {
-#if defined(__APPLE__) && TARGET_OS_OSX
-    if (sample_rate == 0) return;
-
-    if (isCurrentDeviceBluetooth() || getCurrentDeviceTransport() != DeviceTransportType::USB) {
-        std::cout << "[AudioEngine] 当前为无线/内置/HDMI设备，保持系统原生最佳采样率，由系统级高品质音频引擎自动对齐" << std::endl;
-        return;
-    }
-
-    AudioDeviceID deviceID = getDefaultOutputDeviceID();
-    if (deviceID == kAudioObjectUnknown) return;
-
-    AudioObjectPropertyAddress srRangeAddr = {
-        kAudioDevicePropertyAvailableNominalSampleRates,
-        kAudioObjectPropertyScopeGlobal,
-        kAudioObjectPropertyElementMain
-    };
-    if (!AudioObjectHasProperty(deviceID, &srRangeAddr)) return;
-
-    UInt32 rangeSize = 0;
-    AudioObjectGetPropertyDataSize(deviceID, &srRangeAddr, 0, nullptr, &rangeSize);
-    size_t rangeCount = rangeSize / sizeof(AudioValueRange);
-    if (rangeCount == 0) return;
-
-    std::vector<AudioValueRange> ranges(rangeCount);
-    if (AudioObjectGetPropertyData(deviceID, &srRangeAddr, 0, nullptr, &rangeSize, ranges.data()) != noErr) return;
-
-    bool supported = false;
-    Float64 target_sr = static_cast<Float64>(sample_rate);
-    for (const auto& r : ranges) {
-        if (target_sr >= r.mMinimum && target_sr <= r.mMaximum) {
-            supported = true;
-            break;
-        }
-    }
-    if (!supported) {
-        std::cout << "[AudioEngine] 当前声卡硬件不支持 " << target_sr << " Hz 硬件切换，保持设备原有最佳采样率" << std::endl;
-        return;
-    }
-
-    AudioObjectPropertyAddress srAddr = {
-        kAudioDevicePropertyNominalSampleRate,
-        kAudioObjectPropertyScopeGlobal,
-        kAudioObjectPropertyElementMain
-    };
-    Float64 cur_sr = 0;
-    UInt32 curSize = sizeof(cur_sr);
-    if (AudioObjectGetPropertyData(deviceID, &srAddr, 0, nullptr, &curSize, &cur_sr) == noErr) {
-        if (std::abs(cur_sr - target_sr) < 1.0) {
-            return;
-        }
-    }
-
-    bool was_open = sink_ && sink_->isOpen();
-    bool was_playing = is_playing_.load(std::memory_order_acquire);
-    if (was_open) {
-        releaseHogMode();
-        sink_->stop();
-        sink_->close();
-    }
-
-    OSStatus srErr = AudioObjectSetPropertyData(deviceID, &srAddr, 0, nullptr, sizeof(target_sr), &target_sr);
-    if (srErr == noErr) {
-        std::cout << "[AudioEngine] 成功将硬件 DAC 采样率点对点同步至: " << target_sr << " Hz (Bit-Perfect)" << std::endl;
-    }
-
-    if (was_open) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        if (sink_->open(current_spec_, [this](float* output, size_t frame_count) {
-                onSinkDataNeeded(output, frame_count);
-            })) {
-            if (is_exclusive_mode_.load(std::memory_order_acquire)) {
-                applyHogMode(true);
-            }
-            if (was_playing) {
-                sink_->start();
-            }
-        }
-    }
-#else
+    // This is a preference, not permission to re-clock a live shared device.
+    // The decoder converts to the device's negotiated rate on open / reroute.
     (void)sample_rate;
-#endif
 }
 
 
@@ -1159,7 +1135,8 @@ bool AudioEngine::isEqEnabled() const {
 
 void AudioEngine::setEqBands(const std::array<float, 10>& gains_db) {
     for (size_t i = 0; i < 10; ++i) {
-        eq_gains_[i].store(gains_db[i], std::memory_order_relaxed);
+        eq_gains_[i].store(std::isfinite(gains_db[i]) ? std::clamp(gains_db[i], -12.0f, 12.0f) : 0.0f,
+                           std::memory_order_relaxed);
     }
 }
 
@@ -1216,6 +1193,7 @@ void AudioEngine::resetFade() {
 }
 
 void AudioEngine::setHardwareBufferSize(uint32_t frames) {
+    std::lock_guard lock(device_mutex_);
 #if defined(__APPLE__) && TARGET_OS_IPHONE
     // iPadOS 的“硬件缓冲深度”属于 AVAudioSession，而 AudioQueue 自身的
     // 推流缓冲必须保持为 open() 时的分配尺寸。在线改写后者会让回调尺寸
@@ -1337,11 +1315,13 @@ void AudioEngine::decodeWorker(std::stop_token stop_token) {
 }
 
 void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
+    render_callback_count_.fetch_add(1, std::memory_order_relaxed);
     size_t samples_needed = frame_count * current_spec_.channels;
     size_t samples_read = ring_buffer_.read(output, samples_needed);
 
     // 若环形缓冲未填满 (或处于末尾)，平滑渐隐防止方波突变引起的爆音/沙沙声
     if (samples_read < samples_needed) {
+        if (!is_eof_.load(std::memory_order_relaxed)) underrun_count_.fetch_add(1, std::memory_order_relaxed);
 #if defined(__APPLE__) && TARGET_OS_IPHONE
         g_iPadSinkUnderflowCount.fetch_add(1, std::memory_order_relaxed);
 #endif
@@ -1364,7 +1344,7 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     float vol = volume_.load(std::memory_order_acquire);
 
     // 10段发烧级图形均衡器 RBJ Audio EQ 二阶 IIR 滤波处理 (支持硬件 Direct 直通)
-    if (is_eq_enabled_.load(std::memory_order_relaxed) && !muted) {
+    if (!muted) {
         applyEqualizer(output, frame_count);
     }
 
@@ -1433,9 +1413,18 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
 
     // 强制峰值限幅保护 [-1.0f, 1.0f]，杜绝母带超零真实峰值 (True Peak > 0dBFS) 在 DAC/蓝牙转换时溢出爆音
     if (!muted && !fade_out_done) {
+        uint64_t clipped = 0, invalid = 0;
         for (size_t i = 0; i < samples_needed; ++i) {
+            if (!std::isfinite(output[i])) {
+                output[i] = 0;
+                ++invalid;
+            } else if (std::abs(output[i]) > 1) {
+                ++clipped;
+            }
             output[i] = std::clamp(output[i], -1.0f, 1.0f);
         }
+        clipped_sample_count_.fetch_add(clipped, std::memory_order_relaxed);
+        invalid_sample_count_.fetch_add(invalid, std::memory_order_relaxed);
     }
 
     // 播放完毕检测 (单曲仅触发一次 EOF 回调，防止高频重复调用)
@@ -1453,84 +1442,14 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     }
 }
 
-struct BiquadCoeffs {
-    float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f;
-    float a1 = 0.0f, a2 = 0.0f;
-};
-
-struct BiquadState {
-    float s1 = 0.0f;
-    float s2 = 0.0f;
-};
-
-static constexpr float EQ_FREQS[10] = {
-    31.25f, 62.5f, 125.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f
-};
-
-static BiquadCoeffs calculatePeakingCoeffs(float freq, float sample_rate, float gain_db, float q = 1.414f) {
-    if (std::abs(gain_db) < 0.05f) {
-        return {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-    }
-    float w0 = 2.0f * 3.14159265358979323846f * freq / sample_rate;
-    if (w0 >= 3.14159265358979323846f * 0.95f) {
-        w0 = 3.14159265358979323846f * 0.95f;
-    }
-    float cos_w0 = std::cos(w0);
-    float sin_w0 = std::sin(w0);
-    float alpha = sin_w0 / (2.0f * q);
-    float A = std::pow(10.0f, gain_db / 40.0f);
-
-    float b0 = 1.0f + alpha * A;
-    float b1 = -2.0f * cos_w0;
-    float b2 = 1.0f - alpha * A;
-    float a0 = 1.0f + alpha / A;
-    float a1 = -2.0f * cos_w0;
-    float a2 = 1.0f - alpha / A;
-
-    float inv_a0 = 1.0f / a0;
-    return { b0 * inv_a0, b1 * inv_a0, b2 * inv_a0, a1 * inv_a0, a2 * inv_a0 };
-}
-
 void AudioEngine::applyEqualizer(float* samples, size_t frame_count) {
-    if (!is_eq_enabled_.load(std::memory_order_relaxed)) return;
-    uint32_t channels = current_spec_.channels;
-    if (channels == 0 || frame_count == 0) return;
-
-    float sample_rate = (current_spec_.sample_rate > 0) ? static_cast<float>(current_spec_.sample_rate) : 44100.0f;
-
-    BiquadCoeffs coeffs[10];
-    bool active[10];
-    bool all_zero = true;
-    for (size_t b = 0; b < 10; ++b) {
-        float g = eq_gains_[b].load(std::memory_order_relaxed);
-        if (std::abs(g) > 0.05f) {
-            all_zero = false;
-            active[b] = true;
-            coeffs[b] = calculatePeakingCoeffs(EQ_FREQS[b], sample_rate, g);
-        } else {
-            active[b] = false;
-        }
+    std::array<float, 10> gains{};
+    if (is_eq_enabled_.load(std::memory_order_relaxed)) {
+        for (size_t i = 0; i < gains.size(); ++i)
+            gains[i] = eq_gains_[i].load(std::memory_order_relaxed);
     }
-    if (all_zero) return;
-
-    static thread_local BiquadState eq_states[2][10]{};
-
-    for (size_t f = 0; f < frame_count; ++f) {
-        for (uint32_t ch = 0; ch < std::min(channels, 2u); ++ch) {
-            float s = samples[f * channels + ch];
-            for (size_t b = 0; b < 10; ++b) {
-                if (active[b]) {
-                    const auto& c = coeffs[b];
-                    auto& st = eq_states[ch][b];
-                    float out = c.b0 * s + st.s1;
-                    st.s1 = c.b1 * s - c.a1 * out + st.s2;
-                    st.s2 = c.b2 * s - c.a2 * out;
-                    s = out;
-                }
-            }
-            samples[f * channels + ch] = s;
-        }
-    }
+    equalizer_.process(samples, frame_count, current_spec_.channels,
+                       current_spec_.sample_rate, gains);
 }
 
 static void fft256(float* re, float* im) {

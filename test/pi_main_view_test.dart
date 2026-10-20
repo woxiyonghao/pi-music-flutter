@@ -65,13 +65,9 @@ void main() {
       expect(find.byType(MacBottomBarWidget), findsOneWidget);
 
       // 验证左侧发烧功能菜单项 (与 Mac/iPad 100% 保持一致)
-      expect(find.text('所有音乐'), findsOneWidget);
-      expect(find.text('均衡器'), findsOneWidget);
-      expect(find.text('调音魔棒'), findsOneWidget);
-      expect(find.text('DAC'), findsOneWidget);
-      expect(find.text('主题'), findsWidgets);
-      expect(find.text('设置'), findsOneWidget);
-      expect(find.text('Web服务'), findsOneWidget);
+      for (final label in ['所有音乐', '均衡器', '调音魔棒', 'DAC', '主题', '设置', 'Web服务']) {
+        expect(find.descendant(of: find.byType(MacSidebarWidget), matching: find.text(label)), findsOneWidget);
+      }
 
       // 验证声卡状态显示 (自动联动 PiSystemService DAC)
       expect(find.textContaining('AK4191 + AK4499EX'), findsWidgets);
