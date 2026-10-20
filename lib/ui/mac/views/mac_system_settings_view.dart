@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../../core/platform_helper.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
@@ -219,7 +220,7 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                 const SizedBox(height: 16.0),
 
                 // 板块三：系统电源与设备控制 (1:1 发烧台机物理操作中枢)
-                _buildPowerManagementCard(),
+                if (PlatformHelper.isRaspberryPiHost) _buildPowerManagementCard(),
                 const SizedBox(height: 16.0),
               ],
             ),
