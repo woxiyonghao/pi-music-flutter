@@ -203,8 +203,6 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
           activeDacName = 'iPad Direct';
         } else if (widget.platform == HifiPlatformType.mac) {
           activeDacName = 'Apple Direct';
-        } else if (widget.platform == HifiPlatformType.linux) {
-          activeDacName = 'Linux 系统输出';
         } else {
           activeDacName = 'WASAPI Direct';
         }
@@ -547,13 +545,13 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
           platform: widget.platform,
         ),
         // 7: systemSettings
-        MacSystemSettingsView(platform: widget.platform),
+        const MacSystemSettingsView(),
         // 8: webService
         MacWebServiceView(isWifiTransfer: false, platform: widget.platform),
         // 9: wifiTransfer
         MacWebServiceView(isWifiTransfer: true, platform: widget.platform),
         // 10: terminal
-        MacSystemSettingsView(platform: widget.platform),
+        const MacSystemSettingsView(),
       ],
     );
   }

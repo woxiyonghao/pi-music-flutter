@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import '../../../core/hifi_audio_service.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
@@ -43,15 +42,23 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
 
   void _loadSettings() {
     final db = MusicDatabaseService.instance;
-    _isEnabled = HifiAudioService.instance.eqEnabled;
+    _isEnabled = db.getSetting('eq_enabled', '1') == '1';
     _selectedPreset = int.tryParse(db.getSetting('eq_selected_preset', '6'))?.clamp(0, presets.length - 1) ?? 6;
 
-    _bandGains = HifiAudioService.instance.eqBands.toList();
+    final defaultGains = presets[_selectedPreset]['gains'] as List<double>;
+    _bandGains = List<double>.generate(10, (i) {
+      final savedStr = db.getSetting('eq_band_$i', defaultGains[i].toString());
+      return double.tryParse(savedStr)?.clamp(-12.0, 12.0) ?? defaultGains[i];
+    });
   }
 
   void _saveSettings() {
-    HifiAudioService.instance.setEqAndBands(_isEnabled, _bandGains,
-        selectedPreset: _selectedPreset);
+    final db = MusicDatabaseService.instance;
+    db.setSetting('eq_enabled', _isEnabled ? '1' : '0');
+    db.setSetting('eq_selected_preset', _selectedPreset.toString());
+    for (int i = 0; i < 10; i++) {
+      db.setSetting('eq_band_$i', _bandGains[i].toStringAsFixed(1));
+    }
   }
 
   void _applyPreset(int index) {
@@ -84,9 +91,8 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([ThemeService.instance, HifiAudioService.instance.eqSettingsRevision]),
+      listenable: ThemeService.instance,
       builder: (context, _) {
-        _loadSettings();
         final accent = ThemeService.instance.accentColor;
 
         return GlassCard(

@@ -227,7 +227,6 @@ class WebRemoteService extends ChangeNotifier {
       request.response.write(jsonEncode({
         'load_error': HifiAudioBindings.instance.loadError,
         'is_loaded': HifiAudioBindings.instance.isLoaded,
-        'audio_diagnostics': jsonDecode(HifiAudioBindings.instance.getDiagnosticsJson()),
         'last_debug_log': audio.lastDebugLog,
         'documents_dir': AppPaths.documentsDirectory,
         'music_dir': AppPaths.musicDirectory,
@@ -756,7 +755,6 @@ class WebRemoteService extends ChangeNotifier {
       'dac_device': Platform.isLinux ? piSys.dacDeviceName : DacSettingService.instance.dacName,
       'alsa_card': piSys.alsaCard,
       'is_playing': audio.state.isPlaying,
-      'is_loading': audio.isPreparingTrack,
       'title': cur?.title ?? '暂未载入曲目',
       'artist': cur?.artist ?? '未知艺术家',
       'album': cur?.album ?? '纯音曲库',
@@ -777,8 +775,6 @@ class WebRemoteService extends ChangeNotifier {
       'visual_mode': theme.backgroundVisualMode,
       'fade_duration': 0.5,
       'is_bit_perfect': audio.state.isBitPerfect,
-      'output_device': audio.state.activeDeviceName,
-      'output_sample_rate': audio.state.activeSampleRate,
       'wifi_running': WifiTransferService.instance.isRunning,
     };
   }

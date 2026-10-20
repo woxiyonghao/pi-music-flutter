@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../common/hifi_slider.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../services/mseb_service.dart';
 import '../../../theme/hifi_theme.dart';
@@ -425,7 +424,7 @@ class _PiTuningDrawerState extends State<PiTuningDrawer> {
                               inactiveTrackColor: HifiTheme.cardBorder,
                               thumbColor: isEnabled ? Colors.white : HifiTheme.textMuted,
                             ),
-                            child: HifiSlider(
+                            child: Slider(
                               min: -12.0,
                               max: 12.0,
                               value: gain.clamp(-12.0, 12.0),
@@ -584,7 +583,7 @@ class _PiTuningDrawerState extends State<PiTuningDrawer> {
                 inactiveTrackColor: HifiTheme.cardBorder,
                 thumbColor: Colors.white,
               ),
-              child: HifiSlider(
+              child: Slider(
                 min: -10.0,
                 max: 10.0,
                 value: value.clamp(-10.0, 10.0),

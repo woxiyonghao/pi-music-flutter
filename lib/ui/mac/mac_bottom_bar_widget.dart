@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../common/hifi_slider.dart';
 import '../../services/theme_service.dart';
 import '../../models/playback_state.dart';
 import '../../core/hifi_audio_service.dart';
@@ -156,7 +155,7 @@ class MacBottomBarWidget extends StatelessWidget {
                   overlayShape: const RoundSliderOverlayShape(overlayRadius: 10.0),
                   overlayColor: ThemeService.instance.accentColor.withValues(alpha: 0.25),
                 ),
-                child: HifiSlider(
+                child: Slider(
                   value: progress,
                   onChanged: (val) {
                     if (state.duration > 0.0) {
@@ -228,7 +227,7 @@ class MacBottomBarWidget extends StatelessWidget {
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 8.0),
               overlayColor: ThemeService.instance.accentColor.withValues(alpha: 0.25),
             ),
-            child: HifiSlider(
+            child: Slider(
               value: state.isMuted ? 0.0 : state.volume.clamp(0.0, 1.0),
               onChanged: (val) {
                 service.setVolume(val);

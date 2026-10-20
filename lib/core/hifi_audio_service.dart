@@ -6,21 +6,12 @@ import '../models/track.dart';
 import '../models/playback_state.dart';
 import '../services/music_database_service.dart';
 import 'hifi_audio_bindings.dart';
-import 'playback_completion_tracker.dart';
 
 /// 全局音频服务 (提供 60fps 动效数据流与状态响应式驱动)
 class HifiAudioService extends ChangeNotifier {
   static final HifiAudioService instance = HifiAudioService._();
 
   final HifiAudioBindings _bindings = HifiAudioBindings.instance;
-  final Future<void> Function(String)? _prepareFileOverride;
-  final bool Function(String, double, double)? _openFileOverride;
-  final bool _ownsBindings;
-  int _loadGeneration = 0;
-  bool _isPreparingTrack = false;
-  bool get isPreparingTrack => _isPreparingTrack;
-  bool _playWhenPrepared = true;
-  double? _pendingSeek;
 
   Track? _currentTrack;
   Track? get currentTrack => _currentTrack;
@@ -38,13 +29,8 @@ class HifiAudioService extends ChangeNotifier {
   PlaybackState get state => _state;
 
   Timer? _ticker;
-  final _completion = PlaybackCompletionTracker();
+  bool _hasConfirmedPlaying = false;
   int _consecutiveErrors = 0;
-  int _hardwarePollTicks = 0;
-  String _hardwareDeviceName = '';
-  int _hardwareSampleRate = 0;
-  final ValueNotifier<String> outputDeviceNameNotifier = ValueNotifier('');
-  final ValueNotifier<int> eqSettingsRevision = ValueNotifier(0);
 
   bool _eqEnabled = false;
   bool get eqEnabled => _eqEnabled;
@@ -58,25 +44,12 @@ class HifiAudioService extends ChangeNotifier {
   final ValueNotifier<Track?> currentTrackNotifier = ValueNotifier<Track?>(null);
   final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
 
-  HifiAudioService._() : _prepareFileOverride = null, _openFileOverride = null, _ownsBindings = true {
+  HifiAudioService._() {
     _bindings.init();
     _loadEqSettings();
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       _startTicker();
     }
-  }
-
-  @visibleForTesting
-  HifiAudioService.forTesting({
-    required Future<void> Function(String) prepareFile,
-    required bool Function(String, double, double) openFile,
-  }) : _prepareFileOverride = prepareFile, _openFileOverride = openFile, _ownsBindings = false;
-
-  static Future<void> _prepareFile(String path) async {
-    // macOS can wait here for Downloads / Desktop access permission. Dart's
-    // asynchronous file service keeps that wait off the Flutter platform thread.
-    final file = await File(path).open(mode: FileMode.read);
-    await file.close();
   }
 
   void _loadEqSettings() {
@@ -96,7 +69,6 @@ class HifiAudioService extends ChangeNotifier {
     _eqEnabled = enabled;
     _bindings.setEqEnabled(enabled);
     MusicDatabaseService.instance.setSetting('eq_enabled', enabled ? '1' : '0');
-    eqSettingsRevision.value++;
     notifyListeners();
   }
 
@@ -115,7 +87,6 @@ class HifiAudioService extends ChangeNotifier {
     for (int i = 0; i < _eqBands.length; i++) {
       db.setSetting('eq_band_$i', _eqBands[i].toStringAsFixed(1));
     }
-    eqSettingsRevision.value++;
     notifyListeners();
   }
 
@@ -127,7 +98,6 @@ class HifiAudioService extends ChangeNotifier {
     for (int i = 0; i < 10; i++) {
       db.setSetting('eq_band_$i', _eqBands[i].toStringAsFixed(1));
     }
-    eqSettingsRevision.value++;
     notifyListeners();
   }
 
@@ -136,7 +106,6 @@ class HifiAudioService extends ChangeNotifier {
     _eqBands[index] = gain.clamp(-12.0, 12.0);
     _bindings.setEqBands(_eqBands);
     MusicDatabaseService.instance.setSetting('eq_band_$index', _eqBands[index].toStringAsFixed(1));
-    eqSettingsRevision.value++;
     notifyListeners();
   }
 
@@ -151,7 +120,6 @@ class HifiAudioService extends ChangeNotifier {
     for (int i = 0; i < 10; i++) {
       db.setSetting('eq_band_$i', '0.0');
     }
-    eqSettingsRevision.value++;
     notifyListeners();
   }
 
@@ -175,23 +143,19 @@ class HifiAudioService extends ChangeNotifier {
       final isMuted = _bindings.isMuted();
       final isBitPerfect = _bindings.isBitPerfect();
       final spectrum = _bindings.getSpectrumLevels();
-      if (_hardwarePollTicks++ % 10 == 0) {
-        _hardwareDeviceName = _bindings.getDeviceName();
-        _hardwareSampleRate = _bindings.getSampleRate();
-        outputDeviceNameNotifier.value = _hardwareDeviceName;
-      }
 
       if (isPlayingNotifier.value != isPlaying) {
         isPlayingNotifier.value = isPlaying;
       }
 
       if (isPlaying) {
+        _hasConfirmedPlaying = true;
         _consecutiveErrors = 0;
       }
 
-      // 停播也可能来自设备重建；只有引擎确认 EOF 且缓冲区已耗尽才自动切歌。
-      if (!_isPreparingTrack && _completion.update(isPlaying: isPlaying, isPaused: isPaused,
-          hasCompleted: _bindings.hasPlaybackCompleted())) {
+      // 仅当曲目曾经在底层引擎真正开始播放，且现在底层已经停止，并且不是处于暂停状态时，才视为自然播完
+      if (_hasConfirmedPlaying && _state.isPlaying && !isPlaying && !_state.isPaused) {
+        _hasConfirmedPlaying = false;
         _state = PlaybackState(
           isPlaying: false,
           isPaused: false,
@@ -202,8 +166,8 @@ class HifiAudioService extends ChangeNotifier {
           volume: volume,
           isMuted: isMuted,
           playMode: _playMode,
-          activeDeviceName: _hardwareDeviceName,
-          activeSampleRate: _hardwareSampleRate,
+          activeDeviceName: 'Apple Direct',
+          activeSampleRate: _currentTrack?.sampleRate ?? 192000,
           spectrumLevels: List.filled(12, 0.0),
         );
         isPlayingNotifier.value = false;
@@ -213,8 +177,7 @@ class HifiAudioService extends ChangeNotifier {
       }
 
       // 仅在播放中或状态变更时通知监听者
-      if (isPlaying || _state.isPlaying != isPlaying || _state.isPaused != isPaused ||
-          _state.activeDeviceName != _hardwareDeviceName || _state.activeSampleRate != _hardwareSampleRate) {
+      if (isPlaying || _state.isPlaying != isPlaying || _state.isPaused != isPaused) {
         _state = PlaybackState(
           isPlaying: isPlaying,
           isPaused: isPaused,
@@ -225,8 +188,8 @@ class HifiAudioService extends ChangeNotifier {
           volume: volume,
           isMuted: isMuted,
           playMode: _playMode,
-          activeDeviceName: _hardwareDeviceName,
-          activeSampleRate: _hardwareSampleRate,
+          activeDeviceName: _currentTrack != null ? 'Apple Direct' : 'Apple Direct',
+          activeSampleRate: _currentTrack?.sampleRate ?? 192000,
           spectrumLevels: spectrum,
         );
         notifyListeners();
@@ -241,11 +204,7 @@ class HifiAudioService extends ChangeNotifier {
     playTrack(_playlistQueue[_currentIndex], _playlistQueue, _currentIndex);
   }
 
-  Future<void> playTrack(Track track, [List<Track>? queue, int? index]) async {
-    final generation = ++_loadGeneration;
-    _isPreparingTrack = true;
-    _playWhenPrepared = true;
-    _pendingSeek = null;
+  void playTrack(Track track, [List<Track>? queue, int? index]) {
     _currentTrack = track;
     currentTrackIdNotifier.value = track.id;
     currentTrackNotifier.value = track;
@@ -260,12 +219,11 @@ class HifiAudioService extends ChangeNotifier {
       _currentIndex = _playlistQueue.indexOf(track);
     }
 
-    _completion.reset();
+    _hasConfirmedPlaying = false;
 
     // 在单元测试无头环境下模拟成功播放，方便验证 Flutter Widget 树与高亮状态流转
-    if (Platform.environment.containsKey('FLUTTER_TEST') && _prepareFileOverride == null) {
-      _isPreparingTrack = false;
-      _completion.update(isPlaying: true, isPaused: false, hasCompleted: false);
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      _hasConfirmedPlaying = true;
       _consecutiveErrors = 0;
       isPlayingNotifier.value = true;
       _state = PlaybackState(
@@ -288,18 +246,10 @@ class HifiAudioService extends ChangeNotifier {
 
     // 智能自愈并校验物理文件是否存在，彻底避免 iOS Sandbox Container UUID 变化导致播放失败
     final resolvedPath = MusicDatabaseService.resolveTrackPath(track.filepath);
-    Object? fileError;
-    try {
-      await (_prepareFileOverride ?? _prepareFile)(resolvedPath);
-    } catch (error) {
-      fileError = error;
-    }
-    // A newer selection or Stop supersedes a pending OS permission request.
-    if (generation != _loadGeneration) return;
-    _isPreparingTrack = false;
-    if (fileError != null) {
-      lastDebugLog = 'FILE_OPEN_FAILED: resolved=$resolvedPath, error=$fileError';
-      debugPrint('[HifiAudioService] 无法读取音频文件: $resolvedPath: $fileError');
+    final fileExists = File(resolvedPath).existsSync();
+    if (!fileExists) {
+      lastDebugLog = 'FILE_NOT_FOUND: resolved=$resolvedPath (orig=${track.filepath})';
+      debugPrint('[HifiAudioService] 音频物理文件不存在: $resolvedPath (原路径: ${track.filepath})');
       _consecutiveErrors++;
       isPlayingNotifier.value = false;
       _state = PlaybackState(
@@ -321,9 +271,7 @@ class HifiAudioService extends ChangeNotifier {
     }
 
     final bool success;
-    if (_openFileOverride != null) {
-      success = _openFileOverride!(resolvedPath, track.startTimeSec, track.endTimeSec);
-    } else if (track.isCueTrack && track.endTimeSec > track.startTimeSec) {
+    if (track.isCueTrack && track.endTimeSec > track.startTimeSec) {
       success = _bindings.openAndPlaySection(resolvedPath, track.startTimeSec, track.endTimeSec);
     } else {
       success = _bindings.openAndPlay(resolvedPath);
@@ -353,24 +301,21 @@ class HifiAudioService extends ChangeNotifier {
     }
 
     lastDebugLog = 'SUCCESS_PLAY: $resolvedPath';
-    final position = _pendingSeek ?? 0.0;
-    if (_pendingSeek != null) _bindings.seek(position);
-    if (!_playWhenPrepared) _bindings.pause();
     _consecutiveErrors = 0;
-    _completion.reset();
-    isPlayingNotifier.value = _playWhenPrepared;
+    _hasConfirmedPlaying = false;
+    isPlayingNotifier.value = true;
     _state = PlaybackState(
-      isPlaying: _playWhenPrepared,
-      isPaused: !_playWhenPrepared,
-      isBitPerfect: _bindings.isBitPerfect(),
-      currentTime: position,
+      isPlaying: true,
+      isPaused: false,
+      isBitPerfect: true,
+      currentTime: 0.0,
       duration: track.durationSec.toDouble(),
-      progress: track.durationSec > 0 ? (position / track.durationSec).clamp(0.0, 1.0) : 0.0,
+      progress: 0.0,
       volume: _state.volume,
       isMuted: _state.isMuted,
       playMode: _playMode,
-      activeDeviceName: _bindings.getDeviceName(),
-      activeSampleRate: _bindings.getSampleRate(),
+      activeDeviceName: 'Apple Direct',
+      activeSampleRate: track.sampleRate,
       spectrumLevels: _state.spectrumLevels,
     );
     notifyListeners();
@@ -383,7 +328,6 @@ class HifiAudioService extends ChangeNotifier {
     }
     _bindings.toggle();
     final nowPlaying = !_state.isPlaying;
-    _playWhenPrepared = nowPlaying;
     isPlayingNotifier.value = nowPlaying;
     _state = PlaybackState(
       isPlaying: nowPlaying,
@@ -403,7 +347,6 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void play() {
-    _playWhenPrepared = true;
     _bindings.play();
     isPlayingNotifier.value = true;
     _state = PlaybackState(
@@ -424,8 +367,7 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void pause() {
-    _playWhenPrepared = false;
-    _completion.reset();
+    _hasConfirmedPlaying = false;
     _bindings.pause();
     isPlayingNotifier.value = false;
     _state = PlaybackState(
@@ -446,11 +388,7 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void stop() {
-    _loadGeneration++;
-    _isPreparingTrack = false;
-    _pendingSeek = null;
-    _playWhenPrepared = false;
-    _completion.reset();
+    _hasConfirmedPlaying = false;
     _bindings.stop();
     isPlayingNotifier.value = false;
     _state = PlaybackState(
@@ -472,7 +410,7 @@ class HifiAudioService extends ChangeNotifier {
 
   void previous() {
     if (_playlistQueue.isEmpty) return;
-    _completion.reset();
+    _hasConfirmedPlaying = false;
     if (_state.currentTime > 3.0) {
       seek(0.0);
       return;
@@ -489,11 +427,11 @@ class HifiAudioService extends ChangeNotifier {
     if (_playlistQueue.isEmpty) return;
     if (_consecutiveErrors >= _playlistQueue.length) {
       _consecutiveErrors = 0;
-      _completion.reset();
+      _hasConfirmedPlaying = false;
       pause();
       return;
     }
-    _completion.reset();
+    _hasConfirmedPlaying = false;
     switch (_playMode) {
       case PlayMode.loopSingle:
         if (isAutomatic) {
@@ -606,10 +544,6 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void seek(double targetSec) {
-    if (_isPreparingTrack) {
-      _pendingSeek = targetSec;
-      return;
-    }
     _bindings.seek(targetSec);
     notifyListeners();
   }
@@ -656,7 +590,7 @@ class HifiAudioService extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
-    if (_ownsBindings) _bindings.dispose();
+    _bindings.dispose();
     super.dispose();
   }
 }

@@ -23,24 +23,16 @@ else()
         src/decoders/FlacDecoder.cpp
         src/decoders/WavDecoder.cpp
         src/decoders/Mp3Decoder.cpp
+        src/sinks/SdlAudioSink.cpp
+        src/sinks/AlsaAudioSink.cpp
     )
-    if(NOT APPLE)
-        list(APPEND AUDIO_ENGINE_SOURCES
-            src/sinks/SdlAudioSink.cpp
-            src/sinks/AlsaAudioSink.cpp
-        )
-    endif()
 endif()
 
 if(APPLE)
     list(APPEND AUDIO_ENGINE_SOURCES
         src/decoders/AppleAudioDecoder.cpp
-        src/decoders/CoreAudioPcmDecoder.cpp
         src/sinks/AudioQueueSink.cpp
     )
-    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-        list(APPEND AUDIO_ENGINE_SOURCES src/sinks/RemoteIOSink.cpp)
-    endif()
 endif()
 
 # 生成发烧音频引擎静态库
@@ -66,8 +58,6 @@ elseif(APPLE)
         "-framework AudioToolbox"
         "-framework CoreFoundation"
     )
-elseif(WIN32)
-    target_link_libraries(audio_engine PRIVATE ${SDL2_LIBRARIES})
 else()
     target_link_libraries(audio_engine PRIVATE
         pthread

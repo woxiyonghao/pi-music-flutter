@@ -39,7 +39,6 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
     if (_currentPlatform == HifiPlatformType.iphone) return 'iPhone 随身数播';
     if (_currentPlatform == HifiPlatformType.android) return 'Android 移动数播';
     if (_currentPlatform == HifiPlatformType.window) return 'Windows 宽屏台机工作台';
-    if (_currentPlatform == HifiPlatformType.linux) return 'Linux 桌面工作台';
     return 'macOS 桌面工作台';
   }
 

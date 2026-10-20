@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../common/hifi_slider.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../models/playback_state.dart';
 import '../../../theme/hifi_theme.dart';
@@ -47,7 +46,7 @@ class PiTouchControls extends StatelessWidget {
                     ),
                     overlayShape: const RoundSliderOverlayShape(overlayRadius: 20.0),
                   ),
-                  child: HifiSlider(
+                  child: Slider(
                     value: state.progress.clamp(0.0, 1.0),
                     onChanged: (val) {
                       if (state.duration > 0) {

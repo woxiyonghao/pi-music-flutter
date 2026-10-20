@@ -40,7 +40,7 @@ class _HiFiPlayerAppState extends State<HiFiPlayerApp> {
       theme: HifiTheme.darkTheme,
       scrollBehavior: const MouseDraggableScrollBehavior(),
       builder: (context, child) {
-        if (PlatformHelper.isRaspberryPiHost) {
+        if (Platform.isLinux || Platform.environment['PI_KIOSK'] == '1') {
           return MouseRegion(
             cursor: SystemMouseCursors.none,
             child: child ?? const SizedBox.shrink(),
@@ -65,8 +65,6 @@ class _HiFiPlayerAppState extends State<HiFiPlayerApp> {
               return const MacMainView();
             case HifiPlatformType.window:
               return const WindowMainView();
-            case HifiPlatformType.linux:
-              return const MacMainView(platform: HifiPlatformType.linux);
           }
         },
       ),

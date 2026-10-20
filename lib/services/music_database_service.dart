@@ -10,11 +10,6 @@ import 'cue_parser.dart';
 
 /// 发烧曲库数据库服务 (读取 C++ 纯音数播持久化 SQLite 数据库)
 class MusicDatabaseService extends ChangeNotifier {
-  // Widget tests change persistent settings and scan fixtures. Keep those writes
-  // away from the user's real library, including when tests run concurrently.
-  static final String? _testDatabasePath = Platform.environment.containsKey('FLUTTER_TEST')
-      ? '${Directory.systemTemp.createTempSync('hifi_player_test_').path}/library.db'
-      : null;
   static final MusicDatabaseService instance = MusicDatabaseService._();
 
   List<Track> _tracks = [];
@@ -35,7 +30,6 @@ class MusicDatabaseService extends ChangeNotifier {
 
   /// 获取 C++ SQLite 数据库默认绝对路径
   String get _databasePath {
-    if (_testDatabasePath != null) return _testDatabasePath!;
     final home = Platform.environment['HOME'] ?? '';
     if (Platform.isIOS) {
       final docs = AppPaths.documentsDirectory;

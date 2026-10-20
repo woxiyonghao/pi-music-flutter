@@ -4,7 +4,6 @@
 #include "audio_engine/LockFreeRingBuffer.hpp"
 #include "audio_engine/IAudioDecoder.hpp"
 #include "audio_engine/IAudioSink.hpp"
-#include "audio_engine/GraphicEqualizer.hpp"
 
 #include <memory>
 #include <string>
@@ -73,7 +72,6 @@ public:
     DeviceTransportType getCurrentDeviceTransport() const;
     bool isCurrentDeviceBluetooth() const;
     void handleDefaultDeviceChanged();
-    void notifyOutputDeviceChanged();
     void applyHardwareSampleRate(uint32_t sample_rate);
     std::string getActiveHardwareDeviceName() const;
     uint32_t getActiveHardwareSampleRate() const;
@@ -84,7 +82,6 @@ public:
     bool selectOutputDevice(const std::string& device_id);
     void setExternalDeviceMock(bool enable);
     bool isExternalDeviceMock() const;
-    std::string getDiagnosticsJson() const;
 
     // 状态查询
     bool isPlaying() const;
@@ -122,9 +119,6 @@ public:
     bool isFadeOutCompleted() const;
     void resetFade();
     bool isEof() const { return is_eof_.load(std::memory_order_acquire); }
-    // Decoder EOF alone may still leave buffered music. Only report completion
-    // after the sink has consumed that buffer, never on stop / output rebuild.
-    bool hasPlaybackCompleted() const { return eof_reported_.load(std::memory_order_acquire); }
 
     // 硬件缓冲区深度配置 (64, 256, 512, 1024 帧)
     void setHardwareBufferSize(uint32_t frames);
@@ -174,7 +168,6 @@ private:
     // 10段图形均衡器状态 (无锁原子阵列)
     std::atomic<bool> is_eq_enabled_{false};
     std::array<std::atomic<float>, 10> eq_gains_{};
-    GraphicEqualizer equalizer_;
 
     // 淡入淡出实时状态
     std::atomic<FadeState> fade_state_{FadeState::None};
@@ -187,16 +180,8 @@ private:
     std::atomic<bool> is_exclusive_mode_{false};
     std::atomic<bool> is_hog_active_{false};
     uint32_t last_active_device_id_{0};
-    uint32_t last_system_output_device_id_{0};
     uint32_t hogged_device_id_{0};
     std::recursive_mutex device_mutex_;
-    std::jthread device_thread_;
-    std::atomic<bool> device_change_pending_{false};
-    std::atomic<bool> is_resampling_{false};
-    std::atomic<uint64_t> underrun_count_{0};
-    std::atomic<uint64_t> clipped_sample_count_{0};
-    std::atomic<uint64_t> invalid_sample_count_{0};
-    std::atomic<uint64_t> render_callback_count_{0};
 
     void applyHogMode(bool enable);
     void releaseHogMode();

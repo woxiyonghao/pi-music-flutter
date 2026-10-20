@@ -65,7 +65,6 @@ public:
      * @brief 设备是否处于已打开状态
      */
     virtual bool isOpen() const = 0;
-    virtual bool hasError() const { return false; }
 
     /**
      * @brief 获取声卡硬件实际协商生效的物理规格

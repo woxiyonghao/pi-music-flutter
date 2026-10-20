@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
-import '../core/platform_helper.dart';
 
 /// 固件与系统在线 OTA 更新状态
 enum OtaStatus {
@@ -56,7 +54,7 @@ class OtaUpdateService extends ChangeNotifier {
   String? _repoRoot;
 
   OtaUpdateService._() {
-    if (PlatformHelper.supportsRuntimeGitOta && !Platform.environment.containsKey('FLUTTER_TEST')) {
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       initLocalVersionInfo();
     }
   }
@@ -75,21 +73,6 @@ class OtaUpdateService extends ChangeNotifier {
       }
     }
     return 'flutter';
-  }
-
-  /// Each desktop updater runs the same Release build and native-library
-  /// packaging script used for a manual installation.
-  static List<String>? releaseBuildCommand(TargetPlatform platform) {
-    switch (platform) {
-      case TargetPlatform.macOS:
-        return ['zsh', 'scripts/build_mac.sh'];
-      case TargetPlatform.linux:
-        return ['bash', 'scripts/build_linux.sh'];
-      case TargetPlatform.windows:
-        return ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/build_windows.ps1'];
-      default:
-        return null;
-    }
   }
 
   /// 获取 Git 源码根目录
@@ -126,7 +109,6 @@ class OtaUpdateService extends ChangeNotifier {
 
   /// 刷新本地 Git 版本元数据
   Future<void> initLocalVersionInfo() async {
-    if (!PlatformHelper.supportsRuntimeGitOta) return;
     final root = getRepoRoot();
     try {
       // 1. 获取当前分支
@@ -163,7 +145,6 @@ class OtaUpdateService extends ChangeNotifier {
 
   /// 异步检测云端远端仓库是否有新提交 (零阻塞 UI 与发烧音频重放)
   Future<void> checkForUpdates() async {
-    if (!PlatformHelper.supportsRuntimeGitOta) return;
     if (_status == OtaStatus.checking || _status == OtaStatus.updating) {
       return;
     }
@@ -242,7 +223,6 @@ class OtaUpdateService extends ChangeNotifier {
 
   /// 执行一键 OTA 升级拉取并触发重新编译构建
   Future<bool> executeUpdate() async {
-    if (!PlatformHelper.supportsRuntimeGitOta) return false;
     if (_status == OtaStatus.updating) return false;
 
     _status = OtaStatus.updating;
@@ -273,25 +253,43 @@ class OtaUpdateService extends ChangeNotifier {
       }
 
       _progress = 0.55;
-      _progressMessage = '代码同步完成，正在构建 Release 应用与原生音频库…';
+      _progressMessage = '代码同步完成！正在本地并发编译全新应用 (flutter build macos)...';
       notifyListeners();
 
-      final target = Platform.isMacOS ? TargetPlatform.macOS
-          : (Platform.isWindows ? TargetPlatform.windows : TargetPlatform.linux);
-      final command = releaseBuildCommand(target)!;
-      final flutterDir = p.dirname(getFlutterExecutable());
-      final buildRes = await Process.run(
-        command.first,
-        command.skip(1).toList(),
-        workingDirectory: root,
-        environment: {
-          ...Platform.environment,
-          if (flutterDir != '.') 'PATH': '$flutterDir${Platform.isWindows ? ';' : ':'}${Platform.environment['PATH'] ?? ''}',
-        },
-      ).timeout(const Duration(minutes: 15));
-      if (buildRes.exitCode != 0) {
-        throw ProcessException(command.first, command.skip(1).toList(),
-            '${buildRes.stdout}\n${buildRes.stderr}', buildRes.exitCode);
+      // 2. 根据运行平台编译目标
+      if (Platform.isMacOS) {
+        final buildRes = await Process.run(
+          'flutter',
+          ['build', 'macos', '--debug'],
+          workingDirectory: root,
+        ).timeout(const Duration(minutes: 5));
+
+        if (buildRes.exitCode != 0) {
+          _status = OtaStatus.failed;
+          _errorMessage = '编译构建失败: ${buildRes.stderr.toString().trim()}';
+          _progressMessage = '';
+          notifyListeners();
+          return false;
+        }
+      } else if (Platform.isLinux) {
+        final flutterBin = getFlutterExecutable();
+        final buildRes = await Process.run(
+          flutterBin,
+          ['build', 'linux', '--release'],
+          workingDirectory: root,
+          environment: {
+            ...Platform.environment,
+            'PATH': '/home/winheo/flutter/bin:/usr/local/bin:/usr/bin:/bin:${Platform.environment['PATH'] ?? ''}',
+          },
+        ).timeout(const Duration(minutes: 8));
+
+        if (buildRes.exitCode != 0) {
+          _status = OtaStatus.failed;
+          _errorMessage = '编译构建失败: ${buildRes.stderr.toString().trim()}';
+          _progressMessage = '';
+          notifyListeners();
+          return false;
+        }
       }
 
       await initLocalVersionInfo();
@@ -310,52 +308,21 @@ class OtaUpdateService extends ChangeNotifier {
   }
 
   /// 重启应用程序
-  Future<void> restartApplication() async {
-    if (!PlatformHelper.supportsRuntimeGitOta) return;
+  void restartApplication() {
     final root = getRepoRoot();
-    String? executable;
-    List<String> arguments = [];
     if (Platform.isMacOS) {
-      final products = Directory(p.join(root, 'build/macos/Build/Products/Release'));
-      if (products.existsSync()) {
-        final apps = products.listSync().whereType<Directory>().where((d) => d.path.endsWith('.app')).toList();
-        if (apps.length == 1) {
-          executable = '/usr/bin/open';
-          arguments = ['-n', apps.single.path];
-        }
+      final appPath = '$root/build/macos/Build/Products/Debug/PiHifiPlayer.app';
+      if (Directory(appPath).existsSync()) {
+        Process.run('sh', [
+          '-c',
+          'sleep 1 && open -g "$appPath"',
+        ]);
+        exit(0);
       }
-    } else if (PlatformHelper.isRaspberryPiHost && Platform.environment['PI_KIOSK'] == '1') {
-      executable = 'sudo';
-      arguments = ['-n', 'systemctl', 'restart', 'myhifi.service'];
-    } else {
-      final platformBuild = Directory(p.join(root, 'build', Platform.isWindows ? 'windows' : 'linux'));
-      if (platformBuild.existsSync()) {
-        final candidates = platformBuild.listSync(recursive: true, followLinks: false).whereType<File>()
-            .where((file) => Platform.isWindows
-                ? p.basename(file.path) == 'hide_player_flutter.exe' && file.path.contains('${p.separator}Release${p.separator}')
-                : p.basename(file.path) == 'hide_player_flutter' && file.path.contains('${p.separator}release${p.separator}bundle${p.separator}'))
-            .toList();
-        if (candidates.length == 1) executable = candidates.single.path;
-      }
-    }
-    if (executable == null) {
-      _errorMessage = '找不到 Release 应用，请确认构建产物后手动重新打开。';
-      notifyListeners();
-      return;
-    }
-    try {
-      if (Platform.isWindows) {
-        final quoted = executable.replaceAll("'", "''");
-        await Process.start('powershell.exe', ['-NoProfile', '-Command',
-          "Start-Sleep -Seconds 2; Start-Process -FilePath '$quoted'"], mode: ProcessStartMode.detached);
-      } else {
-        await Process.start('/bin/sh', ['-c', r'sleep 2; exec "$@"', 'restart', executable, ...arguments],
-            mode: ProcessStartMode.detached);
-      }
+    } else if (Platform.isLinux) {
+      // 树莓派 Linux 下重启 systemd 服务或启动脚本
+      Process.run('systemctl', ['restart', 'pi_hifi_player']);
       exit(0);
-    } catch (e) {
-      _errorMessage = '无法重启 Release 应用: $e';
-      notifyListeners();
     }
   }
 }

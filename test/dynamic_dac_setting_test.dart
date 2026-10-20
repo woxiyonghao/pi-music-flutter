@@ -10,17 +10,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Dynamic DAC Hardware & Topping DX12 View Tests', () {
-    test('AirPods and HDMI show negotiated PCM instead of USB DSD specifications', () {
-      for (final bus in ['Bluetooth', 'HDMI / DP']) {
-        final device = DacDeviceInfo.fromJson({
-          'id': 'system-output', 'name': 'System output', 'transport': bus,
-          'currentSampleRate': 48000, 'maxSampleRate': 192000,
-          'supportsDsd': false,
-        });
-        expect(device.isSystemManagedOutput, isTrue);
-        expect(device.specBadge, '48kHz · 系统 PCM');
-      }
-    });
     test('DacDeviceInfo JSON deserialization and specBadge calculation', () {
       final json = {
         'id': 'usb_dx12',
@@ -179,7 +168,7 @@ void main() {
       await tester.tap(find.text('本机解码器'));
       await tester.pumpAndSettle();
 
-      expect(find.text('独占输出偏好（兼容模式自动降级）'), findsOneWidget);
+      expect(find.text('CoreAudio 独占模式 (Exclusive Hog Mode)'), findsOneWidget);
       expect(find.text('声卡硬件缓冲区深度 (Hardware Buffer Size)'), findsOneWidget);
       expect(find.text('64 帧 (1.4ms)'), findsOneWidget);
       // 还原状态

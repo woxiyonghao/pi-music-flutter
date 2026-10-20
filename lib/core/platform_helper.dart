@@ -8,32 +8,9 @@ enum HifiPlatformType {
   ipad,
   mac,
   window,
-  linux,
 }
 
 class PlatformHelper {
-  /// Linux 桌面与树莓派共用系统内核，不能仅凭 Platform.isLinux 判断。
-  static final bool isRaspberryPiHost = _detectRaspberryPi();
-
-  static bool _detectRaspberryPi() {
-    if (!Platform.isLinux) return false;
-    if (Platform.environment['PI_KIOSK'] == '1' ||
-        const String.fromEnvironment('HIFI_DEVICE') == 'pi') {
-      return true;
-    }
-    try {
-      return File('/proc/device-tree/model')
-          .readAsStringSync()
-          .toLowerCase()
-          .contains('raspberry pi');
-    } catch (_) {
-      return false;
-    }
-  }
-
-  static bool get supportsRuntimeGitOta =>
-      !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
-
   /// 手动覆盖平台类型（方便在 Mac 开发期预览所有端界面）
   static HifiPlatformType? overridePlatform;
 
@@ -75,7 +52,7 @@ class PlatformHelper {
     }
 
     if (Platform.isLinux) {
-      currentPlatform = isRaspberryPiHost ? HifiPlatformType.pi : HifiPlatformType.linux;
+      currentPlatform = HifiPlatformType.pi;
       return currentPlatform;
     }
 
@@ -95,8 +72,7 @@ class PlatformHelper {
     if (p == HifiPlatformType.ipad || p == HifiPlatformType.iphone || p == HifiPlatformType.android) {
       return false;
     }
-    return p == HifiPlatformType.pi || p == HifiPlatformType.mac ||
-        p == HifiPlatformType.window || p == HifiPlatformType.linux;
+    return p == HifiPlatformType.pi || p == HifiPlatformType.mac || p == HifiPlatformType.window;
   }
 
   /// 获取平台友好名称
@@ -115,8 +91,6 @@ class PlatformHelper {
         return 'Android';
       case HifiPlatformType.window:
         return 'Windows';
-      case HifiPlatformType.linux:
-        return 'Linux';
     }
   }
 }

@@ -240,21 +240,6 @@ static std::string toLower(const std::string& s) {
 
 DacProfile DacDeviceCatalog::matchProfile(const std::string& device_name, bool is_builtin, const std::string& transport, uint32_t detected_max_sr) {
     std::string lower = toLower(device_name);
-    const auto bus = toLower(transport);
-    const bool bluetooth = bus.find("bluetooth") != std::string::npos || lower.find("airpod") != std::string::npos;
-    if (bluetooth || bus.find("hdmi") != std::string::npos || bus.find("displayport") != std::string::npos ||
-        bus.find("airplay") != std::string::npos) {
-        DacProfile p;
-        p.brand = lower.find("airpod") != std::string::npos ? "Apple Inc." : "System Audio";
-        p.model = device_name;
-        p.chip_model = bluetooth ? "系统蓝牙音频编解码器" : "系统数字音频输出";
-        p.usb_interface = bluetooth ? "Bluetooth（系统协商）" : transport;
-        p.max_sample_rate = detected_max_sr > 0 ? detected_max_sr : 48000;
-        p.max_dsd_rate = "无（自动转换为 PCM）";
-        p.supports_dsd = p.supports_hog_mode = p.supports_uac_mode = false;
-        p.supports_dpll = p.supports_gain_control = p.supports_line_out_bypass = false;
-        return p;
-    }
 
     if (is_builtin || transport == "BuiltIn" || transport == "BuiltIn (AOP)") {
 #if defined(__APPLE__) && TARGET_OS_IPHONE

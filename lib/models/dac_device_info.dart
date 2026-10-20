@@ -69,63 +69,40 @@ class DacDeviceInfo {
       supportsDpll: json['supportsDpll'] as bool? ?? false,
       supportsGainControl: json['supportsGainControl'] as bool? ?? false,
       supportsLineOutBypass: json['supportsLineOutBypass'] as bool? ?? false,
-      digitalFilters: (json['digitalFilters'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          [],
-      filterDescriptions: (json['filterDescriptions'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          [],
+      digitalFilters: (json['digitalFilters'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      filterDescriptions: (json['filterDescriptions'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
     );
   }
 
   /// 规格角标徽章 (如 "384kHz / 32Bit · DSD256")
   String get specBadge {
-    if (isSystemManagedOutput) {
-      return '${(currentSampleRate / 1000).round()}kHz · 系统 PCM';
-    }
     final khz = (maxSampleRate / 1000).round();
     final dsdPart = supportsDsd && maxDsdRate != '无' ? ' · $maxDsdRate' : '';
     return '${khz}kHz / ${maxBitDepth}Bit$dsdPart';
   }
 
-  bool get isSystemManagedOutput {
-    final bus = transport.toLowerCase();
-    return bus.contains('bluetooth') ||
-        bus.contains('hdmi') ||
-        bus.contains('displayport') ||
-        bus.contains('airplay') ||
-        name.toLowerCase().contains('airpod');
-  }
-
-  bool get isDisplayOutput {
-    final bus = transport.toLowerCase().replaceAll(' ', '');
-    return bus.contains('hdmi') || bus.contains('displayport') || bus == 'dp';
-  }
-
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'isBuiltIn': isBuiltIn,
-        'isDefault': isDefault,
-        'transport': transport,
-        'currentSampleRate': currentSampleRate,
-        'maxSampleRate': maxSampleRate,
-        'maxBitDepth': maxBitDepth,
-        'brand': brand,
-        'model': model,
-        'chipModel': chipModel,
-        'usbInterface': usbInterface,
-        'maxDsdRate': maxDsdRate,
-        'supportsDsd': supportsDsd,
-        'supportsHogMode': supportsHogMode,
-        'supportsUacMode': supportsUacMode,
-        'supportsDpll': supportsDpll,
-        'supportsGainControl': supportsGainControl,
-        'supportsLineOutBypass': supportsLineOutBypass,
-        'digitalFilters': digitalFilters,
-        'filterDescriptions': filterDescriptions,
-        'specBadge': specBadge,
-      };
+    'id': id,
+    'name': name,
+    'isBuiltIn': isBuiltIn,
+    'isDefault': isDefault,
+    'transport': transport,
+    'currentSampleRate': currentSampleRate,
+    'maxSampleRate': maxSampleRate,
+    'maxBitDepth': maxBitDepth,
+    'brand': brand,
+    'model': model,
+    'chipModel': chipModel,
+    'usbInterface': usbInterface,
+    'maxDsdRate': maxDsdRate,
+    'supportsDsd': supportsDsd,
+    'supportsHogMode': supportsHogMode,
+    'supportsUacMode': supportsUacMode,
+    'supportsDpll': supportsDpll,
+    'supportsGainControl': supportsGainControl,
+    'supportsLineOutBypass': supportsLineOutBypass,
+    'digitalFilters': digitalFilters,
+    'filterDescriptions': filterDescriptions,
+    'specBadge': specBadge,
+  };
 }

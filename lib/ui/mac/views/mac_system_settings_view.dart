@@ -1,7 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../common/hifi_slider.dart';
-import '../../../core/platform_helper.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
@@ -9,9 +7,7 @@ import '../../common/glass_card.dart';
 
 /// 系统设置视图 (1:1 严格对齐 C++ SystemSettingsView.cpp，纯平铺按钮组，无任何 popup/dropdown，完整 SQLite 持久化)
 class MacSystemSettingsView extends StatefulWidget {
-  final HifiPlatformType? platform;
-
-  const MacSystemSettingsView({super.key, this.platform});
+  const MacSystemSettingsView({super.key});
 
   @override
   State<MacSystemSettingsView> createState() => _MacSystemSettingsViewState();
@@ -223,10 +219,8 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                 const SizedBox(height: 16.0),
 
                 // 板块三：系统电源与设备控制 (1:1 发烧台机物理操作中枢)
-                if ((widget.platform ?? PlatformHelper.currentPlatform) == HifiPlatformType.pi) ...[
-                  _buildPowerManagementCard(),
-                  const SizedBox(height: 16.0),
-                ],
+                _buildPowerManagementCard(),
+                const SizedBox(height: 16.0),
               ],
             ),
           ),
@@ -265,8 +259,10 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                   confirmText: '立刻关机',
                   confirmColor: const Color(0xFFEF4444),
                   onConfirm: () async {
-                    if (PlatformHelper.isRaspberryPiHost) {
+                    if (Platform.isLinux) {
                       await Process.run('sudo', ['systemctl', 'poweroff']);
+                    } else if (Platform.isMacOS) {
+                      exit(0);
                     }
                   },
                 ),
@@ -288,8 +284,10 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                   confirmText: '立刻重启',
                   confirmColor: const Color(0xFFF59E0B),
                   onConfirm: () async {
-                    if (PlatformHelper.isRaspberryPiHost) {
+                    if (Platform.isLinux) {
                       await Process.run('sudo', ['systemctl', 'reboot']);
+                    } else if (Platform.isMacOS) {
+                      exit(0);
                     }
                   },
                 ),
@@ -309,8 +307,10 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                   confirmText: '重启服务',
                   confirmColor: ThemeService.instance.accentColor,
                   onConfirm: () async {
-                    if (PlatformHelper.isRaspberryPiHost) {
+                    if (Platform.isLinux) {
                       await Process.run('sudo', ['systemctl', 'restart', 'myhifi.service']);
+                    } else {
+                      exit(0);
                     }
                   },
                 ),
@@ -604,7 +604,7 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                     overlayColor: accent.withValues(alpha: 0.2),
                     overlayShape: const RoundSliderOverlayShape(overlayRadius: 12.0),
                   ),
-                  child: HifiSlider(
+                  child: Slider(
                     value: value,
                     min: 0.1,
                     max: 1.0,

@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../../core/hifi_audio_service.dart';
 import '../../core/platform_helper.dart';
 import '../../models/sidebar_tab.dart';
 import '../../models/track.dart';
@@ -284,21 +283,16 @@ class _MacSidebarWidgetState extends State<MacSidebarWidget> {
                 ),
                 const SizedBox(width: 10.0),
                 Expanded(
-                  child: ValueListenableBuilder<String>(
-                    valueListenable: HifiAudioService.instance.outputDeviceNameNotifier,
-                    builder: (context, name, _) => Text(
-                      widget.isDacConnected
-                          ? (name.isNotEmpty && _currentPlatform != HifiPlatformType.pi ? name : widget.dacName)
-                          : 'DAC: 未连接',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: UIConfig.fontRegular,
-                        color: widget.isDacConnected
-                            ? UIConfig.textNormal
-                            : UIConfig.textMuted,
-                        fontWeight:
-                            widget.isDacConnected ? FontWeight.w500 : FontWeight.normal,
-                      ),
+                  child: Text(
+                    widget.isDacConnected ? widget.dacName : 'DAC: 未连接',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: UIConfig.fontRegular,
+                      color: widget.isDacConnected
+                          ? UIConfig.textNormal
+                          : UIConfig.textMuted,
+                      fontWeight:
+                          widget.isDacConnected ? FontWeight.w500 : FontWeight.normal,
                     ),
                   ),
                 ),
