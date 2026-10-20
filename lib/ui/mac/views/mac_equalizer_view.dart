@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../core/hifi_audio_service.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
@@ -42,23 +43,15 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
 
   void _loadSettings() {
     final db = MusicDatabaseService.instance;
-    _isEnabled = db.getSetting('eq_enabled', '1') == '1';
+    _isEnabled = HifiAudioService.instance.eqEnabled;
     _selectedPreset = int.tryParse(db.getSetting('eq_selected_preset', '6'))?.clamp(0, presets.length - 1) ?? 6;
 
-    final defaultGains = presets[_selectedPreset]['gains'] as List<double>;
-    _bandGains = List<double>.generate(10, (i) {
-      final savedStr = db.getSetting('eq_band_$i', defaultGains[i].toString());
-      return double.tryParse(savedStr)?.clamp(-12.0, 12.0) ?? defaultGains[i];
-    });
+    _bandGains = HifiAudioService.instance.eqBands.toList();
   }
 
   void _saveSettings() {
-    final db = MusicDatabaseService.instance;
-    db.setSetting('eq_enabled', _isEnabled ? '1' : '0');
-    db.setSetting('eq_selected_preset', _selectedPreset.toString());
-    for (int i = 0; i < 10; i++) {
-      db.setSetting('eq_band_$i', _bandGains[i].toStringAsFixed(1));
-    }
+    HifiAudioService.instance.setEqAndBands(_isEnabled, _bandGains,
+        selectedPreset: _selectedPreset);
   }
 
   void _applyPreset(int index) {
@@ -91,8 +84,9 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: ThemeService.instance,
+      listenable: Listenable.merge([ThemeService.instance, HifiAudioService.instance.eqSettingsRevision]),
       builder: (context, _) {
+        _loadSettings();
         final accent = ThemeService.instance.accentColor;
 
         return GlassCard(
@@ -208,17 +202,20 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
           ),
           const SizedBox(height: 14.0),
 
-          // 2. 预设方案水平胶囊栏 (8款发烧经典预设)
-          Row(
-            children: [
-              for (int i = 0; i < presets.length; i++) ...[
-                if (i > 0) const SizedBox(width: 8.0),
-                Expanded(
-                  child: InkWell(
+          // 2. 预设方案水平胶囊栏 (8款发烧经典预设，支持平滑横向拖拽与舒适触控间距)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                for (int i = 0; i < presets.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8.0),
+                  InkWell(
                     onTap: () => _applyPreset(i),
                     borderRadius: BorderRadius.circular(13.0),
                     child: Container(
-                      height: 26.0,
+                      height: 28.0,
+                      padding: const EdgeInsets.symmetric(horizontal: 14.0),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: _selectedPreset == i
@@ -246,9 +243,9 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
                       ),
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
           const SizedBox(height: 12.0),
 

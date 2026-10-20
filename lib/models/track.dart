@@ -94,6 +94,49 @@ class Track {
     return Object.hash(filepath, title);
   }
 
+  int get formatInt {
+    switch (format) {
+      case AudioFormat.flac:
+        return 1;
+      case AudioFormat.wav:
+        return 2;
+      case AudioFormat.dsdDsf:
+        return 3;
+      case AudioFormat.dsdDff:
+        return 4;
+      case AudioFormat.alac:
+        return 5;
+      case AudioFormat.mp3:
+        return 6;
+      default:
+        return 0;
+    }
+  }
+
+  static AudioFormat formatFromExtension(String ext) {
+    switch (ext.toLowerCase()) {
+      case '.flac':
+        return AudioFormat.flac;
+      case '.wav':
+        return AudioFormat.wav;
+      case '.dsf':
+        return AudioFormat.dsdDsf;
+      case '.dff':
+        return AudioFormat.dsdDff;
+      case '.alac':
+      case '.m4a':
+      case '.aac':
+      case '.caf':
+      case '.aiff':
+      case '.aif':
+        return AudioFormat.alac;
+      case '.mp3':
+        return AudioFormat.mp3;
+      default:
+        return AudioFormat.unknown;
+    }
+  }
+
   static AudioFormat formatFromInt(int val) {
     switch (val) {
       case 1:

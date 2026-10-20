@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:flutter/foundation.dart';
 import 'package:sqlite3/sqlite3.dart';
 import '../models/track.dart';
+import '../core/app_paths.dart';
 
 /// 发烧曲库数据库服务 (读取 C++ 纯音数播持久化 SQLite 数据库)
 class MusicDatabaseService extends ChangeNotifier {
@@ -45,6 +47,46 @@ class MusicDatabaseService extends ChangeNotifier {
         value TEXT NOT NULL
       );
     ''');
+  }
+
+  static String resolveTrackPath(String path) {
+    if (path.isEmpty) return path;
+
+    // 1. 如果路径在当前文件系统上直接存在，直接返回
+    if (File(path).existsSync()) {
+      return path;
+    }
+
+    // 2. 处理 iOS / iPadOS 沙盒路径动态重定向
+    if (Platform.isIOS) {
+      final currentDocs = AppPaths.documentsDirectory;
+      if (currentDocs.isNotEmpty) {
+        // 查找 "/Documents/" 相对路径
+        final docIdx = path.indexOf('/Documents/');
+        if (docIdx != -1) {
+          final subPath = path.substring(docIdx + '/Documents/'.length);
+          final remapped = '$currentDocs/$subPath';
+          if (File(remapped).existsSync()) {
+            return remapped;
+          }
+        }
+
+        // 尝试提取文件名在当前 Documents/music/ 下查找
+        final filename = p.basename(path);
+        final fallbackMusic = '$currentDocs/music/$filename';
+        if (File(fallbackMusic).existsSync()) {
+          return fallbackMusic;
+        }
+
+        // 尝试提取文件名在当前 Documents/ 根目录下查找
+        final fallbackDoc = '$currentDocs/$filename';
+        if (File(fallbackDoc).existsSync()) {
+          return fallbackDoc;
+        }
+      }
+    }
+
+    return path;
   }
 
   /// 获取持久化设置项 (1:1 对齐 C++ MusicDatabase::getSetting)

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'core/app_paths.dart';
 import 'core/platform_helper.dart';
 import 'services/web_remote_service.dart';
 import 'theme/hifi_theme.dart';
@@ -11,11 +12,13 @@ import 'ui/ipad/ipad_main_view.dart';
 import 'ui/mac/mac_main_view.dart';
 import 'ui/window/window_main_view.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppPaths.init();
   runApp(const HiFiPlayerApp());
 
-  // 1:1 对齐 C++ Application.cpp，启动后台 Web 远程遥控中枢
+  // 启动后台 Web 远程遥控服务 (8088 端口)
+  // 注意：局域网 WiFi 无线传歌服务默认保持关闭 (所有平台默认关闭，由用户在界面设置中手动按需开启)
   if (!Platform.environment.containsKey('FLUTTER_TEST')) {
     WebRemoteService.instance.start(port: 8088);
   }
@@ -29,8 +32,6 @@ class HiFiPlayerApp extends StatefulWidget {
 }
 
 class _HiFiPlayerAppState extends State<HiFiPlayerApp> {
-  HifiPlatformType? _activePlatform;
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -38,34 +39,35 @@ class _HiFiPlayerAppState extends State<HiFiPlayerApp> {
       debugShowCheckedModeBanner: false,
       theme: HifiTheme.darkTheme,
       scrollBehavior: const MouseDraggableScrollBehavior(),
+      builder: (context, child) {
+        if (PlatformHelper.isRaspberryPiHost) {
+          return MouseRegion(
+            cursor: SystemMouseCursors.none,
+            child: child ?? const SizedBox.shrink(),
+          );
+        }
+        return child ?? const SizedBox.shrink();
+      },
       home: LayoutBuilder(
         builder: (context, constraints) {
-          final detected = PlatformHelper.detect(constraints.maxWidth, constraints.maxHeight);
-          final platform = _activePlatform ?? detected;
+          final platform = PlatformHelper.detect(constraints.maxWidth, constraints.maxHeight);
 
-          Widget content;
           switch (platform) {
             case HifiPlatformType.iphone:
-              content = const IphoneMainView();
-              break;
+              return const IphoneMainView();
             case HifiPlatformType.android:
-              content = const AndroidMainView();
-              break;
+              return const AndroidMainView();
             case HifiPlatformType.pi:
-              content = const PiMainView();
-              break;
+              return const PiMainView();
             case HifiPlatformType.ipad:
-              content = const IpadMainView();
-              break;
+              return const IpadMainView();
             case HifiPlatformType.mac:
-              content = const MacMainView();
-              break;
+              return const MacMainView();
             case HifiPlatformType.window:
-              content = const WindowMainView();
-              break;
+              return const WindowMainView();
+            case HifiPlatformType.linux:
+              return const MacMainView(platform: HifiPlatformType.linux);
           }
-
-          return content;
         },
       ),
     );

@@ -51,6 +51,10 @@ bool hifi_audio_is_idle() {
     return audio_engine::AudioEngine::getInstance().isIdle();
 }
 
+bool hifi_audio_has_playback_completed() {
+    return audio_engine::AudioEngine::getInstance().hasPlaybackCompleted();
+}
+
 double hifi_audio_get_current_time() {
     return audio_engine::AudioEngine::getInstance().getCurrentTimeSec();
 }
@@ -137,6 +141,32 @@ void hifi_audio_set_eof_callback(HifiEofCallback callback) {
     } else {
         audio_engine::AudioEngine::getInstance().setEofCallback(nullptr);
     }
+}
+
+static std::string g_devices_json_cache;
+
+const char* hifi_audio_get_connected_devices_json() {
+    g_devices_json_cache = audio_engine::AudioEngine::getInstance().getConnectedDevicesJson();
+    return g_devices_json_cache.c_str();
+}
+
+bool hifi_audio_select_output_device(const char* device_id) {
+    if (!device_id) return false;
+    return audio_engine::AudioEngine::getInstance().selectOutputDevice(device_id);
+}
+
+void hifi_audio_set_external_device_mock(bool enable) {
+    audio_engine::AudioEngine::getInstance().setExternalDeviceMock(enable);
+}
+
+bool hifi_audio_is_external_device_mock() {
+    return audio_engine::AudioEngine::getInstance().isExternalDeviceMock();
+}
+
+const char* hifi_audio_get_diagnostics_json() {
+    static thread_local std::string diagnostics;
+    diagnostics = audio_engine::AudioEngine::getInstance().getDiagnosticsJson();
+    return diagnostics.c_str();
 }
 
 } // extern "C"

@@ -5,10 +5,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(NOT APPLE AND NOT ANDROID)
+    find_package(SDL2 REQUIRED)
+endif()
+
 # 源码列表
 if(ANDROID)
     set(AUDIO_ENGINE_SOURCES
         src/AudioEngine.cpp
+        src/DacDeviceCatalog.cpp
         src/DsfParser.cpp
         src/decoders/FlacDecoder.cpp
         src/decoders/WavDecoder.cpp
@@ -18,24 +23,34 @@ if(ANDROID)
 else()
     set(AUDIO_ENGINE_SOURCES
         src/AudioEngine.cpp
+        src/DacDeviceCatalog.cpp
         src/DsfParser.cpp
         src/decoders/FlacDecoder.cpp
         src/decoders/WavDecoder.cpp
         src/decoders/Mp3Decoder.cpp
-        src/sinks/SdlAudioSink.cpp
-        src/sinks/AlsaAudioSink.cpp
     )
+    if(NOT APPLE)
+        list(APPEND AUDIO_ENGINE_SOURCES
+            src/sinks/SdlAudioSink.cpp
+            src/sinks/AlsaAudioSink.cpp
+        )
+    endif()
 endif()
 
 if(APPLE)
     list(APPEND AUDIO_ENGINE_SOURCES
         src/decoders/AppleAudioDecoder.cpp
+        src/decoders/CoreAudioPcmDecoder.cpp
         src/sinks/AudioQueueSink.cpp
     )
+    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        list(APPEND AUDIO_ENGINE_SOURCES src/sinks/RemoteIOSink.cpp)
+    endif()
 endif()
 
 # 生成发烧音频引擎静态库
 add_library(audio_engine STATIC ${AUDIO_ENGINE_SOURCES})
+target_compile_features(audio_engine PUBLIC cxx_std_20)
 
 target_include_directories(audio_engine
     PUBLIC
@@ -57,6 +72,8 @@ elseif(APPLE)
         "-framework AudioToolbox"
         "-framework CoreFoundation"
     )
+elseif(WIN32)
+    target_link_libraries(audio_engine PRIVATE ${SDL2_LIBRARIES})
 else()
     target_link_libraries(audio_engine PRIVATE
         pthread

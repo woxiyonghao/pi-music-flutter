@@ -28,5 +28,7 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>用于读取下载目录中由你选择的音乐文件并播放。</string>
 </dict>
 </plist>

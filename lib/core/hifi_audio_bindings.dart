@@ -1,6 +1,7 @@
 import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart';
 
 // C 函数签名
 typedef _HifiAudioInitC = Bool Function();
@@ -42,6 +43,30 @@ typedef _HifiAudioGetSampleRateDart = int Function();
 typedef _HifiAudioGetDeviceNameC = Void Function(Pointer<Utf8>, Int32);
 typedef _HifiAudioGetDeviceNameDart = void Function(Pointer<Utf8>, int);
 
+typedef _HifiAudioSetEqEnabledC = Void Function(Bool);
+typedef _HifiAudioSetEqEnabledDart = void Function(bool);
+
+typedef _HifiAudioIsEqEnabledC = Bool Function();
+typedef _HifiAudioIsEqEnabledDart = bool Function();
+
+typedef _HifiAudioSetEqBandsC = Void Function(Pointer<Float>);
+typedef _HifiAudioSetEqBandsDart = void Function(Pointer<Float>);
+
+typedef _HifiAudioGetEqBandsC = Void Function(Pointer<Float>);
+typedef _HifiAudioGetEqBandsDart = void Function(Pointer<Float>);
+
+typedef _HifiAudioGetDevicesJsonC = Pointer<Utf8> Function();
+typedef _HifiAudioGetDevicesJsonDart = Pointer<Utf8> Function();
+
+typedef _HifiAudioSelectDeviceC = Bool Function(Pointer<Utf8>);
+typedef _HifiAudioSelectDeviceDart = bool Function(Pointer<Utf8>);
+
+typedef _HifiAudioSetMockExternalC = Void Function(Bool);
+typedef _HifiAudioSetMockExternalDart = void Function(bool);
+
+typedef _HifiAudioIsMockExternalC = Bool Function();
+typedef _HifiAudioIsMockExternalDart = bool Function();
+
 /// FFI 绑定底层 C++ audio_engine
 class HifiAudioBindings {
   static HifiAudioBindings? _instance;
@@ -74,14 +99,29 @@ class HifiAudioBindings {
   late final _HifiAudioGetSpectrumDart _getSpectrumLevels;
   late final _HifiAudioGetSampleRateDart _getSampleRate;
   late final _HifiAudioGetDeviceNameDart _getDeviceName;
+  late final _HifiAudioSetEqEnabledDart _setEqEnabled;
+  late final _HifiAudioIsEqEnabledDart _isEqEnabled;
+  late final _HifiAudioSetEqBandsDart _setEqBands;
+  late final _HifiAudioGetEqBandsDart _getEqBands;
+  late final _HifiAudioGetDevicesJsonDart _getConnectedDevicesJson;
+  late final _HifiAudioSelectDeviceDart _selectOutputDevice;
+  late final _HifiAudioSetMockExternalDart _setExternalDeviceMock;
+  late final _HifiAudioIsMockExternalDart _isExternalDeviceMock;
+  bool _hasDeviceCatalog = false;
+  _HifiAudioGetDevicesJsonDart? _getDiagnosticsJson;
+  _HifiAudioBoolDart? _hasPlaybackCompleted;
 
-  // 内存复用：12 频段频谱指针 (避免每帧内存分配与 GC 压力)
+  // 内存复用：12 频段频谱指针与 10 频段 EQ 指针 (避免每帧内存分配与 GC 压力)
   late final Pointer<Float> _spectrumBuffer;
+  late final Pointer<Float> _eqBuffer;
 
   HifiAudioBindings._() {
     _spectrumBuffer = calloc<Float>(12);
+    _eqBuffer = calloc<Float>(10);
     _loadLibrary();
   }
+
+  String loadError = '';
 
   void _loadLibrary() {
     try {
@@ -106,11 +146,16 @@ class HifiAudioBindings {
           'Contents/Frameworks/libhifi_audio_ffi.dylib',
         ]);
       } else if (Platform.isLinux) {
-        // Linux / 树莓派 5
+        // Linux / 树莓派 5: 优先搜寻 bundle/lib、可执行程序同级与本地构建目录
+        final execPath = Platform.resolvedExecutable;
+        final execDir = File(execPath).parent.path;
         _lib = _tryOpen([
+          '$execDir/lib/libhifi_audio_ffi.so',
+          '$execDir/libhifi_audio_ffi.so',
           'libhifi_audio_ffi.so',
           'native/build/libhifi_audio_ffi.so',
           './libhifi_audio_ffi.so',
+          '/usr/local/lib/libhifi_audio_ffi.so',
         ]);
       } else if (Platform.isAndroid) {
         _lib = DynamicLibrary.open('libhifi_audio_ffi.so');
@@ -148,10 +193,33 @@ class HifiAudioBindings {
       _getSpectrumLevels = _lib.lookupFunction<_HifiAudioGetSpectrumC, _HifiAudioGetSpectrumDart>('hifi_audio_get_spectrum_levels');
       _getSampleRate = _lib.lookupFunction<_HifiAudioGetSampleRateC, _HifiAudioGetSampleRateDart>('hifi_audio_get_sample_rate');
       _getDeviceName = _lib.lookupFunction<_HifiAudioGetDeviceNameC, _HifiAudioGetDeviceNameDart>('hifi_audio_get_device_name');
+      _setEqEnabled = _lib.lookupFunction<_HifiAudioSetEqEnabledC, _HifiAudioSetEqEnabledDart>('hifi_audio_set_eq_enabled');
+      _isEqEnabled = _lib.lookupFunction<_HifiAudioIsEqEnabledC, _HifiAudioIsEqEnabledDart>('hifi_audio_is_eq_enabled');
+      _setEqBands = _lib.lookupFunction<_HifiAudioSetEqBandsC, _HifiAudioSetEqBandsDart>('hifi_audio_set_eq_bands');
+      _getEqBands = _lib.lookupFunction<_HifiAudioGetEqBandsC, _HifiAudioGetEqBandsDart>('hifi_audio_get_eq_bands');
+
+      try {
+        _getConnectedDevicesJson = _lib.lookupFunction<_HifiAudioGetDevicesJsonC, _HifiAudioGetDevicesJsonDart>('hifi_audio_get_connected_devices_json');
+        _selectOutputDevice = _lib.lookupFunction<_HifiAudioSelectDeviceC, _HifiAudioSelectDeviceDart>('hifi_audio_select_output_device');
+        _setExternalDeviceMock = _lib.lookupFunction<_HifiAudioSetMockExternalC, _HifiAudioSetMockExternalDart>('hifi_audio_set_external_device_mock');
+        _isExternalDeviceMock = _lib.lookupFunction<_HifiAudioIsMockExternalC, _HifiAudioIsMockExternalDart>('hifi_audio_is_external_device_mock');
+        _hasDeviceCatalog = true;
+      } catch (e) {
+        _hasDeviceCatalog = false;
+        debugPrint('[HifiAudioBindings] 提示: 动态设备画像符号未导出 (平滑降级): $e');
+      }
 
       _isLoaded = true;
-    } catch (e) {
-      // 库未编译时的模拟降级模式
+      try {
+        _hasPlaybackCompleted = _lib.lookupFunction<_HifiAudioBoolC,
+            _HifiAudioBoolDart>('hifi_audio_has_playback_completed');
+      } catch (_) {}
+      try {
+        _getDiagnosticsJson = _lib.lookupFunction<_HifiAudioGetDevicesJsonC,
+            _HifiAudioGetDevicesJsonDart>('hifi_audio_get_diagnostics_json');
+      } catch (_) {}
+    } catch (e, stack) {
+      loadError = 'LOOKUP_ERROR: $e\n$stack';
       _isLoaded = false;
     }
   }
@@ -159,7 +227,11 @@ class HifiAudioBindings {
   DynamicLibrary _tryOpen(List<String> paths) {
     for (final path in paths) {
       try {
-        return DynamicLibrary.open(path);
+        final lib = DynamicLibrary.open(path);
+        // 关键校验：确保加载的不是残存的过旧动态库
+        if (lib.providesSymbol('hifi_audio_open_and_play')) {
+          return lib;
+        }
       } catch (_) {}
     }
     return DynamicLibrary.process();
@@ -168,14 +240,14 @@ class HifiAudioBindings {
   // 对外安全调用封装
   bool init() => _isLoaded ? _init() : true;
   bool openAndPlay(String path) {
-    if (!_isLoaded) return true;
+    if (!_isLoaded) return false;
     final nativePath = path.toNativeUtf8();
     final res = _openAndPlay(nativePath);
     calloc.free(nativePath);
     return res;
   }
   bool openAndPlaySection(String path, double startSec, double endSec) {
-    if (!_isLoaded) return true;
+    if (!_isLoaded) return false;
     final nativePath = path.toNativeUtf8();
     final res = _openAndPlaySection(nativePath, startSec, endSec);
     calloc.free(nativePath);
@@ -189,6 +261,9 @@ class HifiAudioBindings {
   bool isPlaying() => _isLoaded ? _isPlaying() : false;
   bool isPaused() => _isLoaded ? _isPaused() : false;
   bool isIdle() => _isLoaded ? _isIdle() : true;
+  // Older libraries cannot prove natural completion. Do not infer it from a
+  // transient stopped state, which can also mean a device is being reopened.
+  bool hasPlaybackCompleted() => _isLoaded && (_hasPlaybackCompleted?.call() ?? false);
   double getCurrentTime() => _isLoaded ? _getCurrentTime() : 0.0;
   double getDuration() => _isLoaded ? _getDuration() : 0.0;
   double getProgress() => _isLoaded ? _getProgress() : 0.0;
@@ -215,7 +290,62 @@ class HifiAudioBindings {
     return name.isNotEmpty ? name : 'Apple Direct';
   }
 
+  void setEqEnabled(bool enabled) {
+    if (_isLoaded) _setEqEnabled(enabled);
+  }
+
+  bool isEqEnabled() => _isLoaded ? _isEqEnabled() : false;
+
+  void setEqBands(List<double> gains) {
+    if (!_isLoaded || gains.length != 10) return;
+    for (int i = 0; i < 10; i++) {
+      _eqBuffer[i] = gains[i];
+    }
+    _setEqBands(_eqBuffer);
+  }
+
+  List<double> getEqBands() {
+    if (!_isLoaded) return List.filled(10, 0.0);
+    _getEqBands(_eqBuffer);
+    return List.generate(10, (i) => _eqBuffer[i]);
+  }
+
+  String getConnectedDevicesJson() {
+    if (!_isLoaded || !_hasDeviceCatalog) return '[]';
+    final ptr = _getConnectedDevicesJson();
+    if (ptr == nullptr) return '[]';
+    return ptr.toDartString();
+  }
+
+  String getDiagnosticsJson() {
+    final getter = _getDiagnosticsJson;
+    if (!_isLoaded || getter == null) return '{}';
+    final ptr = getter();
+    return ptr == nullptr ? '{}' : ptr.toDartString();
+  }
+
+  bool selectOutputDevice(String deviceId) {
+    if (!_isLoaded || !_hasDeviceCatalog) return false;
+    final nativeId = deviceId.toNativeUtf8();
+    final res = _selectOutputDevice(nativeId);
+    calloc.free(nativeId);
+    return res;
+  }
+
+  bool _mockExternalFallback = false;
+
+  void setExternalDeviceMock(bool enable) {
+    _mockExternalFallback = enable;
+    if (_isLoaded && _hasDeviceCatalog) _setExternalDeviceMock(enable);
+  }
+
+  bool isExternalDeviceMock() {
+    if (!_isLoaded || !_hasDeviceCatalog) return _mockExternalFallback;
+    return _isExternalDeviceMock();
+  }
+
   void dispose() {
     calloc.free(_spectrumBuffer);
+    calloc.free(_eqBuffer);
   }
 }

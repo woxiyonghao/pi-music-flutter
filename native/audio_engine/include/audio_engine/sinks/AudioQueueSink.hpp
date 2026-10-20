@@ -26,8 +26,10 @@ public:
     bool isOpen() const override;
     AudioFormatSpec getActualSpec() const override;
 
-    void setBufferSize(uint32_t samples) override { buffer_size_samples_ = samples; }
-    uint32_t getBufferSize() const override { return buffer_size_samples_; }
+    // A live queue's allocated frame count is immutable. Preferences apply on reopen.
+    void setBufferSize(uint32_t samples) override { requested_buffer_frames_.store(samples); }
+    uint32_t getBufferSize() const override { return requested_buffer_frames_.load(); }
+    bool hasError() const override { return last_error_.load() != noErr; }
     std::string getDeviceName() const override { return "Apple AudioQueue (CoreAudio)"; }
 
 private:
@@ -42,6 +44,8 @@ private:
     std::atomic<bool> is_running_{false};
     bool is_stopped_{true};
     uint32_t buffer_size_samples_{2048};
+    std::atomic<uint32_t> requested_buffer_frames_{2048};
+    std::atomic<OSStatus> last_error_{noErr};
     double buffer_latency_sec_{0.0};
 };
 

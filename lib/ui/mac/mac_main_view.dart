@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../core/platform_helper.dart';
+import '../../core/hifi_audio_service.dart';
 import '../../models/sidebar_tab.dart';
 import '../../services/music_database_service.dart';
 import '../../services/theme_service.dart';
@@ -24,7 +26,8 @@ import 'views/mac_web_service_view.dart';
 /// 具备：空闲时间全屏屏保检测 (15s/30s/1m/5m/永不)、四角板块平滑滑出动效 (0.4s 缓动插值)、
 /// 双击或点击胶囊栏无缝切换沉浸表头模式与鼠标活动自适应唤醒
 class MacMainView extends StatefulWidget {
-  const MacMainView({super.key});
+  final HifiPlatformType platform;
+  const MacMainView({super.key, this.platform = HifiPlatformType.mac});
 
   @override
   State<MacMainView> createState() => _MacMainViewState();
@@ -165,7 +168,8 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([MusicDatabaseService.instance, ThemeService.instance]),
+      listenable: Listenable.merge([MusicDatabaseService.instance,
+        HifiAudioService.instance.outputDeviceNameNotifier, ThemeService.instance]),
       builder: (context, _) {
         final theme = ThemeService.instance;
         final activeVisualizer = VisualizerType.values[theme.backgroundVisualMode.clamp(0, VisualizerType.values.length - 1)];
@@ -257,7 +261,9 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                           currentTab: _currentTab,
                                           selectedPlaylistId: _selectedPlaylistId,
                                           playlists: playlists,
-                                          dacName: 'Apple Direct',
+                                          dacName: HifiAudioService.instance.outputDeviceNameNotifier.value.isEmpty
+                                              ? '本机音频'
+                                              : HifiAudioService.instance.outputDeviceNameNotifier.value,
                                           isDacConnected: true,
                                           onTabSelected: (tab) {
                                             setState(() {
@@ -449,7 +455,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
         // 4: msebTuning
         const MacMagicTuningView(),
         // 5: dacSettings
-        const MacDACSettingView(),
+        MacDACSettingView(platform: widget.platform),
         // 6: themeSettings
         MacThemeSettingView(
           currentVisualizer: activeVisualizer,
