@@ -224,6 +224,7 @@ class MusicDatabaseService extends ChangeNotifier {
   /// 智能解析并自愈音频路径 (1:1 严格对齐 C++ MusicDatabase::resolveTrackPath)
   /// 彻底根治 iOS / iPadOS 每次通过 Xcode 重新运行或版本升级导致 Sandbox Container UUID 变化失效的问题
   static String resolveTrackPath(String path) {
+    if (!Platform.isIOS) return path;
     if (path.isEmpty) return path;
 
     // 1. 如果路径在当前文件系统上直接存在，直接返回

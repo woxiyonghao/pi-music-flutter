@@ -1,8 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val hifiLocalProperties = Properties().apply {
+    rootProject.file("local.properties").inputStream().use { load(it) }
+}
+val hifiFlutterSdk = hifiLocalProperties.getProperty("flutter.sdk")
+val hifiDart = "$hifiFlutterSdk/bin/cache/dart-sdk/bin/" +
+    if (System.getProperty("os.name").lowercase().contains("windows")) "dart.exe" else "dart"
 
 android {
     namespace = "com.example.hide_player_flutter"
@@ -19,7 +28,7 @@ android {
         applicationId = "com.example.hide_player_flutter"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = maxOf(26, flutter.minSdkVersion)
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
@@ -27,6 +36,19 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DHIFI_DART_EXECUTABLE=$hifiDart", "-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared")
+                targets += "hifi_audio_ffi"
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("../../native/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {

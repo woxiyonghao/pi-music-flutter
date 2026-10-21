@@ -87,7 +87,7 @@ void main() {
           body: SizedBox(
             width: 1024,
             height: 600,
-            child: MacDACSettingView(),
+            child: MacDACSettingView(platform: HifiPlatformType.mac),
           ),
         ),
       );

@@ -1,79 +1,31 @@
 cmake_minimum_required(VERSION 3.20)
-project(hifi_audio_ffi LANGUAGES C CXX)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+project(hifi_platform_audio LANGUAGES C CXX)
+# Integration only. All audio implementation lives on dev/audio_engine.
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build configuration" FORCE)
 endif()
-
-find_package(SDL2 REQUIRED)
-
-# 包含核心头文件
-include_directories(
-    include
-    audio_engine/include
-    ${SDL2_INCLUDE_DIRS}
-)
-
-# 引入底层发烧音频核心
-add_subdirectory(audio_engine)
-
-# 构建供 Flutter dart:ffi 动态调用的共享库
-add_library(hifi_audio_ffi SHARED
-    src/hifi_audio_ffi.cpp
-)
-
-target_link_libraries(hifi_audio_ffi PRIVATE
-    audio_engine
-    ${SDL2_LIBRARIES}
-)
-
-if(APPLE)
-    # macOS / iOS 平台链接系统 CoreAudio / AudioToolbox
-    target_link_libraries(hifi_audio_ffi PRIVATE
-        "-framework CoreAudio"
-        "-framework AudioToolbox"
-        "-framework CoreFoundation"
-    )
-    set_target_properties(hifi_audio_ffi PROPERTIES
-        MACOSX_RPATH ON
-        INSTALL_NAME_DIR "@rpath"
-    )
-elseif(ANDROID)
-    target_link_libraries(hifi_audio_ffi PRIVATE
-        aaudio
-        log
-    )
-elseif(UNIX AND NOT APPLE)
-    # Linux / 树莓派 5
-    target_link_libraries(hifi_audio_ffi PRIVATE
-        asound
-        pthread
-    )
+if(NOT HIFI_DART_EXECUTABLE)
+    find_program(HIFI_DART_LAUNCHER NAMES dart dart.bat REQUIRED)
+    get_filename_component(HIFI_DART_BIN "${HIFI_DART_LAUNCHER}" DIRECTORY)
+    if(WIN32)
+        set(HIFI_DART_EXECUTABLE "${HIFI_DART_BIN}/cache/dart-sdk/bin/dart.exe")
+    else()
+        set(HIFI_DART_EXECUTABLE "${HIFI_DART_BIN}/cache/dart-sdk/bin/dart")
+    endif()
+    if(NOT EXISTS "${HIFI_DART_EXECUTABLE}")
+        set(HIFI_DART_EXECUTABLE "${HIFI_DART_LAUNCHER}")
+    endif()
 endif()
-
-if(APPLE)
-    # 音频库全格式回归测试与解码健全性审计可执行工具 (依赖 AppleAudioDecoder)
-    add_executable(audit_audio_library
-        tests/audit_audio_library.cpp
-    )
-
-    target_include_directories(audit_audio_library PRIVATE
-        include
-        audio_engine/include
-        audio_engine/third_party
-    )
-
-    target_link_libraries(audit_audio_library PRIVATE
-        audio_engine
-        sqlite3
-        ${SDL2_LIBRARIES}
-        "-framework CoreAudio"
-        "-framework AudioToolbox"
-        "-framework CoreFoundation"
-    )
+execute_process(COMMAND "${HIFI_DART_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/fetch_audio_engine.dart"
+    RESULT_VARIABLE HIFI_FETCH_STATUS OUTPUT_VARIABLE HIFI_ENGINE_SOURCE OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(NOT HIFI_FETCH_STATUS EQUAL 0)
+    message(FATAL_ERROR "Could not fetch the locked audio_engine SDK")
 endif()
-
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../audio_engine.lock.json")
+set(BUILD_TESTING OFF CACHE BOOL "Engine tests run on dev/audio_engine" FORCE)
+set(HIFI_BUILD_FFI ON CACHE BOOL "Build C ABI" FORCE)
+add_subdirectory("${HIFI_ENGINE_SOURCE}" "${CMAKE_CURRENT_BINARY_DIR}/engine")
+set_target_properties(hifi_audio_ffi PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

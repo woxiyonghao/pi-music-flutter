@@ -55,3 +55,8 @@ native/build/
 *.a
 compile_commands.json
 .cache/
+
+# Generated SDKs and per-platform build output
+/native/build*/
+/android/.cxx/
+/android/app/.cxx/

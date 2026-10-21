@@ -1,17 +1,20 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:convert';
+import '../platform/application_config.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 
 // C 函数签名
-typedef _HifiAudioInitC = Bool Function();
-typedef _HifiAudioInitDart = bool Function();
+typedef _HifiAudioInitC = Bool Function(Pointer<Utf8>, Uint32);
+typedef _HifiAudioInitDart = bool Function(Pointer<Utf8>, int);
 
 typedef _HifiAudioOpenAndPlayC = Bool Function(Pointer<Utf8>);
 typedef _HifiAudioOpenAndPlayDart = bool Function(Pointer<Utf8>);
 
 typedef _HifiAudioOpenSectionC = Bool Function(Pointer<Utf8>, Double, Double);
-typedef _HifiAudioOpenSectionDart = bool Function(Pointer<Utf8>, double, double);
+typedef _HifiAudioOpenSectionDart = bool Function(
+    Pointer<Utf8>, double, double);
 
 typedef _HifiAudioVoidC = Void Function();
 typedef _HifiAudioVoidDart = void Function();
@@ -108,6 +111,8 @@ class HifiAudioBindings {
   late final _HifiAudioSetMockExternalDart _setExternalDeviceMock;
   late final _HifiAudioIsMockExternalDart _isExternalDeviceMock;
   bool _hasDeviceCatalog = false;
+  _HifiAudioGetDevicesJsonDart? _getDiagnosticsJson;
+  _HifiAudioBoolDart? _hasPlaybackCompleted;
 
   // 内存复用：12 频段频谱指针与 10 频段 EQ 指针 (避免每帧内存分配与 GC 压力)
   late final Pointer<Float> _spectrumBuffer;
@@ -136,8 +141,6 @@ class HifiAudioBindings {
         _lib = _tryOpen([
           '$appDir/Frameworks/libhifi_audio_ffi.dylib',
           '$execDir/libhifi_audio_ffi.dylib',
-          '/Users/mk10/Desktop/hide_player_flutter/native/build/libhifi_audio_ffi.dylib',
-          '/Users/mk10/Desktop/hide_player_flutter/libhifi_audio_ffi.dylib',
           'libhifi_audio_ffi.dylib',
           'native/build/libhifi_audio_ffi.dylib',
           '../native/build/libhifi_audio_ffi.dylib',
@@ -169,38 +172,79 @@ class HifiAudioBindings {
       }
 
       // 绑定函数指针
-      _init = _lib.lookupFunction<_HifiAudioInitC, _HifiAudioInitDart>('hifi_audio_init');
-      _openAndPlay = _lib.lookupFunction<_HifiAudioOpenAndPlayC, _HifiAudioOpenAndPlayDart>('hifi_audio_open_and_play');
-      _openAndPlaySection = _lib.lookupFunction<_HifiAudioOpenSectionC, _HifiAudioOpenSectionDart>('hifi_audio_open_and_play_section');
-      _play = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>('hifi_audio_play');
-      _pause = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>('hifi_audio_pause');
-      _toggle = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>('hifi_audio_toggle');
-      _stop = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>('hifi_audio_stop');
-      _seek = _lib.lookupFunction<_HifiAudioSeekC, _HifiAudioSeekDart>('hifi_audio_seek');
-      _isPlaying = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>('hifi_audio_is_playing');
-      _isPaused = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>('hifi_audio_is_paused');
-      _isIdle = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>('hifi_audio_is_idle');
-      _getCurrentTime = _lib.lookupFunction<_HifiAudioDoubleC, _HifiAudioDoubleDart>('hifi_audio_get_current_time');
-      _getDuration = _lib.lookupFunction<_HifiAudioDoubleC, _HifiAudioDoubleDart>('hifi_audio_get_duration');
-      _getProgress = _lib.lookupFunction<_HifiAudioFloatC, _HifiAudioFloatDart>('hifi_audio_get_progress');
-      _setVolume = _lib.lookupFunction<_HifiAudioSetVolumeC, _HifiAudioSetVolumeDart>('hifi_audio_set_volume');
-      _getVolume = _lib.lookupFunction<_HifiAudioFloatC, _HifiAudioFloatDart>('hifi_audio_get_volume');
-      _setMuted = _lib.lookupFunction<_HifiAudioSetMutedC, _HifiAudioSetMutedDart>('hifi_audio_set_muted');
-      _isMuted = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>('hifi_audio_is_muted');
-      _isBitPerfect = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>('hifi_audio_is_bit_perfect');
-      _getSpectrumLevels = _lib.lookupFunction<_HifiAudioGetSpectrumC, _HifiAudioGetSpectrumDart>('hifi_audio_get_spectrum_levels');
-      _getSampleRate = _lib.lookupFunction<_HifiAudioGetSampleRateC, _HifiAudioGetSampleRateDart>('hifi_audio_get_sample_rate');
-      _getDeviceName = _lib.lookupFunction<_HifiAudioGetDeviceNameC, _HifiAudioGetDeviceNameDart>('hifi_audio_get_device_name');
-      _setEqEnabled = _lib.lookupFunction<_HifiAudioSetEqEnabledC, _HifiAudioSetEqEnabledDart>('hifi_audio_set_eq_enabled');
-      _isEqEnabled = _lib.lookupFunction<_HifiAudioIsEqEnabledC, _HifiAudioIsEqEnabledDart>('hifi_audio_is_eq_enabled');
-      _setEqBands = _lib.lookupFunction<_HifiAudioSetEqBandsC, _HifiAudioSetEqBandsDart>('hifi_audio_set_eq_bands');
-      _getEqBands = _lib.lookupFunction<_HifiAudioGetEqBandsC, _HifiAudioGetEqBandsDart>('hifi_audio_get_eq_bands');
+      final abi = _lib.lookupFunction<Uint32 Function(), int Function()>(
+          'hifi_audio_get_abi_version')();
+      if (abi != 2) throw StateError('Expected audio_engine ABI 2, got $abi');
+      _init = _lib.lookupFunction<_HifiAudioInitC, _HifiAudioInitDart>(
+          'hifi_audio_init_for_platform');
+      _openAndPlay = _lib.lookupFunction<_HifiAudioOpenAndPlayC,
+          _HifiAudioOpenAndPlayDart>('hifi_audio_open_and_play');
+      _openAndPlaySection = _lib.lookupFunction<_HifiAudioOpenSectionC,
+          _HifiAudioOpenSectionDart>('hifi_audio_open_and_play_section');
+      _play = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>(
+          'hifi_audio_play');
+      _pause = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>(
+          'hifi_audio_pause');
+      _toggle = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>(
+          'hifi_audio_toggle');
+      _stop = _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>(
+          'hifi_audio_stop');
+      _seek = _lib.lookupFunction<_HifiAudioSeekC, _HifiAudioSeekDart>(
+          'hifi_audio_seek');
+      _isPlaying = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>(
+          'hifi_audio_is_playing');
+      _isPaused = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>(
+          'hifi_audio_is_paused');
+      _isIdle = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>(
+          'hifi_audio_is_idle');
+      _getCurrentTime =
+          _lib.lookupFunction<_HifiAudioDoubleC, _HifiAudioDoubleDart>(
+              'hifi_audio_get_current_time');
+      _getDuration =
+          _lib.lookupFunction<_HifiAudioDoubleC, _HifiAudioDoubleDart>(
+              'hifi_audio_get_duration');
+      _getProgress = _lib.lookupFunction<_HifiAudioFloatC, _HifiAudioFloatDart>(
+          'hifi_audio_get_progress');
+      _setVolume =
+          _lib.lookupFunction<_HifiAudioSetVolumeC, _HifiAudioSetVolumeDart>(
+              'hifi_audio_set_volume');
+      _getVolume = _lib.lookupFunction<_HifiAudioFloatC, _HifiAudioFloatDart>(
+          'hifi_audio_get_volume');
+      _setMuted =
+          _lib.lookupFunction<_HifiAudioSetMutedC, _HifiAudioSetMutedDart>(
+              'hifi_audio_set_muted');
+      _isMuted = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>(
+          'hifi_audio_is_muted');
+      _isBitPerfect = _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>(
+          'hifi_audio_is_bit_perfect');
+      _getSpectrumLevels = _lib.lookupFunction<_HifiAudioGetSpectrumC,
+          _HifiAudioGetSpectrumDart>('hifi_audio_get_spectrum_levels');
+      _getSampleRate = _lib.lookupFunction<_HifiAudioGetSampleRateC,
+          _HifiAudioGetSampleRateDart>('hifi_audio_get_sample_rate');
+      _getDeviceName = _lib.lookupFunction<_HifiAudioGetDeviceNameC,
+          _HifiAudioGetDeviceNameDart>('hifi_audio_get_device_name');
+      _setEqEnabled = _lib.lookupFunction<_HifiAudioSetEqEnabledC,
+          _HifiAudioSetEqEnabledDart>('hifi_audio_set_eq_enabled');
+      _isEqEnabled = _lib.lookupFunction<_HifiAudioIsEqEnabledC,
+          _HifiAudioIsEqEnabledDart>('hifi_audio_is_eq_enabled');
+      _setEqBands =
+          _lib.lookupFunction<_HifiAudioSetEqBandsC, _HifiAudioSetEqBandsDart>(
+              'hifi_audio_set_eq_bands');
+      _getEqBands =
+          _lib.lookupFunction<_HifiAudioGetEqBandsC, _HifiAudioGetEqBandsDart>(
+              'hifi_audio_get_eq_bands');
 
       try {
-        _getConnectedDevicesJson = _lib.lookupFunction<_HifiAudioGetDevicesJsonC, _HifiAudioGetDevicesJsonDart>('hifi_audio_get_connected_devices_json');
-        _selectOutputDevice = _lib.lookupFunction<_HifiAudioSelectDeviceC, _HifiAudioSelectDeviceDart>('hifi_audio_select_output_device');
-        _setExternalDeviceMock = _lib.lookupFunction<_HifiAudioSetMockExternalC, _HifiAudioSetMockExternalDart>('hifi_audio_set_external_device_mock');
-        _isExternalDeviceMock = _lib.lookupFunction<_HifiAudioIsMockExternalC, _HifiAudioIsMockExternalDart>('hifi_audio_is_external_device_mock');
+        _getConnectedDevicesJson = _lib.lookupFunction<
+                _HifiAudioGetDevicesJsonC, _HifiAudioGetDevicesJsonDart>(
+            'hifi_audio_get_connected_devices_json');
+        _selectOutputDevice = _lib.lookupFunction<_HifiAudioSelectDeviceC,
+            _HifiAudioSelectDeviceDart>('hifi_audio_select_output_device');
+        _setExternalDeviceMock = _lib.lookupFunction<_HifiAudioSetMockExternalC,
+                _HifiAudioSetMockExternalDart>(
+            'hifi_audio_set_external_device_mock');
+        _isExternalDeviceMock = _lib.lookupFunction<_HifiAudioIsMockExternalC,
+            _HifiAudioIsMockExternalDart>('hifi_audio_is_external_device_mock');
         _hasDeviceCatalog = true;
       } catch (e) {
         _hasDeviceCatalog = false;
@@ -208,6 +252,15 @@ class HifiAudioBindings {
       }
 
       _isLoaded = true;
+      try {
+        _hasPlaybackCompleted =
+            _lib.lookupFunction<_HifiAudioBoolC, _HifiAudioBoolDart>(
+                'hifi_audio_has_playback_completed');
+      } catch (_) {}
+      try {
+        _getDiagnosticsJson = _lib.lookupFunction<_HifiAudioGetDevicesJsonC,
+            _HifiAudioGetDevicesJsonDart>('hifi_audio_get_diagnostics_json');
+      } catch (_) {}
     } catch (e, stack) {
       loadError = 'LOOKUP_ERROR: $e\n$stack';
       _isLoaded = false;
@@ -219,7 +272,7 @@ class HifiAudioBindings {
       try {
         final lib = DynamicLibrary.open(path);
         // 关键校验：确保加载的不是残存的过旧动态库
-        if (lib.providesSymbol('hifi_audio_open_and_play')) {
+        if (lib.providesSymbol('hifi_audio_init_for_platform')) {
           return lib;
         }
       } catch (_) {}
@@ -228,7 +281,48 @@ class HifiAudioBindings {
   }
 
   // 对外安全调用封装
-  bool init() => _isLoaded ? _init() : true;
+  bool init() {
+    if (!_isLoaded) return Platform.environment.containsKey('FLUTTER_TEST');
+    final platform = applicationPlatform.name.toNativeUtf8();
+    try {
+      return _init(platform, outputPolicies);
+    } finally {
+      calloc.free(platform);
+    }
+  }
+
+  Map<String, dynamic> get capabilities {
+    if (!_isLoaded) return {};
+    final value =
+        _lib.lookupFunction<Pointer<Utf8> Function(), Pointer<Utf8> Function()>(
+            'hifi_audio_get_capabilities_json')();
+    return jsonDecode(value.toDartString()) as Map<String, dynamic>;
+  }
+
+  bool updateHostOutput(Map<String, dynamic> output) {
+    if (!_isLoaded) return false;
+    final id = (output['id'] as String? ?? '').toNativeUtf8();
+    final name = (output['name'] as String? ?? '').toNativeUtf8();
+    final transport =
+        (output['transport'] as String? ?? 'System').toNativeUtf8();
+    try {
+      return _lib.lookupFunction<
+              Bool Function(
+                  Uint32, Uint32, Pointer<Utf8>, Pointer<Utf8>, Pointer<Utf8>),
+              bool Function(int, int, Pointer<Utf8>, Pointer<Utf8>,
+                  Pointer<Utf8>)>('hifi_audio_update_host_output')(
+          (output['sampleRate'] as num? ?? 0).toInt(),
+          (output['channels'] as num? ?? 0).toInt(),
+          id,
+          name,
+          transport);
+    } finally {
+      calloc.free(id);
+      calloc.free(name);
+      calloc.free(transport);
+    }
+  }
+
   bool openAndPlay(String path) {
     if (!_isLoaded) return false;
     final nativePath = path.toNativeUtf8();
@@ -236,6 +330,7 @@ class HifiAudioBindings {
     calloc.free(nativePath);
     return res;
   }
+
   bool openAndPlaySection(String path, double startSec, double endSec) {
     if (!_isLoaded) return false;
     final nativePath = path.toNativeUtf8();
@@ -243,6 +338,7 @@ class HifiAudioBindings {
     calloc.free(nativePath);
     return res;
   }
+
   void play() => _isLoaded ? _play() : null;
   void pause() => _isLoaded ? _pause() : null;
   void toggle() => _isLoaded ? _toggle() : null;
@@ -251,6 +347,10 @@ class HifiAudioBindings {
   bool isPlaying() => _isLoaded ? _isPlaying() : false;
   bool isPaused() => _isLoaded ? _isPaused() : false;
   bool isIdle() => _isLoaded ? _isIdle() : true;
+  // Older libraries cannot prove natural completion. Do not infer it from a
+  // transient stopped state, which can also mean a device is being reopened.
+  bool hasPlaybackCompleted() =>
+      _isLoaded && (_hasPlaybackCompleted?.call() ?? false);
   double getCurrentTime() => _isLoaded ? _getCurrentTime() : 0.0;
   double getDuration() => _isLoaded ? _getDuration() : 0.0;
   double getProgress() => _isLoaded ? _getProgress() : 0.0;
@@ -266,15 +366,15 @@ class HifiAudioBindings {
     return List.generate(12, (i) => _spectrumBuffer[i]);
   }
 
-  int getSampleRate() => _isLoaded ? _getSampleRate() : 192000;
+  int getSampleRate() => _isLoaded ? _getSampleRate() : 0;
 
   String getDeviceName() {
-    if (!_isLoaded) return 'Apple Direct';
+    if (!_isLoaded) return '音频引擎未连接';
     final buf = calloc<Uint8>(256);
     _getDeviceName(buf.cast<Utf8>(), 256);
     final name = buf.cast<Utf8>().toDartString();
     calloc.free(buf);
-    return name.isNotEmpty ? name : 'Apple Direct';
+    return name.isNotEmpty ? name : '系统音频输出';
   }
 
   void setEqEnabled(bool enabled) {
@@ -302,6 +402,13 @@ class HifiAudioBindings {
     final ptr = _getConnectedDevicesJson();
     if (ptr == nullptr) return '[]';
     return ptr.toDartString();
+  }
+
+  String getDiagnosticsJson() {
+    final getter = _getDiagnosticsJson;
+    if (!_isLoaded || getter == null) return '{}';
+    final ptr = getter();
+    return ptr == nullptr ? '{}' : ptr.toDartString();
   }
 
   bool selectOutputDevice(String deviceId) {
