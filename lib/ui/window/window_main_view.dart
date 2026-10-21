@@ -25,7 +25,7 @@ class WindowMainView extends StatelessWidget {
           backgroundColor: HifiTheme.background,
           appBar: AppBar(
             backgroundColor: const Color(0xFF161B22),
-            title: const Text('Windows HiFi Player (WASAPI Exclusive)'),
+            title: const Text('Windows HiFi Player (系统音频输出)'),
             actions: [
               Container(
                 margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),

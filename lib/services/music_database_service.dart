@@ -2,9 +2,17 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:sqlite3/sqlite3.dart';
 import '../models/track.dart';
+import '../core/app_paths.dart';
 
 /// 发烧曲库数据库服务 (读取 C++ 纯音数播持久化 SQLite 数据库)
 class MusicDatabaseService extends ChangeNotifier {
+  static String resolveTrackPath(String path) {
+    if (!Platform.isIOS) return path;
+    final marker = path.indexOf('/Documents/');
+    if (marker >= 0) return '${AppPaths.documentsDirectory}/${path.substring(marker + 11)}';
+    return path;
+  }
+
   static final MusicDatabaseService instance = MusicDatabaseService._();
 
   List<Track> _tracks = [];
