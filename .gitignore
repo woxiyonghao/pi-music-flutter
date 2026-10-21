@@ -53,8 +53,11 @@ native/build/
 *.dll
 build-ios/
 *.a
-!ios/lib/**/*.a
-!ios/lib/*.a
 compile_commands.json
 .cache/
 reports/*.log
+
+# Generated SDKs and per-platform build output
+/native/build*/
+/android/.cxx/
+/android/app/.cxx/

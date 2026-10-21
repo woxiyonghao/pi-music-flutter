@@ -11,7 +11,6 @@ cd "$PROJECT_DIR"
 
 echo "📱 [HiFi Master] 开始编译 iPad / iOS Release 发行版..."
 
-export PATH="/opt/homebrew/bin:/Users/mk10/development/flutter/bin:$PATH"
 
 # 1. 获取依赖
 echo "📦 [1/2] 检查 Flutter 依赖项..."
