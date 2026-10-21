@@ -50,6 +50,7 @@ class MusicDatabaseService extends ChangeNotifier {
   }
 
   static String resolveTrackPath(String path) {
+    if (!Platform.isIOS) return path;
     if (path.isEmpty) return path;
 
     // 1. 如果路径在当前文件系统上直接存在，直接返回

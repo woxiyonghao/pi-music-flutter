@@ -6,6 +6,7 @@ import '../models/track.dart';
 import '../models/playback_state.dart';
 import '../services/music_database_service.dart';
 import 'hifi_audio_bindings.dart';
+import '../platform/platform_audio_runtime.dart';
 import 'playback_completion_tracker.dart';
 
 /// 全局音频服务 (提供 60fps 动效数据流与状态响应式驱动)
@@ -55,12 +56,22 @@ class HifiAudioService extends ChangeNotifier {
   String lastDebugLog = '';
 
   final ValueNotifier<int?> currentTrackIdNotifier = ValueNotifier<int?>(null);
-  final ValueNotifier<Track?> currentTrackNotifier = ValueNotifier<Track?>(null);
+  final ValueNotifier<Track?> currentTrackNotifier =
+      ValueNotifier<Track?>(null);
   final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
 
-  HifiAudioService._() : _prepareFileOverride = null, _openFileOverride = null, _ownsBindings = true {
+  HifiAudioService._()
+      : _prepareFileOverride = null,
+        _openFileOverride = null,
+        _ownsBindings = true {
     _bindings.init();
     _loadEqSettings();
+    final runtime = PlatformAudioRuntime.instance;
+    runtime.isPlaying = () => _state.isPlaying;
+    runtime.pauseForSystem = () => pause(fromSystem: true);
+    runtime.resumeAfterSystem = () {
+      play();
+    };
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       _startTicker();
     }
@@ -70,7 +81,9 @@ class HifiAudioService extends ChangeNotifier {
   HifiAudioService.forTesting({
     required Future<void> Function(String) prepareFile,
     required bool Function(String, double, double) openFile,
-  }) : _prepareFileOverride = prepareFile, _openFileOverride = openFile, _ownsBindings = false;
+  })  : _prepareFileOverride = prepareFile,
+        _openFileOverride = openFile,
+        _ownsBindings = false;
 
   static Future<void> _prepareFile(String path) async {
     // macOS can wait here for Downloads / Desktop access permission. Dart's
@@ -135,7 +148,8 @@ class HifiAudioService extends ChangeNotifier {
     if (index < 0 || index >= 10) return;
     _eqBands[index] = gain.clamp(-12.0, 12.0);
     _bindings.setEqBands(_eqBands);
-    MusicDatabaseService.instance.setSetting('eq_band_$index', _eqBands[index].toStringAsFixed(1));
+    MusicDatabaseService.instance
+        .setSetting('eq_band_$index', _eqBands[index].toStringAsFixed(1));
     eqSettingsRevision.value++;
     notifyListeners();
   }
@@ -190,8 +204,11 @@ class HifiAudioService extends ChangeNotifier {
       }
 
       // 停播也可能来自设备重建；只有引擎确认 EOF 且缓冲区已耗尽才自动切歌。
-      if (!_isPreparingTrack && _completion.update(isPlaying: isPlaying, isPaused: isPaused,
-          hasCompleted: _bindings.hasPlaybackCompleted())) {
+      if (!_isPreparingTrack &&
+          _completion.update(
+              isPlaying: isPlaying,
+              isPaused: isPaused,
+              hasCompleted: _bindings.hasPlaybackCompleted())) {
         _state = PlaybackState(
           isPlaying: false,
           isPaused: false,
@@ -213,8 +230,11 @@ class HifiAudioService extends ChangeNotifier {
       }
 
       // 仅在播放中或状态变更时通知监听者
-      if (isPlaying || _state.isPlaying != isPlaying || _state.isPaused != isPaused ||
-          _state.activeDeviceName != _hardwareDeviceName || _state.activeSampleRate != _hardwareSampleRate) {
+      if (isPlaying ||
+          _state.isPlaying != isPlaying ||
+          _state.isPaused != isPaused ||
+          _state.activeDeviceName != _hardwareDeviceName ||
+          _state.activeSampleRate != _hardwareSampleRate) {
         _state = PlaybackState(
           isPlaying: isPlaying,
           isPaused: isPaused,
@@ -263,7 +283,8 @@ class HifiAudioService extends ChangeNotifier {
     _completion.reset();
 
     // 在单元测试无头环境下模拟成功播放，方便验证 Flutter Widget 树与高亮状态流转
-    if (Platform.environment.containsKey('FLUTTER_TEST') && _prepareFileOverride == null) {
+    if (Platform.environment.containsKey('FLUTTER_TEST') &&
+        _prepareFileOverride == null) {
       _isPreparingTrack = false;
       _completion.update(isPlaying: true, isPaused: false, hasCompleted: false);
       _consecutiveErrors = 0;
@@ -291,6 +312,10 @@ class HifiAudioService extends ChangeNotifier {
     Object? fileError;
     try {
       await (_prepareFileOverride ?? _prepareFile)(resolvedPath);
+      if (generation != _loadGeneration) return;
+      if (!await PlatformAudioRuntime.instance.activate()) {
+        throw StateError('Audio session activation was denied');
+      }
     } catch (error) {
       fileError = error;
     }
@@ -298,7 +323,8 @@ class HifiAudioService extends ChangeNotifier {
     if (generation != _loadGeneration) return;
     _isPreparingTrack = false;
     if (fileError != null) {
-      lastDebugLog = 'FILE_OPEN_FAILED: resolved=$resolvedPath, error=$fileError';
+      lastDebugLog =
+          'FILE_OPEN_FAILED: resolved=$resolvedPath, error=$fileError';
       debugPrint('[HifiAudioService] 无法读取音频文件: $resolvedPath: $fileError');
       _consecutiveErrors++;
       isPlayingNotifier.value = false;
@@ -322,15 +348,18 @@ class HifiAudioService extends ChangeNotifier {
 
     final bool success;
     if (_openFileOverride != null) {
-      success = _openFileOverride!(resolvedPath, track.startTimeSec, track.endTimeSec);
+      success = _openFileOverride!(
+          resolvedPath, track.startTimeSec, track.endTimeSec);
     } else if (track.isCueTrack && track.endTimeSec > track.startTimeSec) {
-      success = _bindings.openAndPlaySection(resolvedPath, track.startTimeSec, track.endTimeSec);
+      success = _bindings.openAndPlaySection(
+          resolvedPath, track.startTimeSec, track.endTimeSec);
     } else {
       success = _bindings.openAndPlay(resolvedPath);
     }
 
     if (!success) {
-      lastDebugLog = 'BINDINGS_OPEN_FAIL: path=$resolvedPath, isCue=${track.isCueTrack}, isLoaded=${_bindings.isLoaded}';
+      lastDebugLog =
+          'BINDINGS_OPEN_FAIL: path=$resolvedPath, isCue=${track.isCueTrack}, isLoaded=${_bindings.isLoaded}';
       debugPrint('[HifiAudioService] 底层解码器打开音频文件失败: $resolvedPath');
       _consecutiveErrors++;
       isPlayingNotifier.value = false;
@@ -365,7 +394,9 @@ class HifiAudioService extends ChangeNotifier {
       isBitPerfect: _bindings.isBitPerfect(),
       currentTime: position,
       duration: track.durationSec.toDouble(),
-      progress: track.durationSec > 0 ? (position / track.durationSec).clamp(0.0, 1.0) : 0.0,
+      progress: track.durationSec > 0
+          ? (position / track.durationSec).clamp(0.0, 1.0)
+          : 0.0,
       volume: _state.volume,
       isMuted: _state.isMuted,
       playMode: _playMode,
@@ -379,31 +410,26 @@ class HifiAudioService extends ChangeNotifier {
   void togglePlayPause() {
     if (_currentTrack == null && _playlistQueue.isNotEmpty) {
       playTrack(_playlistQueue.first);
-      return;
+    } else if (_state.isPlaying || (_isPreparingTrack && _playWhenPrepared)) {
+      pause();
+    } else {
+      play();
     }
-    _bindings.toggle();
-    final nowPlaying = !_state.isPlaying;
-    _playWhenPrepared = nowPlaying;
-    isPlayingNotifier.value = nowPlaying;
-    _state = PlaybackState(
-      isPlaying: nowPlaying,
-      isPaused: !nowPlaying,
-      isBitPerfect: _state.isBitPerfect,
-      currentTime: _state.currentTime,
-      duration: _state.duration,
-      progress: _state.progress,
-      volume: _state.volume,
-      isMuted: _state.isMuted,
-      playMode: _playMode,
-      activeDeviceName: _state.activeDeviceName,
-      activeSampleRate: _state.activeSampleRate,
-      spectrumLevels: _state.spectrumLevels,
-    );
-    notifyListeners();
   }
 
-  void play() {
+  Future<void> play() async {
     _playWhenPrepared = true;
+    if (_isPreparingTrack) return;
+    final generation = _loadGeneration;
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      if (!await PlatformAudioRuntime.instance.activate()) return;
+      if (generation != _loadGeneration || !_playWhenPrepared) return;
+      // A selection paused during preparation has no native decoder yet.
+      if (_bindings.isIdle() && _currentTrack != null) {
+        await playTrack(_currentTrack!);
+        return;
+      }
+    }
     _bindings.play();
     isPlayingNotifier.value = true;
     _state = PlaybackState(
@@ -423,7 +449,8 @@ class HifiAudioService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void pause() {
+  void pause({bool fromSystem = false}) {
+    if (!fromSystem) PlatformAudioRuntime.instance.userPaused();
     _playWhenPrepared = false;
     _completion.reset();
     _bindings.pause();
@@ -446,6 +473,7 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void stop() {
+    PlatformAudioRuntime.instance.userPaused();
     _loadGeneration++;
     _isPreparingTrack = false;
     _pendingSeek = null;
@@ -498,7 +526,10 @@ class HifiAudioService extends ChangeNotifier {
       case PlayMode.loopSingle:
         if (isAutomatic) {
           // 自然播完单曲循环模式：重新播放当前曲目
-          final trackToReplay = _currentTrack ?? (_playlistQueue.isNotEmpty ? _playlistQueue[_currentIndex] : null);
+          final trackToReplay = _currentTrack ??
+              (_playlistQueue.isNotEmpty
+                  ? _playlistQueue[_currentIndex]
+                  : null);
           if (trackToReplay != null) {
             playTrack(trackToReplay);
             return;

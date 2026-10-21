@@ -7,7 +7,6 @@ cd "$PROJECT_DIR"
 
 echo "🔨 [HiFi Master] 开始编译 macOS 完整应用 (Release 发行版)..."
 
-export PATH="/opt/homebrew/bin:/Users/mk10/development/flutter/bin:$PATH"
 
 # 1. 编译 C++ 动态库
 echo "⚡ [AudioEngine] 编译 C++20 原生内核 (Release)..."

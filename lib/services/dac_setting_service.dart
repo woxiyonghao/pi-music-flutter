@@ -193,6 +193,13 @@ class DacSettingService extends ChangeNotifier {
       debugPrint('[DacSettingService] refreshDevices error: $e');
     }
 
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      _connectedDevices = [];
+      _selectedDeviceIndex = -1;
+      notifyListeners();
+      return;
+    }
+
     // 降级回退或测试模式默认设备列表 (根据当前平台类型智能匹配本机解码器)
     final isIpad = PlatformHelper.isIpad;
     final isPi = PlatformHelper.isPi;
