@@ -1,3 +1,5 @@
+> 当前分支与引擎的接入规则见 [分支职责](doc/branch_ownership.md)。音频源码统一维护在本仓库的 `dev/audio_engine`，通过 `audio_engine.lock.json` 锁定使用。
+
 # 🎵 MyHiFiPlayer - Flutter 发烧级全平台数播前级交互系统
 
 本项目是配合 **C++20 发烧级纯音音频内核 (`audio_engine`)** 的全新 **Flutter 跨平台交互客户端**。
