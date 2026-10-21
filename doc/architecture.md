@@ -1,3 +1,5 @@
+> 当前分层以 [分支职责](branch_ownership.md) 为准；下文历史路径中的 native/audio_engine 已由锁定的引擎 SDK 替代。
+
 # 深度架构设计文档：C++20 发烧音频引擎与 Flutter 的融合机制
 
 ## 1. 架构动机与问题背景
