@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 #include <atomic>
-#include <thread>
+#include "audio_engine/WorkerThread.hpp"
 #include <functional>
 #include "audio_engine/DacDeviceCatalog.hpp"
 #include <mutex>
@@ -135,13 +135,13 @@ private:
     ~AudioEngine();
 
     std::unique_ptr<IAudioSink> sink_;
-    bool using_ipad_remote_io_{false};
+    bool using_remote_io_{false};
     std::unique_ptr<IAudioDecoder> decoder_;
     std::mutex decoder_mutex_; // 保护解码器切换与 Seek 操作
 
     LockFreeRingBuffer<float> ring_buffer_;
 
-    std::jthread decode_thread_;
+    WorkerThread decode_thread_;
     std::atomic<bool> is_decoding_{false};
     std::atomic<bool> is_eof_{false};
 
@@ -190,7 +190,7 @@ private:
     uint32_t last_system_output_device_id_{0};
     uint32_t hogged_device_id_{0};
     std::recursive_mutex device_mutex_;
-    std::jthread device_thread_;
+    WorkerThread device_thread_;
     std::atomic<bool> device_change_pending_{false};
     std::atomic<bool> is_resampling_{false};
     std::atomic<uint64_t> underrun_count_{0};
@@ -203,7 +203,7 @@ private:
     void registerDeviceListener();
     void unregisterDeviceListener();
 
-    void decodeWorker(std::stop_token stop_token);
+    void decodeWorker(StopToken stop_token);
     void onSinkDataNeeded(float* output, size_t frame_count);
     void applyEqualizer(float* samples, size_t frame_count);
     void updateSpectrumAnalysis(const float* samples, size_t frame_count);

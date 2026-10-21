@@ -2,6 +2,7 @@
 
 #include <CoreAudio/CoreAudio.h>
 #include <vector>
+#include "audio_engine/RuntimeContext.hpp"
 
 namespace audio_engine {
 
@@ -53,6 +54,7 @@ inline AudioDeviceID getSystemDefaultOutputDeviceID() {
 
 inline AudioDeviceID getPlaybackOutputDeviceID() {
     const AudioDeviceID system_default = getSystemDefaultOutputDeviceID();
+    if (!runtimeContext().policy(exclude_display_outputs)) return system_default;
     if (system_default != kAudioObjectUnknown &&
         !isDisplayOutputTransport(getOutputDeviceTransport(system_default)))
         return system_default;

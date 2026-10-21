@@ -1,4 +1,5 @@
 #include "audio_engine/sinks/SdlAudioSink.hpp"
+#include "audio_engine/RuntimeContext.hpp"
 #include <iostream>
 #include <cstring>
 
@@ -43,6 +44,7 @@ bool SdlAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback cal
 #if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
     int num_audio_devices = SDL_GetNumAudioDevices(0);
     std::cout << "[SdlAudioSink] 正在扫描系统物理音频输出设备 (共 " << num_audio_devices << " 个)..." << std::endl;
+    if (runtimeContext().policy(prefer_external_output))
     for (int i = 0; i < num_audio_devices; ++i) {
         const char* d_name = SDL_GetAudioDeviceName(i, 0);
         if (!d_name) continue;
