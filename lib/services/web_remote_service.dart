@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import '../core/hifi_audio_bindings.dart';
 import '../core/hifi_audio_service.dart';
 import '../models/playback_state.dart';
 import '../models/track.dart';
 import 'music_database_service.dart';
+import 'dac_setting_service.dart';
 import 'theme_service.dart';
 import 'web_remote_html.dart';
 
@@ -27,12 +29,18 @@ class WebRemoteService extends ChangeNotifier {
   int get clientCount => _clients.length;
 
   Timer? _broadcastTimer;
+  Timer? _dacBroadcastTimer;
+  final DacSettingService? _dacOverride;
 
-  WebRemoteService._() {
+  WebRemoteService._() : _dacOverride = null {
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       _initLocalIp();
     }
   }
+
+  @visibleForTesting
+  WebRemoteService.forTesting({required DacSettingService dac})
+      : _dacOverride = dac;
 
   Future<void> _initLocalIp() async {
     _localIp = await findLocalIp();
@@ -104,6 +112,8 @@ class WebRemoteService extends ChangeNotifier {
   Future<void> stop() async {
     _broadcastTimer?.cancel();
     _broadcastTimer = null;
+    _dacBroadcastTimer?.cancel();
+    _dacBroadcastTimer = null;
 
     for (final ws in _clients) {
       try {
@@ -131,6 +141,12 @@ class WebRemoteService extends ChangeNotifier {
       if (isPlaying) {
         broadcastState();
       }
+    });
+    // Route changes and hotplug must also update idle remote clients.
+    _dacBroadcastTimer?.cancel();
+    _dacBroadcastTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!isRunning || _clients.isEmpty) return;
+      _broadcast(jsonEncode(_buildDacMap()));
     });
   }
 
@@ -164,6 +180,7 @@ class WebRemoteService extends ChangeNotifier {
     if ((request.method == 'GET' || request.method == 'HEAD') &&
         (path == '/' || path == '/index.html')) {
       request.response.headers.contentType = ContentType.html;
+      request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
       if (request.method == 'GET') {
         request.response.write(webRemoteHtml);
       }
@@ -525,19 +542,27 @@ class WebRemoteService extends ChangeNotifier {
   }
 
   Map<String, dynamic> _buildDacMap() {
+    final dac = _dacOverride ?? DacSettingService.instance;
+    dac.refreshDevices();
+    final active = dac.currentDevice;
+    final bindings = HifiAudioBindings.instance;
     return {
       'type': 'dac',
-      'has_external_dac': false,
-      'dac_name': '系统默认声卡 (Apple Direct)',
-      'active_output': '系统默认音频输出',
-      'selected_chip': 0,
-      'chip_name': 'Apple Direct',
-      'params': {
-        'apple_exclusive': 0,
-        'apple_sample_rate': 0,
-        'apple_drive': 0,
-        'apple_bit_depth': 0,
-      },
+      'dac_name':
+          active?.name ?? (bindings.isLoaded ? bindings.getDeviceName() : ''),
+      'sample_rate': active?.currentSampleRate ?? 0,
+      'transport': active?.transport ?? '',
+      'follows_system_output': dac.followsSystemOutput,
+      'devices': [
+        for (final device in dac.connectedDevices)
+          {
+            'id': device.id,
+            'name': device.name,
+            'transport': device.transport,
+            'sample_rate': device.currentSampleRate,
+            'is_active': device.id == active?.id,
+          },
+      ],
     };
   }
 
