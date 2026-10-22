@@ -226,30 +226,13 @@ class _IpadMainViewState extends State<IpadMainView> with SingleTickerProviderSt
                       final opacity = (1.0 - easeT).clamp(0.0, 1.0);
                       final isFullyFullscreen = progress >= 0.999;
 
-                      final screensaverThemeIdx = int.tryParse(db.getSetting('setting_idle_screensaver_theme', '0')) ?? 0;
-                      final VisualizerType effectiveVisualizer;
-                      if (progress > 0.6 && screensaverThemeIdx > 0) {
-                        switch (screensaverThemeIdx) {
-                          case 1: effectiveVisualizer = VisualizerType.mcIntosh; break;
-                          case 2: effectiveVisualizer = VisualizerType.accuphase; break;
-                          case 3: effectiveVisualizer = VisualizerType.tapeReel; break;
-                          case 4: effectiveVisualizer = VisualizerType.siriWave; break;
-                          case 5: effectiveVisualizer = VisualizerType.bubbles; break;
-                          case 6: effectiveVisualizer = VisualizerType.glassClock; break;
-                          case 7: effectiveVisualizer = VisualizerType.ipadTelemetryDashboard; break;
-                          default: effectiveVisualizer = activeVisualizer; break;
-                        }
-                      } else {
-                        effectiveVisualizer = activeVisualizer;
-                      }
-
                       return Stack(
                         fit: StackFit.expand,
                         children: [
-                          // 1. 全景底层背景与音乐律动动效
+                          // 1. 全景底层背景与音乐律动动效 (严格跟随侧边栏主题选择)
                           RepaintBoundary(
                             child: MacBackgroundWidget(
-                              visualizerType: effectiveVisualizer,
+                              visualizerType: activeVisualizer,
                               fullscreenProgress: progress,
                             ),
                           ),
@@ -339,7 +322,7 @@ class _IpadMainViewState extends State<IpadMainView> with SingleTickerProviderSt
                               ),
                             ),
 
-                          // 5. 沉浸屏保模式快捷操作胶囊 (切换动效/退出)
+                          // 5. 沉浸全屏模式快捷退出按钮
                           if (progress > 0.05)
                             Positioned(
                               top: 16.0,
@@ -347,7 +330,6 @@ class _IpadMainViewState extends State<IpadMainView> with SingleTickerProviderSt
                               child: Opacity(
                                 opacity: progress.clamp(0.0, 1.0),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
                                   decoration: BoxDecoration(
                                     color: const Color.fromRGBO(14, 18, 26, 0.82),
                                     borderRadius: BorderRadius.circular(20.0),
@@ -361,37 +343,12 @@ class _IpadMainViewState extends State<IpadMainView> with SingleTickerProviderSt
                                       ),
                                     ],
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      DropdownButtonHideUnderline(
-                                        child: DropdownButton<VisualizerType>(
-                                          value: effectiveVisualizer,
-                                          dropdownColor: const Color(0xFF161B24),
-                                          icon: Icon(Icons.style_rounded, size: 16, color: theme.accentColor),
-                                          style: const TextStyle(fontSize: 11, color: UIConfig.textActive, fontWeight: FontWeight.bold),
-                                          items: VisualizerType.values.map((type) {
-                                            return DropdownMenuItem<VisualizerType>(
-                                              value: type,
-                                              child: Text(type.displayName),
-                                            );
-                                          }).toList(),
-                                          onChanged: (newType) {
-                                            if (newType != null) {
-                                              ThemeService.instance.setBackgroundVisualMode(newType.index);
-                                            }
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8.0),
-                                      IconButton(
-                                        icon: const Icon(Icons.fullscreen_exit_rounded, size: 18, color: UIConfig.iconNormal),
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                                        tooltip: '退出全屏',
-                                        onPressed: _exitFullscreenIdle,
-                                      ),
-                                    ],
+                                  child: IconButton(
+                                    icon: const Icon(Icons.fullscreen_exit_rounded, size: 20, color: UIConfig.iconNormal),
+                                    padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+                                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                    tooltip: '退出全屏',
+                                    onPressed: _exitFullscreenIdle,
                                   ),
                                 ),
                               ),

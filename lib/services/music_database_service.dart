@@ -19,6 +19,7 @@ class MusicDatabaseService extends ChangeNotifier {
   List<Playlist> get playlists => _playlists;
 
   MusicDatabaseService._() {
+    deleteSetting('setting_idle_screensaver_theme');
     loadLibrary();
   }
 
@@ -89,6 +90,7 @@ class MusicDatabaseService extends ChangeNotifier {
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL
       );
+      DELETE FROM app_settings WHERE key = 'setting_idle_screensaver_theme';
     ''');
   }
 
@@ -133,6 +135,23 @@ class MusicDatabaseService extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('[MusicDatabaseService] setSetting error for $key: $e');
+      return false;
+    }
+  }
+
+  /// 删除持久化设置项 (彻底清理废弃配置项)
+  bool deleteSetting(String key) {
+    final dbFile = File(_databasePath);
+    if (!dbFile.existsSync()) return true;
+    try {
+      final db = _openDb();
+      final stmt = db.prepare('DELETE FROM app_settings WHERE key = ?;');
+      stmt.execute([key]);
+      stmt.close();
+      db.close();
+      return true;
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] deleteSetting error for $key: $e');
       return false;
     }
   }
