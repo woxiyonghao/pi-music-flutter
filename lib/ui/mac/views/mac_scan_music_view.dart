@@ -101,23 +101,26 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
     super.dispose();
   }
 
-  void _triggerScan() {
+  void _triggerScan() async {
     setState(() {
       _state = ScanUIState.scanning;
       _isEditMode = false;
       _selectedTrackIds.clear();
     });
 
-    // 异步扫描音乐文件
-    Timer(const Duration(milliseconds: 2200), () {
-      if (mounted) {
-        MusicDatabaseService.instance.loadLibrary();
-        widget.onScanComplete?.call();
-        setState(() {
-          _state = ScanUIState.completed;
-        });
-      }
-    });
+    // 真正异步扫描音乐文件与 CUE 分轨表
+    try {
+      await MusicDatabaseService.instance.scanLibrary();
+    } catch (e) {
+      debugPrint('[MacScanView] 扫描异常: $e');
+    }
+
+    if (mounted) {
+      widget.onScanComplete?.call();
+      setState(() {
+        _state = ScanUIState.completed;
+      });
+    }
   }
 
   @override

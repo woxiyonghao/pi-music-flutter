@@ -11,6 +11,9 @@ class TapeReelPainter extends CustomPainter {
   final bool isPlaying;
   final double elapsedSec;    // 播放时间秒数
   final Color? accentColor;
+  final double vuLeft;
+  final double vuRight;
+  final List<double>? spectrumLevels;
 
   static const Color chassisBg = Color(0xFF0C0906);        // 铸铁深邃黑曜底板
   static const Color panelBg = Color(0xFF16120E);          // 复古暖棕黑拉丝面板
@@ -31,6 +34,9 @@ class TapeReelPainter extends CustomPainter {
     required this.isPlaying,
     this.elapsedSec = 0.0,
     this.accentColor,
+    this.vuLeft = 0.0,
+    this.vuRight = 0.0,
+    this.spectrumLevels,
   });
 
   @override
@@ -270,42 +276,95 @@ class TapeReelPainter extends CustomPainter {
         ..strokeWidth = 1.2,
     );
 
-    // 三组精密模拟磁头 (消音磁头、录音磁头、放音磁头)
+    // 三组精密模拟磁头 (消音磁头 ERASE、录音磁头 RECORD、放音磁头 PLAYBACK)
     final headGap = width / 4.0;
     final headLabels = ['ERASE', 'RECORD', 'PLAYBACK'];
+
+    // 计算三柱的音频动态能量响应
+    double bass = 0.0;
+    double mid = 0.0;
+    double treble = 0.0;
+    if (spectrumLevels != null && spectrumLevels!.length >= 12) {
+      bass = (spectrumLevels![0] + spectrumLevels![1] + spectrumLevels![2] + spectrumLevels![3]) / 4.0;
+      mid = (spectrumLevels![4] + spectrumLevels![5] + spectrumLevels![6] + spectrumLevels![7]) / 4.0;
+      treble = (spectrumLevels![8] + spectrumLevels![9] + spectrumLevels![10] + spectrumLevels![11]) / 4.0;
+    } else {
+      bass = vuLeft;
+      mid = (vuLeft + vuRight) * 0.5;
+      treble = vuRight;
+    }
+    final headLevels = [
+      isPlaying ? bass.clamp(0.06, 1.0) : 0.04,
+      isPlaying ? mid.clamp(0.08, 1.0) : 0.04,
+      isPlaying ? treble.clamp(0.06, 1.0) : 0.04,
+    ];
+
+    final baseAccent = accentColor ?? const Color(0xFFF97316);
 
     for (int h = 1; h <= 3; ++h) {
       final hx = rect.left + h * headGap;
       final hRect = Rect.fromCenter(center: Offset(hx, center.dy), width: 26.0, height: height * 0.65);
 
-      // 坡莫合金金属屏蔽外壳
+      // 坡莫合金金属屏蔽外壳 (内凹暗槽)
       canvas.drawRRect(
         RRect.fromRectAndRadius(hRect, const Radius.circular(4)),
-        Paint()..color = const Color(0xFF283242),
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(hRect, const Radius.circular(4)),
-        Paint()
-          ..color = const Color(0xFFC5D1DE)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.0,
+        Paint()..color = const Color(0xFF181F2A),
       );
 
-      // 磁头工作微隙 (Gap line)
-      canvas.drawLine(
-        Offset(hx, hRect.top + 3.0),
-        Offset(hx, hRect.bottom - 3.0),
+      // 柱内音效电平能量柱 (从下往上升腾渲染音效，中间死线已去除)
+      final level = headLevels[h - 1];
+      const innerPad = 2.5;
+      final innerW = hRect.width - innerPad * 2;
+      final maxInnerH = hRect.height - innerPad * 2;
+      final activeH = maxInnerH * level;
+
+      if (activeH > 1.0) {
+        final barRect = Rect.fromLTWH(
+          hRect.left + innerPad,
+          hRect.bottom - innerPad - activeH,
+          innerW,
+          activeH,
+        );
+        final barGradient = LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [
+            baseAccent.withValues(alpha: 0.45),
+            baseAccent,
+            h == 2 ? const Color(0xFFFFD54F) : baseAccent.withValues(alpha: 0.95),
+          ],
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(barRect, const Radius.circular(2)),
+          Paint()..shader = barGradient.createShader(barRect),
+        );
+
+        // 顶峰高亮微线 (Peak Indicator)
+        final peakY = barRect.top;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(hRect.left + innerPad, peakY, innerW, 1.8),
+            const Radius.circular(1),
+          ),
+          Paint()..color = Colors.white.withValues(alpha: 0.9),
+        );
+      }
+
+      // 柱身外金属边框
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(hRect, const Radius.circular(4)),
         Paint()
-          ..color = (accentColor ?? const Color(0xFFF97316))
-          ..strokeWidth = 1.4,
+          ..color = const Color(0xFFC5D1DE).withValues(alpha: 0.85)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0,
       );
 
       // 磁头微型标牌文字
       final tp = TextPainter(
         text: TextSpan(
           text: headLabels[h - 1],
-          style: const TextStyle(
-            color: Color(0xFF8A9FB4),
+          style: TextStyle(
+            color: level > 0.3 ? Colors.white.withValues(alpha: 0.95) : const Color(0xFF8A9FB4),
             fontSize: 7.5,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,

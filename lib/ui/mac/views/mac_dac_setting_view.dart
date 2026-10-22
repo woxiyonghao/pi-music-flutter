@@ -697,6 +697,27 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
             '${dev.model} · 发烧芯片与数字滤波调教', Icons.tune_rounded, accent),
         const SizedBox(height: 8),
 
+        // 0. 硬件输出采样率 (kHz) 控制器 (方案 A：支持自动源码直出与 44.1k~384k 档位)
+        _buildCapsuleSelector(
+          title: '硬件输出采样率 (Hardware Sample Rate / kHz)',
+          subtitle:
+              '直接控制外接 DAC 解码器工作主频。推荐【自动】，播放时随音频文件实际码率零损耗源码直出；亦可手动强制指定主频',
+          options: const [
+            '自动 (Bit-Perfect 源码直出)',
+            '44.1 kHz',
+            '48.0 kHz',
+            '96.0 kHz',
+            '192.0 kHz',
+            '384.0 kHz'
+          ],
+          selectedIndex: dac.sampleRateMode,
+          accent: accent,
+          onSelected: (idx) {
+            dac.setSampleRateMode(idx);
+          },
+        ),
+        const SizedBox(height: 12),
+
         // 1. 核心数字滤波器选择 (ESS ES9039Q2M 官方 8 种滤波曲线)
         Container(
           padding: const EdgeInsets.all(14),

@@ -8,7 +8,7 @@ import 'package:hide_player_flutter/ui/mac/views/mac_scan_music_view.dart';
 
 void main() {
   setUp(() {
-    MusicDatabaseService.instance.loadLibrary();
+    MusicDatabaseService.instance.loadFallbackDemoTracksForTesting();
   });
 
   tearDown(() {

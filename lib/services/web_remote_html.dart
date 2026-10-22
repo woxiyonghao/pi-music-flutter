@@ -574,7 +574,7 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
           <div class="eq-switch-wrap">
             <span>魔棒调音</span>
             <label class="switch">
-              <input type="checkbox" id="msebToggle" checked>
+              <input type="checkbox" id="msebToggle">
               <span class="slider-toggle"></span>
             </label>
           </div>

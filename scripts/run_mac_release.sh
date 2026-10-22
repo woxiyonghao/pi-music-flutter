@@ -3,6 +3,9 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 export PATH="$PATH:$HOME/development/flutter/bin:/opt/homebrew/bin"
+export PUB_HOSTED_URL="${PUB_HOSTED_URL:-https://pub.flutter-io.cn}"
+export FLUTTER_STORAGE_BASE_URL="${FLUTTER_STORAGE_BASE_URL:-https://storage.flutter-io.cn}"
+
 
 # Keep platform branches separate: the Mac button always runs dev/mac.
 if [[ "$(git -C "$PROJECT_DIR" branch --show-current)" == "dev/mac" ]]; then

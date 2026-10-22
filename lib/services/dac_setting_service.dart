@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../core/hifi_audio_bindings.dart';
+import '../core/hifi_audio_service.dart';
 import '../core/platform_helper.dart';
 import '../models/dac_device_info.dart';
 import 'music_database_service.dart';
@@ -358,5 +360,59 @@ class DacSettingService extends ChangeNotifier {
         .setSetting('setting_dac_$cleanKey', val.toString());
     notifyListeners();
     onBroadcastNeeded?.call();
+  }
+
+  static const MethodChannel _macSystemChannel =
+      MethodChannel('pihifi/macos_system');
+
+  /// 硬件输出采样率模式档位：
+  /// 0: 自动 (源码直通 · Bit-Perfect)
+  /// 1: 44.1 kHz
+  /// 2: 48.0 kHz
+  /// 3: 96.0 kHz
+  /// 4: 192.0 kHz
+  /// 5: 384.0 kHz
+  int get sampleRateMode => getParam('topping_sample_rate_mode', 0).clamp(0, 5);
+
+  static const List<double> supportedSampleRates = [
+    0.0, // 自动
+    44100.0,
+    48000.0,
+    96000.0,
+    192000.0,
+    384000.0,
+  ];
+
+  Future<bool> setSampleRateMode(int modeIndex) async {
+    final clamped = modeIndex.clamp(0, 5);
+    setParam('topping_sample_rate_mode', clamped);
+
+    if (clamped == 0) {
+      final currentRate =
+          HifiAudioService.instance.currentTrack?.sampleRate ?? 44100;
+      return syncPlaybackSampleRate(currentRate.toDouble());
+    } else {
+      final targetRate = supportedSampleRates[clamped];
+      return _applyNativeSampleRate(targetRate);
+    }
+  }
+
+  Future<bool> syncPlaybackSampleRate(double rate) async {
+    if (sampleRateMode != 0) return false;
+    if (rate <= 0) return false;
+    return _applyNativeSampleRate(rate);
+  }
+
+  Future<bool> _applyNativeSampleRate(double rate) async {
+    if (!Platform.isMacOS) return false;
+    try {
+      final ok = await _macSystemChannel
+          .invokeMethod<bool>('setSampleRate', {'sampleRate': rate});
+      debugPrint('[DacSettingService] 硬件采样率已切换为: $rate Hz, 状态: $ok');
+      return ok ?? false;
+    } catch (e) {
+      debugPrint('[DacSettingService] 切换硬件采样率失败: $e');
+      return false;
+    }
   }
 }

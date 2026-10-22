@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/track.dart';
 import '../models/playback_state.dart';
 import '../services/music_database_service.dart';
+import '../services/dac_setting_service.dart';
 import 'hifi_audio_bindings.dart';
 import '../platform/platform_audio_runtime.dart';
 import 'playback_completion_tracker.dart';
@@ -382,6 +383,9 @@ class HifiAudioService extends ChangeNotifier {
     }
 
     lastDebugLog = 'SUCCESS_PLAY: $resolvedPath';
+    if (track.sampleRate > 0) {
+      DacSettingService.instance.syncPlaybackSampleRate(track.sampleRate.toDouble());
+    }
     final position = _pendingSeek ?? 0.0;
     if (_pendingSeek != null) _bindings.seek(position);
     if (!_playWhenPrepared) _bindings.pause();
