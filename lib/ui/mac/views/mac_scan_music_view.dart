@@ -137,8 +137,99 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('全盘检索完成！已成功扫描并收录 $total 首母带音轨。'),
+            content: Text('全盘检索完成！本次入库 $count 首，曲库共有 $total 首母带音轨。'),
             backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmAndDeleteSelectedTracks() async {
+    final count = _selectedTrackIds.length;
+    if (count == 0) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color.fromRGBO(20, 24, 34, 0.95),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14.0),
+            side: const BorderSide(color: Color.fromRGBO(255, 255, 255, 0.15)),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 22.0),
+              SizedBox(width: 8.0),
+              Text(
+                '确认删除曲目与源文件',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16.0,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            '确定要从曲库中移除并彻底删除已选择的 $count 首歌曲本地源文件吗？\n\n⚠️ 警告：该操作将直接从本地存储中彻底删除音频源文件，删除后无法找回！',
+            style: const TextStyle(
+              color: Color.fromRGBO(255, 255, 255, 0.85),
+              fontSize: 13.0,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              style: TextButton.styleFrom(
+                foregroundColor: UIConfig.textMuted,
+                padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+              ),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6.0),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              ),
+              child: const Text('彻底删除'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      final current = HifiAudioService.instance.currentTrack;
+      if (current != null && _selectedTrackIds.contains(current.id)) {
+        HifiAudioService.instance.stop();
+      }
+
+      final deletedCount = await MusicDatabaseService.instance.deleteTracks(
+        _selectedTrackIds,
+        deleteSourceFiles: true,
+      );
+
+      if (mounted) {
+        setState(() {
+          _selectedTrackIds.clear();
+          _isEditMode = false;
+          if (MusicDatabaseService.instance.tracks.isEmpty) {
+            _state = ScanUIState.idle;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已成功删除 $deletedCount 首歌曲及其本地源文件'),
+            backgroundColor: const Color(0xFFEF4444),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -307,13 +398,54 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
 
     return Column(
       children: [
-        // 顶部操作栏：「选择」多选模式切换 +「重新扫描」
+        // 顶部操作栏：「全选」+「选择」多选模式切换 +「删除」/「重新扫描」
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
+            if (_isEditMode) ...[
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  setState(() {
+                    if (_selectedTrackIds.length == allTracks.length) {
+                      _selectedTrackIds.clear();
+                    } else {
+                      _selectedTrackIds.addAll(allTracks.map((t) => t.id));
+                    }
+                  });
+                },
+                child: Container(
+                  height: 28.0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(40, 48, 64, 0.7),
+                    borderRadius: BorderRadius.circular(6.0),
+                    border: Border.all(
+                      color: const Color.fromRGBO(255, 255, 255, 0.12),
+                    ),
+                  ),
+                  child: Text(
+                    _selectedTrackIds.length == allTracks.length ? '取消全选' : '全选',
+                    style: const TextStyle(
+                      fontSize: UIConfig.fontSmall,
+                      color: UIConfig.textNormal,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8.0),
+            ],
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _isEditMode = !_isEditMode),
+              onTap: () {
+                setState(() {
+                  _isEditMode = !_isEditMode;
+                  if (!_isEditMode) {
+                    _selectedTrackIds.clear();
+                  }
+                });
+              },
               child: Container(
                 height: 28.0,
                 padding: const EdgeInsets.symmetric(horizontal: 14.0),
@@ -339,29 +471,63 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
               ),
             ),
             const SizedBox(width: 8.0),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _triggerScan,
-              child: Container(
-                height: 28.0,
-                padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color.fromRGBO(40, 48, 64, 0.7),
-                  borderRadius: BorderRadius.circular(6.0),
-                  border: Border.all(
-                    color: const Color.fromRGBO(255, 255, 255, 0.12),
+            if (_isEditMode && _selectedTrackIds.isNotEmpty)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _confirmAndDeleteSelectedTracks,
+                child: Container(
+                  height: 28.0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(6.0),
+                    border: Border.all(
+                      color: const Color(0xFFEF4444),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.delete_outline_rounded,
+                          size: 14.0, color: Color(0xFFEF4444)),
+                      const SizedBox(width: 4.0),
+                      Text(
+                        '删除 (${_selectedTrackIds.length})',
+                        style: const TextStyle(
+                          fontSize: UIConfig.fontSmall,
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: const Text(
-                  '重新扫描',
-                  style: TextStyle(
-                    fontSize: UIConfig.fontSmall,
-                    color: UIConfig.textNormal,
+              )
+            else
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _triggerScan,
+                child: Container(
+                  height: 28.0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(40, 48, 64, 0.7),
+                    borderRadius: BorderRadius.circular(6.0),
+                    border: Border.all(
+                      color: const Color.fromRGBO(255, 255, 255, 0.12),
+                    ),
+                  ),
+                  child: const Text(
+                    '重新扫描',
+                    style: TextStyle(
+                      fontSize: UIConfig.fontSmall,
+                      color: UIConfig.textNormal,
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 8.0),

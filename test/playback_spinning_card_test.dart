@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
 import 'package:hide_player_flutter/models/track.dart';
+import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:hide_player_flutter/services/theme_service.dart';
 import 'package:hide_player_flutter/ui/mac/views/mac_scan_music_view.dart';
 import 'package:hide_player_flutter/ui/mac/widgets/mac_music_item_widget.dart';
@@ -30,6 +31,13 @@ void main() {
     bitDepth: 16,
     durationSec: 290,
   );
+
+  setUp(() async {
+    MusicDatabaseService.instance.loadLibrary();
+    if (MusicDatabaseService.instance.tracks.isEmpty) {
+      await MusicDatabaseService.instance.scanLibrary();
+    }
+  });
 
   tearDown(() {
     HifiAudioService.instance.pause();

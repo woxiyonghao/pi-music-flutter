@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 HIFI_PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PATH="${PATH}:/opt/homebrew/bin:/usr/local/bin"
 HIFI_SDK="${PLATFORM_NAME:-iphoneos}"
 case "$HIFI_SDK" in
   iphoneos) HIFI_ARCHS="${ARCHS:-arm64}" ;;
@@ -16,7 +17,9 @@ fi
 cmake -S "$HIFI_PROJECT_DIR/native" -B "$HIFI_BUILD_DIR" -G Xcode \
   -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT="$HIFI_SDK" \
   -DCMAKE_OSX_ARCHITECTURES="$HIFI_ARCHS" -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
-  -DCMAKE_BUILD_TYPE=Release "${HIFI_CMAKE_ARGS[@]}"
+  -DCMAKE_BUILD_TYPE=Release "${HIFI_CMAKE_ARGS[@]+"${HIFI_CMAKE_ARGS[@]}"}"
 cmake --build "$HIFI_BUILD_DIR" --config Release --target hifi_audio_ffi --parallel -- CODE_SIGNING_ALLOWED=NO
 mkdir -p "$HIFI_PROJECT_DIR/ios/lib/$HIFI_SDK"
+cp "$HIFI_BUILD_DIR/Release-$HIFI_SDK/libhifi_audio_ffi.a" "$HIFI_PROJECT_DIR/ios/lib/$HIFI_SDK/" 2>/dev/null || \
 cp "$HIFI_BUILD_DIR/Release/libhifi_audio_ffi.a" "$HIFI_PROJECT_DIR/ios/lib/$HIFI_SDK/"
+

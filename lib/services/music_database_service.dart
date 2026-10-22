@@ -22,8 +22,18 @@ class MusicDatabaseService extends ChangeNotifier {
     loadLibrary();
   }
 
+  String? _customDatabasePathForTesting;
+
+  @visibleForTesting
+  set customDatabasePathForTesting(String? path) {
+    _customDatabasePathForTesting = path;
+  }
+
   /// 获取 C++ SQLite 数据库默认绝对路径
   String get _databasePath {
+    if (_customDatabasePathForTesting != null) {
+      return _customDatabasePathForTesting!;
+    }
     final home = Platform.environment['HOME'] ?? '';
     if (Platform.isIOS) {
       final docs = AppPaths.documentsDirectory;
@@ -548,5 +558,105 @@ class MusicDatabaseService extends ChangeNotifier {
       db.close();
     } catch (_) {}
     notifyListeners();
+  }
+
+  /// 从曲库与 SQLite 中删除指定曲目，并可选择是否物理删除磁盘源文件
+  Future<int> deleteTracks(Iterable<int> trackIds, {bool deleteSourceFiles = true}) async {
+    final idSet = trackIds.toSet();
+    if (idSet.isEmpty) return 0;
+
+    final tracksToDelete = _tracks.where((t) => idSet.contains(t.id)).toList();
+    if (tracksToDelete.isEmpty) return 0;
+
+    // 1. 物理删除源文件 (若 deleteSourceFiles 为 true)
+    if (deleteSourceFiles) {
+      // 收集非 CUE 分轨文件
+      final nonCuePaths = <String>{};
+      // 收集 CUE 专辑分轨文件
+      final cueAudioPaths = <String, Set<int>>{};
+      final cueFilePaths = <String>{};
+
+      for (final t in _tracks) {
+        final path = resolveTrackPath(t.filepath);
+        if (t.isCueTrack) {
+          cueAudioPaths.putIfAbsent(path, () => {}).add(t.id);
+          if (t.cuePath.isNotEmpty) {
+            cueFilePaths.add(resolveTrackPath(t.cuePath));
+          }
+        }
+      }
+
+      for (final t in tracksToDelete) {
+        final path = resolveTrackPath(t.filepath);
+        if (!t.isCueTrack) {
+          nonCuePaths.add(path);
+        }
+      }
+
+      // 物理删除普通音频文件
+      for (final path in nonCuePaths) {
+        try {
+          final file = File(path);
+          if (file.existsSync()) {
+            file.deleteSync();
+            debugPrint('[MusicDatabaseService] 已物理删除音频文件: $path');
+          }
+        } catch (e) {
+          debugPrint('[MusicDatabaseService] 删除源文件失败 $path: $e');
+        }
+      }
+
+      // 如果一个 CUE 专辑的所有分轨都被选中删除了，则连同整轨音频与 .cue 描述文件一起物理删除
+      for (final entry in cueAudioPaths.entries) {
+        final cueAudioPath = entry.key;
+        final allTrackIdsForCue = entry.value;
+        if (allTrackIdsForCue.every((id) => idSet.contains(id))) {
+          try {
+            final f = File(cueAudioPath);
+            if (f.existsSync()) {
+              f.deleteSync();
+              debugPrint('[MusicDatabaseService] 已物理删除整轨 CUE 音频: $cueAudioPath');
+            }
+          } catch (e) {
+            debugPrint('[MusicDatabaseService] 删除 CUE 音频失败: $e');
+          }
+        }
+      }
+      for (final cuePath in cueFilePaths) {
+        try {
+          final f = File(cuePath);
+          if (f.existsSync()) {
+            final base = p.withoutExtension(cuePath);
+            final possibleAudios = ['$base.wav', '$base.flac', '$base.ape', '$base.dsf'];
+            final hasRemainingAudio = possibleAudios.any((p) => File(p).existsSync());
+            if (!hasRemainingAudio) {
+              f.deleteSync();
+              debugPrint('[MusicDatabaseService] 已清理孤立 CUE 描述文件: $cuePath');
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 2. 从 SQLite 数据库中移除记录
+    try {
+      final db = _openDb();
+      final placeholders = List.filled(idSet.length, '?').join(',');
+      final stmt = db.prepare('DELETE FROM scanned_tracks WHERE id IN ($placeholders);');
+      stmt.execute(idSet.toList());
+      stmt.close();
+      db.close();
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] SQLite 删除曲目失败: $e');
+    }
+
+    // 3. 从内存列表中移除
+    _tracks.removeWhere((t) => idSet.contains(t.id));
+    for (final pl in _playlists) {
+      pl.tracks.removeWhere((t) => idSet.contains(t.id));
+    }
+    notifyListeners();
+
+    return tracksToDelete.length;
   }
 }

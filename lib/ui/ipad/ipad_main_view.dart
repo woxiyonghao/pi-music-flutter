@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/hifi_audio_service.dart';
+import '../../core/platform_helper.dart';
 import '../../models/sidebar_tab.dart';
 import '../../services/music_database_service.dart';
 import '../../services/theme_service.dart';
@@ -446,7 +447,7 @@ class _IpadMainViewState extends State<IpadMainView> with SingleTickerProviderSt
         // 4: msebTuning
         const MacMagicTuningView(),
         // 5: dacSettings
-        const MacDACSettingView(),
+        const MacDACSettingView(platform: HifiPlatformType.ipad),
         // 6: themeSettings
         MacThemeSettingView(
           currentVisualizer: activeVisualizer,

@@ -111,7 +111,6 @@ class AudioMetadataHelper {
       if (raf.readIntoSync(blockHdr) < 4) {
         return const AudioMetadata(sampleRate: 96000, bitDepth: 24, durationSec: 180);
       }
-      final isLast = (blockHdr[0] & 0x80) != 0;
       final blockType = blockHdr[0] & 0x7F;
       final blockLen = (blockHdr[1] << 16) | (blockHdr[2] << 8) | blockHdr[3];
 

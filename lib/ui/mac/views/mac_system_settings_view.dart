@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../common/hifi_slider.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
@@ -365,7 +366,7 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                     overlayColor: accent.withValues(alpha: 0.2),
                     overlayShape: const RoundSliderOverlayShape(overlayRadius: 12.0),
                   ),
-                  child: Slider(
+                  child: HifiSlider(
                     value: value,
                     min: 0.1,
                     max: 1.0,

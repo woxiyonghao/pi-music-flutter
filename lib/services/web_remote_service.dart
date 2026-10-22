@@ -241,6 +241,8 @@ class WebRemoteService extends ChangeNotifier {
         audio.play();
       } else if (path == '/api/pause') {
         audio.pause();
+      } else if (path == '/api/stop') {
+        audio.stop();
       } else if (path == '/api/toggle') {
         audio.togglePlayPause();
       } else if (path == '/api/next') {
@@ -257,6 +259,31 @@ class WebRemoteService extends ChangeNotifier {
       } else if (path == '/api/volume') {
         final val = double.tryParse(request.uri.queryParameters['value'] ?? '');
         if (val != null) audio.setVolume(val);
+      } else if (path == '/api/play_index') {
+        final idx = int.tryParse(request.uri.queryParameters['index'] ?? '');
+        final db = MusicDatabaseService.instance;
+        if (idx != null && idx >= 0 && idx < db.tracks.length) {
+          audio.playTracks(db.tracks, idx);
+        }
+      } else if (path == '/api/play_track') {
+        final id = int.tryParse(request.uri.queryParameters['id'] ?? '');
+        final db = MusicDatabaseService.instance;
+        if (id != null) {
+          final t = db.tracks.cast<Track?>().firstWhere((item) => item?.id == id, orElse: () => null);
+          if (t != null) {
+            audio.playTrack(t);
+          }
+        }
+      } else if (path == '/api/theme') {
+        final tid = int.tryParse(request.uri.queryParameters['id'] ?? '');
+        if (tid != null) {
+          ThemeService.instance.setTheme(tid);
+        }
+      } else if (path == '/api/visual_mode') {
+        final mode = int.tryParse(request.uri.queryParameters['mode'] ?? '');
+        if (mode != null) {
+          ThemeService.instance.setBackgroundVisualMode(mode);
+        }
       }
 
       broadcastState();

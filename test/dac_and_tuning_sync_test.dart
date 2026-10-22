@@ -12,6 +12,7 @@ void main() {
 
   tearDown(() async {
     await WebRemoteService.instance.stop();
+    DacSettingService.instance.setChip(0);
   });
 
   group('DacSettingService Tests', () {
