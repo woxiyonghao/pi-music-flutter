@@ -886,7 +886,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         _buildCapsuleSelector(
           title: 'UAC 协议通信模式 (USB Audio Class)',
           subtitle:
-              'UAC 2.0 释放 384kHz/32Bit 与 DSD256 极限性能；UAC 1.0 免驱动即插即用（限 96kHz）',
+              'UAC 2.0 释放 384kHz/32Bit 与 DSD256 极限性能；UAC 1.0 免驱动即插即用（限 96kHz）\n⚠️ 拓品 DX1 II 为机身背部物理硬件拨片开关，切换需拨动机器并重插 USB',
           options: const [
             'UAC 2.0 (全速异步传输 · 384k/DSD256)',
             'UAC 1.0 (标准免驱 · 兼容游戏机/PS5/Switch)'
@@ -894,7 +894,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
           selectedIndex: uacIdx,
           accent: accent,
           onSelected: (idx) {
-            dac.setParam('topping_uac_mode', idx);
+            _showUacSwitchDialog(context, idx, dac, accent);
           },
         ),
         const SizedBox(height: 12),
@@ -929,6 +929,87 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
           ],
         ),
       ],
+    );
+  }
+
+  void _showUacSwitchDialog(
+      BuildContext context, int targetIdx, DacSettingService dac, Color accent) {
+    final modeName = targetIdx == 0
+        ? 'UAC 2.0 (全速异步传输 · 384k/DSD256)'
+        : 'UAC 1.0 (标准免驱 · 兼容游戏机/PS5/Switch)';
+    final switchLabel = targetIdx == 0 ? '2.0' : '1.0';
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF141924),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: accent.withValues(alpha: 0.4), width: 1.2),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.tune_rounded, color: accent, size: 22),
+            const SizedBox(width: 10),
+            const Text(
+              '拓品 DX1 II · 硬件物理拨片提示',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '你选择切换为：$modeName',
+              style: TextStyle(
+                color: accent,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '⚠️ 重要硬件说明：\n'
+              'TOPPING DX1 II 的 UAC 模式是由机身背部的【物理硬件拨片开关】直接控制的。\n\n'
+              '请按以下步骤操作生效：\n'
+              '1. 在 DX1 II 机器背部将 UAC 开关拨至对应的【$switchLabel】档位；\n'
+              '2. 拔掉并重新插上 USB 数据线，以让 DX1 II 重新与 Mac 完成 USB 握手。',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12.5,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () {
+              dac.setParam('topping_uac_mode', targetIdx);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('我知道了，确认切换',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 

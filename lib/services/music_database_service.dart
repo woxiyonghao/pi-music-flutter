@@ -98,6 +98,10 @@ class MusicDatabaseService extends ChangeNotifier {
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS dac_dx1ii_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
       DELETE FROM app_settings WHERE key = 'setting_idle_screensaver_theme';
     ''');
 
@@ -225,6 +229,82 @@ class MusicDatabaseService extends ChangeNotifier {
       debugPrint('[MusicDatabaseService] deleteSetting error for $key: $e');
       return false;
     }
+  }
+
+  /// 获取拓品 TOPPING DX1 II 专用硬件持久化设置
+  String getDacDx1iiSetting(String key, String defaultValue) {
+    final dbFile = File(_databasePath);
+    if (!dbFile.existsSync()) return defaultValue;
+    try {
+      final db = _openDb();
+      final stmt = db.prepare('SELECT value FROM dac_dx1ii_settings WHERE key = ? LIMIT 1;');
+      final ResultSet res = stmt.select([key]);
+      stmt.close();
+      String val = defaultValue;
+      if (res.isNotEmpty) {
+        val = (res.first['value'] as String? ?? defaultValue).trim();
+      }
+      db.close();
+      return val;
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] getDacDx1iiSetting error for $key: $e');
+      return defaultValue;
+    }
+  }
+
+  /// 保存拓品 TOPPING DX1 II 专用硬件持久化设置
+  bool setDacDx1iiSetting(String key, String value) {
+    final dbFile = File(_databasePath);
+    try {
+      if (!dbFile.parent.existsSync()) {
+        dbFile.parent.createSync(recursive: true);
+      }
+      final db = _openDb();
+      final stmt = db.prepare('INSERT OR REPLACE INTO dac_dx1ii_settings (key, value) VALUES (?, ?);');
+      stmt.execute([key, value]);
+      stmt.close();
+      db.close();
+      return true;
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] setDacDx1iiSetting error for $key: $e');
+      return false;
+    }
+  }
+
+  /// 获取拓品 TOPPING DX1 II 全量硬件配置字典
+  Map<String, String> getAllDacDx1iiSettings() {
+    final dbFile = File(_databasePath);
+    if (!dbFile.existsSync()) return {};
+    final map = <String, String>{};
+    try {
+      final db = _openDb();
+      final ResultSet res = db.select('SELECT key, value FROM dac_dx1ii_settings;');
+      for (final row in res) {
+        final k = row['key'] as String?;
+        final v = row['value'] as String?;
+        if (k != null && v != null) {
+          map[k] = v;
+        }
+      }
+      db.close();
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] getAllDacDx1iiSettings error: $e');
+    }
+    return map;
+  }
+
+  /// 检查本地是否已有拓品 DX1 II 的专用配置表数据
+  bool hasDacDx1iiSettings() {
+    final dbFile = File(_databasePath);
+    if (!dbFile.existsSync()) return false;
+    try {
+      final db = _openDb();
+      final ResultSet res = db.select('SELECT count(*) as cnt FROM dac_dx1ii_settings;');
+      final cnt = res.isNotEmpty ? (res.first['cnt'] as int? ?? 0) : 0;
+      db.close();
+      return cnt > 0;
+    } catch (_) {}
+    return false;
   }
 
   void loadLibrary() {

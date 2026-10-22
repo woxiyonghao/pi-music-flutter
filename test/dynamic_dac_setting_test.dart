@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/platform_helper.dart';
 import 'package:hide_player_flutter/models/dac_device_info.dart';
 import 'package:hide_player_flutter/services/dac_setting_service.dart';
+import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:hide_player_flutter/theme/hifi_theme.dart';
 import 'package:hide_player_flutter/ui/mac/views/mac_dac_setting_view.dart';
 
@@ -236,6 +237,74 @@ void main() {
       expect(find.text('ALSA Ring Buffer 环形缓冲区深度'), findsOneWidget);
       expect(find.text('ALSA 数字音频输出位深'), findsOneWidget);
       expect(find.text('CoreAudio 独占模式 (Exclusive Hog Mode)'), findsNothing);
+    });
+
+    test('dac_dx1ii_settings table stores and restores DX1 II hardware settings including sampleRateMode', () {
+      final db = MusicDatabaseService.instance;
+      db.setDacDx1iiSetting('sample_rate_mode', '4'); // 192 kHz
+      db.setDacDx1iiSetting('filter', '2');
+      db.setDacDx1iiSetting('uac_mode', '1');
+
+      expect(db.getDacDx1iiSetting('sample_rate_mode', '0'), equals('4'));
+      expect(db.getDacDx1iiSetting('filter', '0'), equals('2'));
+      expect(db.getDacDx1iiSetting('uac_mode', '0'), equals('1'));
+      expect(db.hasDacDx1iiSettings(), isTrue);
+
+      final all = db.getAllDacDx1iiSettings();
+      expect(all['sample_rate_mode'], equals('4'));
+
+      // 验证 DacSettingService 的 setSampleRateMode 同步更新到 dac_dx1ii_settings
+      final service = DacSettingService.instance;
+      service.setSampleRateMode(5); // 384 kHz
+      expect(service.sampleRateMode, equals(5));
+      expect(db.getDacDx1iiSetting('sample_rate_mode', '0'), equals('5'));
+
+      // 验证 setParam topping_ 也会同步写入专用表
+      service.setParam('topping_dpll', 3);
+      expect(db.getDacDx1iiSetting('dpll', '0'), equals('3'));
+    });
+
+    testWidgets('Tapping UAC mode pops up physical hardware switch warning dialog', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final service = DacSettingService.instance;
+      service.toggleMockExternal(true);
+      final externalIdx = service.connectedDevices.indexWhere((d) => !d.isBuiltIn);
+      service.selectDevice(externalIdx);
+
+      await tester.pumpWidget(MaterialApp(
+        theme: HifiTheme.darkTheme,
+        home: const Scaffold(
+          body: SizedBox(
+            width: 1200,
+            height: 800,
+            child: MacDACSettingView(),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      // 点击 UAC 1.0 胶囊选项
+      final uacOptionFinder = find.text('UAC 1.0 (标准免驱 · 兼容游戏机/PS5/Switch)');
+      expect(uacOptionFinder, findsOneWidget);
+      await tester.ensureVisible(uacOptionFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(uacOptionFinder);
+      await tester.pumpAndSettle();
+
+      // 必须弹出硬件物理拨片提示弹窗
+      expect(find.text('拓品 DX1 II · 硬件物理拨片提示'), findsOneWidget);
+      expect(find.textContaining('TOPPING DX1 II 的 UAC 模式是由机身背部的【物理硬件拨片开关】直接控制的'), findsOneWidget);
+      expect(find.text('我知道了，确认切换'), findsOneWidget);
+
+      // 点击确认切换
+      await tester.tap(find.text('我知道了，确认切换'));
+      await tester.pumpAndSettle();
+
+      expect(service.getParam('topping_uac_mode'), equals(1));
+      service.toggleMockExternal(false);
     });
   });
 }
