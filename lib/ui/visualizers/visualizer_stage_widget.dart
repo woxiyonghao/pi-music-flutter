@@ -15,6 +15,7 @@ import 'siri_wave_painter.dart';
 import 'audio_bubbles_painter.dart';
 import 'cyber_grid_painter.dart';
 import 'glass_clock_painter.dart';
+import 'ipad_telemetry_dashboard_widget.dart';
 
 /// 统一发烧动效舞台容器 (专为横屏设备打造，内置 60fps 物理阻尼与动画引擎)
 class VisualizerStageWidget extends StatefulWidget {
@@ -378,15 +379,24 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           accentColor: ThemeService.instance.accentColor,
         );
         break;
+      case VisualizerType.ipadTelemetryDashboard:
+        painter = LedSpectrumPainter(
+          levels: state.spectrumLevels,
+          peakHold: _peakHold,
+          accentColor: ThemeService.instance.accentColor,
+        );
+        break;
     }
+
+    final Widget mainContent = (effectiveType == VisualizerType.ipadTelemetryDashboard)
+        ? const IpadTelemetryDashboardWidget()
+        : CustomPaint(painter: painter);
 
     return Stack(
       children: [
         // 核心渲染画布
         Positioned.fill(
-          child: CustomPaint(
-            painter: painter,
-          ),
+          child: mainContent,
         ),
 
         // 右上角动效切换 Pill 胶囊控件 (可选)

@@ -109,6 +109,16 @@ class ThemeService extends ChangeNotifier {
       peakColor: Color.fromRGBO(252, 165, 165, 240 / 255),
       defaultVisualMode: 1,
     ),
+    ThemePreset(
+      id: 9,
+      name: 'iPad 硬件大师',
+      englishName: 'iPad Hardware Master',
+      soundStyle: '赛博极客 · 硬件遥测直通',
+      accentColor: Color(0xFF00E5FF),
+      litColor: Color.fromRGBO(0, 229, 255, 150 / 255),
+      peakColor: Color.fromRGBO(255, 110, 180, 240 / 255),
+      defaultVisualMode: 11,
+    ),
   ];
 
   static const List<String> visualModeLabels = [
@@ -123,6 +133,7 @@ class ThemeService extends ChangeNotifier {
     '电光霓虹声波',
     '赛博粒子网格',
     '液态玻璃时钟',
+    'iPad 硬件大师大屏',
   ];
 
   int _currentThemeId = 0;

@@ -222,6 +222,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                             case 4: effectiveVisualizer = VisualizerType.siriWave; break;
                             case 5: effectiveVisualizer = VisualizerType.bubbles; break;
                             case 6: effectiveVisualizer = VisualizerType.glassClock; break;
+                            case 7: effectiveVisualizer = VisualizerType.ipadTelemetryDashboard; break;
                             default: effectiveVisualizer = activeVisualizer; break;
                           }
                         } else {

@@ -22,10 +22,11 @@ void main() {
 
   group('Visualizers and Theme System Headless Verification', () {
     test('VisualizerType display names and subtitles are complete', () {
-      expect(VisualizerType.values.length, 11);
+      expect(VisualizerType.values.length, 12);
       expect(VisualizerType.bubbles.displayName, contains('气泡'));
       expect(VisualizerType.cyberGrid.displayName, contains('赛博'));
       expect(VisualizerType.glassClock.displayName, contains('时钟'));
+      expect(VisualizerType.ipadTelemetryDashboard.displayName, contains('硬件大师'));
     });
 
     test('ThemeService updates backgroundVisualMode and accent color', () {
@@ -41,6 +42,15 @@ void main() {
 
       theme.setBackgroundVisualMode(VisualizerType.glassClock.index);
       expect(theme.backgroundVisualMode, VisualizerType.glassClock.index);
+
+      theme.setBackgroundVisualMode(VisualizerType.ipadTelemetryDashboard.index);
+      expect(theme.backgroundVisualMode, VisualizerType.ipadTelemetryDashboard.index);
+
+      // iPad 硬件大师专属主题预设验证
+      theme.setTheme(9);
+      expect(theme.currentThemeId, 9);
+      expect(theme.accentColor, const Color(0xFF00E5FF));
+      expect(theme.backgroundVisualMode, VisualizerType.ipadTelemetryDashboard.index);
     });
 
     test('AudioBubblesPainter paints successfully without throwing', () {

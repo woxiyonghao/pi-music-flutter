@@ -125,6 +125,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
     Icons.graphic_eq_rounded,          // 电光霓虹声波
     Icons.grid_4x4_rounded,            // 赛博粒子网格
     Icons.access_time_filled_rounded,  // 液态玻璃时钟
+    Icons.developer_board_rounded,     // iPad 硬件大师大屏
   ];
 
   /// 毛玻璃板块卡片容器

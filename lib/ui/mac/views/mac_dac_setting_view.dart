@@ -34,7 +34,9 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
   @override
   void initState() {
     super.initState();
-    _dac.refreshDevices();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _dac.refreshDevices();
+    });
     if (HifiAudioBindings.instance.isLoaded) {
       _devicePoll = Timer.periodic(const Duration(seconds: 2), (_) {
         _dac.refreshDevices();
