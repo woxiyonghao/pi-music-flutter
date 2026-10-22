@@ -31,12 +31,18 @@ class WebRemoteService extends ChangeNotifier {
   int get clientCount => _clients.length;
 
   Timer? _broadcastTimer;
+  Timer? _dacBroadcastTimer;
+  final DacSettingService? _dacOverride;
 
-  WebRemoteService._() {
+  WebRemoteService._() : _dacOverride = null {
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       _initLocalIp();
     }
   }
+
+  @visibleForTesting
+  WebRemoteService.forTesting({required DacSettingService dac})
+      : _dacOverride = dac;
 
   Future<void> _initLocalIp() async {
     _localIp = await findLocalIp();
@@ -116,6 +122,8 @@ class WebRemoteService extends ChangeNotifier {
     DacSettingService.instance.onBroadcastNeeded = null;
     _broadcastTimer?.cancel();
     _broadcastTimer = null;
+    _dacBroadcastTimer?.cancel();
+    _dacBroadcastTimer = null;
 
     for (final ws in _clients) {
       try {
@@ -143,6 +151,13 @@ class WebRemoteService extends ChangeNotifier {
       if (isPlaying) {
         broadcastState();
       }
+    });
+
+    // 路由变更与热插拔设备定时广播给处于待机状态的客户端
+    _dacBroadcastTimer?.cancel();
+    _dacBroadcastTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!isRunning || _clients.isEmpty) return;
+      _broadcast(jsonEncode(_buildDacMap()));
     });
   }
 
@@ -176,6 +191,7 @@ class WebRemoteService extends ChangeNotifier {
     if ((request.method == 'GET' || request.method == 'HEAD') &&
         (path == '/' || path == '/index.html')) {
       request.response.headers.contentType = ContentType.html;
+      request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
       if (request.method == 'GET') {
         request.response.write(webRemoteHtml);
       }
@@ -651,15 +667,27 @@ class WebRemoteService extends ChangeNotifier {
   }
 
   Map<String, dynamic> _buildDacMap() {
-    final dac = DacSettingService.instance;
+    final dac = _dacOverride ?? DacSettingService.instance;
+    dac.refreshDevices();
+    final active = dac.currentDevice;
+    final bindings = HifiAudioBindings.instance;
     return {
       'type': 'dac',
-      'has_external_dac': dac.hasExternalDac,
-      'dac_name': dac.dacName,
-      'active_output': dac.activeOutput,
-      'selected_chip': dac.selectedChip,
-      'chip_name': dac.dacName,
-      'params': dac.allParams,
+      'dac_name':
+          active?.name ?? (bindings.isLoaded ? bindings.getDeviceName() : ''),
+      'sample_rate': active?.currentSampleRate ?? 0,
+      'transport': active?.transport ?? '',
+      'follows_system_output': dac.followsSystemOutput,
+      'devices': [
+        for (final device in dac.connectedDevices)
+          {
+            'id': device.id,
+            'name': device.name,
+            'transport': device.transport,
+            'sample_rate': device.currentSampleRate,
+            'is_active': device.id == active?.id,
+          },
+      ],
     };
   }
 

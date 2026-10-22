@@ -73,8 +73,8 @@ void main() {
     });
   });
 
-  group('WebRemoteService to DAC WebSocket Sync Tests', () {
-    test('WebSocket receives DAC update on set_dac_chip and set_dac_param', () async {
+  group('WebRemoteService to DAC and MSEB WebSocket Sync Tests', () {
+    test('WebSocket receives real DAC status and handles MSEB updates', () async {
       final remote = WebRemoteService.instance;
       final started = await remote.start(port: 18099);
       expect(started, isTrue);
@@ -94,30 +94,28 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 150));
       final initialDac = messages.firstWhere((m) => m['type'] == 'dac', orElse: () => {});
       expect(initialDac.isNotEmpty, isTrue);
+      expect(initialDac.containsKey('devices'), isTrue);
+      expect(initialDac.containsKey('dac_name'), isTrue);
 
-      // Client sends set_dac_chip
+      // Client sends set_mseb_param
       ws.add(jsonEncode({
-        'action': 'set_dac_chip',
-        'chip': 2, // AK4499EX
+        'action': 'set_mseb_param',
+        'index': 1,
+        'value': 3.5,
       }));
       await Future.delayed(const Duration(milliseconds: 150));
 
-      expect(DacSettingService.instance.selectedChip, equals(2));
-      final chipUpdate = messages.lastWhere((m) => m['type'] == 'dac');
-      expect(chipUpdate['selected_chip'], equals(2));
-      expect(chipUpdate['dac_name'], equals('AK4499EX'));
+      expect(MsebService.instance.values[1], equals(3.5));
+      final msebUpdate = messages.lastWhere((m) => m['type'] == 'mseb');
+      expect(msebUpdate['params'][1], equals(3.5));
 
-      // Client sends set_dac_param
+      // Client sends reset_mseb
       ws.add(jsonEncode({
-        'action': 'set_dac_param',
-        'key': 'akm_filter',
-        'val': 4,
+        'action': 'reset_mseb',
       }));
       await Future.delayed(const Duration(milliseconds: 150));
 
-      expect(DacSettingService.instance.getParam('akm_filter'), equals(4));
-      final paramUpdate = messages.lastWhere((m) => m['type'] == 'dac');
-      expect(paramUpdate['params']['akm_filter'], equals(4));
+      expect(MsebService.instance.values[1], equals(0.0));
 
       await sub.cancel();
       await ws.close();
