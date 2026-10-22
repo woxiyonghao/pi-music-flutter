@@ -82,14 +82,14 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                 child: ListView(
                   physics: const BouncingScrollPhysics(),
                   children: [
-                    // 板块一：预设 (8款名机经典主题)
+                    // 板块一：主题预设
                     _buildSectionContainer(
                       title: '预设',
                       child: _buildPresetsGrid(theme),
                     ),
                     const SizedBox(height: 12.0),
 
-                    // 板块二：背景律动 (11款律动模式)
+                    // 板块二：背景律动
                     _buildSectionContainer(
                       title: '背景律动',
                       child: _buildVisualizerModesGrid(theme),
@@ -125,6 +125,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
     Icons.graphic_eq_rounded,          // 电光霓虹声波
     Icons.grid_4x4_rounded,            // 赛博粒子网格
     Icons.access_time_filled_rounded,  // 液态玻璃时钟
+    Icons.developer_board_rounded,    // Mac 硬件大师大屏
   ];
 
   /// 毛玻璃板块卡片容器

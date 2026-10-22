@@ -11,6 +11,7 @@ enum VisualizerType {
   neonWave,     // 电光霓虹声波
   cyberGrid,    // 赛博粒子网格
   glassClock,   // 液态玻璃时钟
+  macTelemetryDashboard, // Mac 硬件大师大屏（追加以保留已有设置索引）
 }
 
 extension VisualizerTypeExtension on VisualizerType {
@@ -38,6 +39,8 @@ extension VisualizerTypeExtension on VisualizerType {
         return '赛博粒子网格 (Cyber Grid)';
       case VisualizerType.glassClock:
         return '液态玻璃时钟 (Glass Clock)';
+      case VisualizerType.macTelemetryDashboard:
+        return 'Mac 硬件大师大屏';
     }
   }
 
@@ -65,6 +68,8 @@ extension VisualizerTypeExtension on VisualizerType {
         return 'Perspective Audio Matrix Plane';
       case VisualizerType.glassClock:
         return 'Frosted Glass Precision Audio Clock';
+      case VisualizerType.macTelemetryDashboard:
+        return 'macOS Live Hardware · CPU / Memory / Storage / Audio';
     }
   }
 }

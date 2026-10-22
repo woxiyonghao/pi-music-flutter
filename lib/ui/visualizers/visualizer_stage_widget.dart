@@ -15,6 +15,7 @@ import 'siri_wave_painter.dart';
 import 'audio_bubbles_painter.dart';
 import 'cyber_grid_painter.dart';
 import 'glass_clock_painter.dart';
+import 'mac_telemetry_dashboard_widget.dart';
 
 /// 统一发烧动效舞台容器 (专为横屏设备打造，内置 60fps 物理阻尼与动画引擎)
 class VisualizerStageWidget extends StatefulWidget {
@@ -58,6 +59,7 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
 
   void _onPlayStateChanged() {
     if (mounted) {
+      if ((widget.activeType ?? _currentType) == VisualizerType.macTelemetryDashboard) return;
       if (!_ticker.isTicking) {
         _lastTimestamp = 0.0;
         _ticker.start();
@@ -129,7 +131,7 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
       setState(() {});
     });
 
-    _ticker.start();
+    if (_currentType != VisualizerType.macTelemetryDashboard) _ticker.start();
   }
 
   @override
@@ -138,7 +140,9 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
     if (widget.activeType != oldWidget.activeType && widget.activeType != null) {
       _currentType = widget.activeType!;
       _lastTimestamp = 0.0;
-      if (!_ticker.isTicking) {
+      if (_currentType == VisualizerType.macTelemetryDashboard) {
+        _ticker.stop();
+      } else if (!_ticker.isTicking) {
         _ticker.start();
       }
       setState(() {});
@@ -276,6 +280,8 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
 
     CustomPainter painter;
     switch (effectiveType) {
+      case VisualizerType.macTelemetryDashboard:
+        return const MacTelemetryDashboardWidget();
       case VisualizerType.mcIntosh:
         painter = McIntoshMeterPainter(
           leftAngle: _leftAngle,

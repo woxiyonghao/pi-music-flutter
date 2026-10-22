@@ -2,6 +2,7 @@ import Cocoa
 import FlutterMacOS
 
 class MainFlutterWindow: NSWindow {
+  private var telemetryChannel: FlutterMethodChannel?
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     self.contentViewController = flutterViewController
@@ -12,6 +13,21 @@ class MainFlutterWindow: NSWindow {
     self.setContentSize(initialSize)
     self.center()
     RegisterGeneratedPlugins(registry: flutterViewController)
+
+    let telemetry = MacSystemTelemetry()
+    let telemetryQueue = DispatchQueue(label: "pihifi.macos.telemetry", qos: .utility)
+    telemetryChannel = FlutterMethodChannel(name: "pihifi/macos_system",
+      binaryMessenger: flutterViewController.engine.binaryMessenger)
+    telemetryChannel?.setMethodCallHandler { call, result in
+      guard call.method == "snapshot" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      telemetryQueue.async {
+        let snapshot = telemetry.snapshot()
+        DispatchQueue.main.async { result(snapshot) }
+      }
+    }
 
     super.awakeFromNib()
     self.title = "PiHifiPlayer - High Fidelity Music Player"
