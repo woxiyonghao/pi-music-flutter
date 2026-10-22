@@ -268,16 +268,22 @@ class HifiAudioBindings {
   }
 
   DynamicLibrary _tryOpen(List<String> paths) {
+    final failures = <String>[];
     for (final path in paths) {
       try {
         final lib = DynamicLibrary.open(path);
-        // 关键校验：确保加载的不是残存的过旧动态库
-        if (lib.providesSymbol('hifi_audio_init_for_platform')) {
-          return lib;
+        final abi = lib.lookupFunction<Uint32 Function(), int Function()>(
+            'hifi_audio_get_abi_version')();
+        if (abi != 2 || !lib.providesSymbol('hifi_audio_init_for_platform')) {
+          throw StateError('Expected audio_engine ABI 2, got $abi');
         }
-      } catch (_) {}
+        return lib;
+      } catch (error) {
+        failures.add('$path: $error');
+      }
     }
-    return DynamicLibrary.process();
+    throw StateError('No compatible audio_engine library found.\n'
+        '${failures.join('\n')}');
   }
 
   // 对外安全调用封装
@@ -285,7 +291,9 @@ class HifiAudioBindings {
     if (!_isLoaded) return Platform.environment.containsKey('FLUTTER_TEST');
     final platform = applicationPlatform.name.toNativeUtf8();
     try {
-      return _init(platform, outputPolicies);
+      final initialized = _init(platform, outputPolicies);
+      if (!initialized) loadError = 'audio_engine rejected initialization';
+      return initialized;
     } finally {
       calloc.free(platform);
     }

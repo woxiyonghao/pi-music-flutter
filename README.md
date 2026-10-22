@@ -103,16 +103,13 @@ cage -s -- /home/winheo/pi-hifi-flutter/build/linux/arm64/release/bundle/hide_pl
 
 ## 🛠️ 本地快速构建与运行
 
-### 1. 编译 C++ 原生动态库
-```bash
-cd native
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
-```
-
-### 2. 运行 Flutter App
+### macOS
 ```bash
 flutter pub get
 flutter run -d macos
+
+# 独立运行的 Release 应用
+./scripts/build_mac.sh
 ```
-在 Mac 上运行时，右上角配有浮动切换器，可一键实时预览 iPhone、iPad、树莓派 7寸屏、Android 等各个平台的专属 UI！
+macOS 工程会自动按 `audio_engine.lock.json` 构建、打包并签名音频库，
+直接从 IDE / Xcode 启动同样生效。无需手动复制动态库；应用界面遵循当前平台分支的入口。

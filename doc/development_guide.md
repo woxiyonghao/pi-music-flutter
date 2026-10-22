@@ -31,15 +31,18 @@ flutter doctor
 # 1. 获取 Flutter 依赖
 flutter pub get
 
-# 2. 编译 C++ 发烧音频核心动态库
-cd native
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j8
-cd ..
-
-# 3. 运行调试
+# 2. 运行调试（也可从 IDE / Xcode 启动）
 flutter run -d macos
+
+# 3. 构建独立运行的发行版
+./scripts/build_mac.sh
 ```
+
+macOS 工程会通过 `scripts/build_macos_audio.sh`，按 `audio_engine.lock.json`
+锁定的提交增量编译音频库，放入应用的 `Contents/Frameworks` 并签名。
+首次构建需要 CMake 和 Git 仓库访问权限；缓存位于 `.dart_tool/audio_engine/source`，
+构建产物位于 `build/audio-engine/macos-*`。无需手动复制根目录或 `native/build`
+中的动态库，旧版本库不会阻止 SDK 更新。
 
 ### 2.2 树莓派 5 (Linux-Lite) 交叉编译与部署
 ```bash
