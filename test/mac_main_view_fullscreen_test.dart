@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
+import 'package:hide_player_flutter/services/theme_service.dart';
+import 'package:hide_player_flutter/ui/visualizers/visualizer_type.dart';
 import 'package:hide_player_flutter/ui/mac/mac_main_view.dart';
 import 'package:hide_player_flutter/ui/mac/mac_background_widget.dart';
 import 'package:hide_player_flutter/ui/mac/mac_sidebar_widget.dart';
@@ -73,6 +75,14 @@ void main() {
 
       // Complete the 400ms animation
       await tester.pump(const Duration(milliseconds: 250));
+
+      // Fullscreen must keep the theme-page selection and offer no override.
+      final background = tester.widget<MacBackgroundWidget>(
+          find.byType(MacBackgroundWidget));
+      expect(background.visualizerType,
+          VisualizerType.values[ThemeService.instance.backgroundVisualMode]);
+      expect(find.byType(DropdownButton<VisualizerType>), findsNothing);
+      expect(find.byTooltip('退出全屏'), findsOneWidget);
 
       // Trigger user activity by moving pointer
       final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);

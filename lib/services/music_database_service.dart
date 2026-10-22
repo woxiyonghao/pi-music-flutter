@@ -36,16 +36,19 @@ class MusicDatabaseService extends ChangeNotifier {
       db.execute('PRAGMA busy_timeout = 3000;');
       db.execute('PRAGMA journal_mode = WAL;');
     } catch (_) {}
-    _ensureSettingsTable(db);
+    initializeSettings(db);
     return db;
   }
 
-  void _ensureSettingsTable(Database db) {
+  /// Keep the theme page as the single source of visualizer preferences.
+  @visibleForTesting
+  static void initializeSettings(Database db) {
     db.execute('''
       CREATE TABLE IF NOT EXISTS app_settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+      DELETE FROM app_settings WHERE key = 'setting_idle_screensaver_theme';
     ''');
   }
 

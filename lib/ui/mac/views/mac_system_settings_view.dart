@@ -25,7 +25,6 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
   double _screenBrightness = 0.85; // 85%
   int _screenTimeoutMode = 0;   // 0: 从不, 1: 5分钟, 2: 15分钟, 3: 30分钟
   int _idleFullscreenMode = 4;  // 0: 15秒, 1: 30秒, 2: 1分钟, 3: 5分钟, 4: 永不
-  int _idleScreensaverTheme = 0; // 0: 跟随当前律动, 1: 麦景图大表头, 2: 金嗓子大表头, 3: 复古磁带机, 4: Siri 流光, 5: 微光气泡, 6: 玻璃时钟
 
   @override
   void initState() {
@@ -43,7 +42,6 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
     _screenBrightness = double.tryParse(db.getSetting('setting_brightness', '0.85'))?.clamp(0.1, 1.0) ?? 0.85;
     _screenTimeoutMode = int.tryParse(db.getSetting('setting_screen_timeout', '0'))?.clamp(0, 3) ?? 0;
     _idleFullscreenMode = int.tryParse(db.getSetting('setting_idle_fullscreen', '4'))?.clamp(0, 4) ?? 4;
-    _idleScreensaverTheme = int.tryParse(db.getSetting('setting_idle_screensaver_theme', '0'))?.clamp(0, 6) ?? 0;
   }
 
   @override
@@ -193,26 +191,6 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                         MusicDatabaseService.instance.setSetting('setting_idle_fullscreen', idx.toString());
                       },
                     ),
-                    if (_idleFullscreenMode != 4) ...[
-                      const SizedBox(height: 10.0),
-                      _buildButtonGroupRow(
-                        label: '全屏屏保主题',
-                        options: const [
-                          '跟随当前律动',
-                          '麦景图大表头',
-                          '金嗓子大表头',
-                          '复古磁带机',
-                          'Siri 流光',
-                          '微光气泡',
-                          '玻璃时钟',
-                        ],
-                        selectedIndex: _idleScreensaverTheme,
-                        onSelected: (idx) {
-                          setState(() => _idleScreensaverTheme = idx);
-                          MusicDatabaseService.instance.setSetting('setting_idle_screensaver_theme', idx.toString());
-                        },
-                      ),
-                    ],
                   ],
                 ),
                 const SizedBox(height: 16.0),
