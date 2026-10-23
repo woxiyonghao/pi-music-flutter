@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'core/app_paths.dart';
 import 'core/hifi_audio_bindings.dart';
 import 'platform/platform_audio_runtime.dart';
+import 'services/dac_setting_service.dart';
 import 'services/music_database_service.dart';
 import 'services/web_remote_service.dart';
 import 'theme/hifi_theme.dart';
@@ -26,6 +27,7 @@ void main() async {
   runApp(const HiFiPlayerApp());
   if (!Platform.environment.containsKey('FLUTTER_TEST')) {
     WebRemoteService.instance.start(port: 8088);
+    DacSettingService.instance.restoreDx1iiHardwareSettings();
   }
 }
 

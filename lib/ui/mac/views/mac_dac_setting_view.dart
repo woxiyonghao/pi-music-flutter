@@ -544,6 +544,26 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         _buildSectionTitle('${dev.model} · 发烧芯片与数字滤波调教', Icons.tune_rounded, accent),
         const SizedBox(height: 8),
 
+        // 0. 硬件输出采样率选择器
+        _buildCapsuleSelector(
+          title: '硬件输出采样率与时钟锁定 (Hardware Output Sample Rate)',
+          subtitle: '0 档源码直通根据母带自动匹配；亦可强制指定高精采样率由底层芯片锁定',
+          options: const [
+            '自动 (源码直通 · Bit-Perfect)',
+            '44.1 kHz',
+            '48.0 kHz',
+            '96.0 kHz',
+            '192.0 kHz',
+            '384.0 kHz'
+          ],
+          selectedIndex: dac.sampleRateMode,
+          accent: accent,
+          onSelected: (idx) {
+            dac.setSampleRateMode(idx);
+          },
+        ),
+        const SizedBox(height: 12),
+
         // 1. 核心数字滤波器选择 (ESS ES9039Q2M 官方 8 种滤波曲线)
         Container(
           padding: const EdgeInsets.all(14),
@@ -680,12 +700,16 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         // 4. UAC 协议模式 (USB Audio Class 2.0 vs 1.0)
         _buildCapsuleSelector(
           title: 'UAC 协议通信模式 (USB Audio Class)',
-          subtitle: 'UAC 2.0 释放 384kHz/32Bit 与 DSD256 极限性能；UAC 1.0 免驱动即插即用（限 96kHz）',
-          options: const ['UAC 2.0 (全速异步传输 · 384k/DSD256)', 'UAC 1.0 (标准免驱 · 兼容游戏机/PS5/Switch)'],
+          subtitle:
+              'UAC 2.0 释放 384kHz/32Bit 与 DSD256 极限性能；UAC 1.0 免驱动即插即用（限 96kHz）\n⚠️ 拓品 DX1 II 为机身背部物理硬件拨片开关，切换需拨动机器并重插 USB',
+          options: const [
+            'UAC 2.0 (全速异步传输 · 384k/DSD256)',
+            'UAC 1.0 (标准免驱 · 兼容游戏机/PS5/Switch)'
+          ],
           selectedIndex: uacIdx,
           accent: accent,
           onSelected: (idx) {
-            dac.setParam('topping_uac_mode', idx);
+            _showUacSwitchDialog(context, idx, dac, accent);
           },
         ),
         const SizedBox(height: 12),
@@ -720,6 +744,87 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
           ],
         ),
       ],
+    );
+  }
+
+  void _showUacSwitchDialog(
+      BuildContext context, int targetIdx, DacSettingService dac, Color accent) {
+    final modeName = targetIdx == 0
+        ? 'UAC 2.0 (全速异步传输 · 384k/DSD256)'
+        : 'UAC 1.0 (标准免驱 · 兼容游戏机/PS5/Switch)';
+    final switchLabel = targetIdx == 0 ? '2.0' : '1.0';
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF141924),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: accent.withValues(alpha: 0.4), width: 1.2),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.tune_rounded, color: accent, size: 22),
+            const SizedBox(width: 10),
+            const Text(
+              '拓品 DX1 II · 硬件物理拨片提示',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '你选择切换为：$modeName',
+              style: TextStyle(
+                color: accent,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '⚠️ 重要硬件说明：\n'
+              'TOPPING DX1 II 的 UAC 模式是由机身背部的【物理硬件拨片开关】直接控制的。\n\n'
+              '请按以下步骤操作生效：\n'
+              '1. 在 DX1 II 机器背部将 UAC 开关拨至对应的【$switchLabel】档位；\n'
+              '2. 拔掉并重新插上 USB 数据线，以让 DX1 II 重新与系统完成 USB 握手。',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12.5,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: accent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () {
+              dac.setParam('topping_uac_mode', targetIdx);
+              Navigator.of(ctx).pop();
+            },
+            child: const Text('我知道了，确认切换',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 

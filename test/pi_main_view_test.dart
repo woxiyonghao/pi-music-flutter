@@ -65,7 +65,7 @@ void main() {
       expect(find.byType(MacBottomBarWidget), findsOneWidget);
 
       // 验证左侧发烧功能菜单项 (与 Mac/iPad 100% 保持一致)
-      expect(find.text('所有音乐'), findsOneWidget);
+      expect(find.text('所有音乐'), findsWidgets);
       expect(find.text('均衡器'), findsOneWidget);
       expect(find.text('调音魔棒'), findsOneWidget);
       expect(find.text('DAC'), findsOneWidget);

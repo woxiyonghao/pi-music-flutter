@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../core/hifi_audio_bindings.dart';
+import '../core/hifi_audio_service.dart';
 import '../core/platform_helper.dart';
 import '../models/dac_device_info.dart';
 import 'music_database_service.dart';
@@ -50,6 +52,7 @@ class DacSettingService extends ChangeNotifier {
   DacSettingService._() {
     _loadFromDatabase();
     refreshDevices();
+    Future.microtask(() => restoreDx1iiHardwareSettings());
   }
 
   static const List<String> chips = [
@@ -97,7 +100,8 @@ class DacSettingService extends ChangeNotifier {
 
     // 常用参数列表
     final keys = [
-      // 拓品 TOPPING DX12 (ES9039Q2M)
+      // 拓品 TOPPING DX12 / DX1 II (ES9039Q2M)
+      'topping_sample_rate_mode',
       'topping_filter', 'topping_dpll', 'topping_dsd_cutoff', 'topping_uac_mode',
       'topping_lineout_bypass', 'topping_gain',
       // Apple / 本机直通
@@ -118,6 +122,35 @@ class DacSettingService extends ChangeNotifier {
     for (final k in keys) {
       final valStr = db.getSetting('setting_dac_$k', '0');
       _params[k] = int.tryParse(valStr) ?? 0;
+    }
+
+    // 2. 拓品 DX1 II 专用持久化表 (dac_dx1ii_settings) 深度本地化读取与迁移
+    final dx1Settings = db.getAllDacDx1iiSettings();
+    if (dx1Settings.isNotEmpty) {
+      for (final entry in dx1Settings.entries) {
+        final k = entry.key;
+        final v = int.tryParse(entry.value);
+        if (v != null) {
+          final paramKey = k.startsWith('topping_') ? k : 'topping_$k';
+          _params[paramKey] = v;
+        }
+      }
+    } else {
+      // 本地表尚无数据时，将现有拓品参数自动镜像写入专用表 dac_dx1ii_settings
+      const dx1SubKeys = [
+        'sample_rate_mode',
+        'filter',
+        'dpll',
+        'dsd_cutoff',
+        'uac_mode',
+        'lineout_bypass',
+        'gain',
+      ];
+      for (final sub in dx1SubKeys) {
+        final val = _params['topping_$sub'] ?? 0;
+        db.setDacDx1iiSetting(sub, val.toString());
+        db.setDacDx1iiSetting('topping_$sub', val.toString());
+      }
     }
   }
 
@@ -283,11 +316,133 @@ class DacSettingService extends ChangeNotifier {
   }
 
   void setParam(String key, int val) {
-    final cleanKey = key.startsWith('setting_dac_') ? key.substring('setting_dac_'.length) : key;
-    if (_params[cleanKey] == val) return;
+    final cleanKey = key.startsWith('setting_dac_')
+        ? key.substring('setting_dac_'.length)
+        : key;
     _params[cleanKey] = val;
-    MusicDatabaseService.instance.setSetting('setting_dac_$cleanKey', val.toString());
+    MusicDatabaseService.instance
+        .setSetting('setting_dac_$cleanKey', val.toString());
+
+    // 拓品 DX1 II 专用表 (dac_dx1ii_settings) 本地化持久化
+    if (cleanKey.startsWith('topping_')) {
+      final dx1Key = cleanKey.substring('topping_'.length);
+      MusicDatabaseService.instance.setDacDx1iiSetting(dx1Key, val.toString());
+      MusicDatabaseService.instance.setDacDx1iiSetting(cleanKey, val.toString());
+    }
+
     notifyListeners();
     onBroadcastNeeded?.call();
+  }
+
+  static const MethodChannel _macSystemChannel =
+      MethodChannel('pihifi/macos_system');
+
+  /// 检测拓品 TOPPING DX1 II 是否处于连接激活状态
+  Future<bool> checkDx1iiConnected() async {
+    // 1. 优先从已探知设备列表中匹配 (兼容 Linux/ALSA 及各端物理外设名称)
+    final hasInDevices = _connectedDevices.any((d) =>
+        d.name.toLowerCase().contains('dx1') ||
+        d.model.toLowerCase().contains('dx1') ||
+        d.brand.toLowerCase().contains('topping'));
+    if (hasInDevices) return true;
+
+    // 2. macOS 专属底层 CoreAudio 实时查询
+    if (Platform.isMacOS) {
+      try {
+        final info = await _macSystemChannel
+            .invokeMapMethod<String, dynamic>('getAudioDeviceInfo');
+        if (info != null && info['isToppingDx1ii'] == true) {
+          return true;
+        }
+      } catch (e) {
+        debugPrint('[DacSettingService] 查询音频设备信息异常: $e');
+      }
+    }
+    return false;
+  }
+
+  /// 启动或重连时，如果连接了 DX1 II 且本地有专属表，反向向硬件设置采样率
+  Future<void> restoreDx1iiHardwareSettings() async {
+    final db = MusicDatabaseService.instance;
+    final hasTable = db.hasDacDx1iiSettings();
+    if (!hasTable) {
+      debugPrint('[DacSettingService] 本地未发现 dac_dx1ii_settings 表数据，跳过反向设置');
+      return;
+    }
+
+    final isConnected = await checkDx1iiConnected();
+    if (!isConnected) {
+      debugPrint('[DacSettingService] 拓品 DX1 II 未连接，跳过反向硬件设置');
+      return;
+    }
+
+    final mode = sampleRateMode;
+    debugPrint(
+        '[DacSettingService] 识别到拓品 DX1 II 已连接，且本地存在 dac_dx1ii_settings 表配置: sampleRateMode=$mode');
+
+    if (mode == 0) {
+      // 0: 自动模式 (Bit-Perfect 源码直出)，同步当前曲目或默认母带采样率
+      final currentRate =
+          HifiAudioService.instance.currentTrack?.sampleRate ?? 44100;
+      await syncPlaybackSampleRate(currentRate.toDouble());
+      debugPrint(
+          '[DacSettingService] 已向拓品 DX1 II 反向设置当前母带采样率: $currentRate Hz (自动直出)');
+    } else {
+      final targetRate = supportedSampleRates[mode];
+      final ok = await _applyNativeSampleRate(targetRate);
+      debugPrint(
+          '[DacSettingService] 已向拓品 DX1 II 反向恢复硬件采样率: $targetRate Hz, 状态: $ok');
+    }
+  }
+
+  /// 硬件输出采样率模式档位：
+  /// 0: 自动 (源码直通 · Bit-Perfect)
+  /// 1: 44.1 kHz
+  /// 2: 48.0 kHz
+  /// 3: 96.0 kHz
+  /// 4: 192.0 kHz
+  /// 5: 384.0 kHz
+  int get sampleRateMode => getParam('topping_sample_rate_mode', 0).clamp(0, 5);
+
+  static const List<double> supportedSampleRates = [
+    0.0, // 自动
+    44100.0,
+    48000.0,
+    96000.0,
+    192000.0,
+    384000.0,
+  ];
+
+  Future<bool> setSampleRateMode(int modeIndex) async {
+    final clamped = modeIndex.clamp(0, 5);
+    setParam('topping_sample_rate_mode', clamped);
+
+    if (clamped == 0) {
+      final currentRate =
+          HifiAudioService.instance.currentTrack?.sampleRate ?? 44100;
+      return syncPlaybackSampleRate(currentRate.toDouble());
+    } else {
+      final targetRate = supportedSampleRates[clamped];
+      return _applyNativeSampleRate(targetRate);
+    }
+  }
+
+  Future<bool> syncPlaybackSampleRate(double rate) async {
+    if (sampleRateMode != 0) return false;
+    if (rate <= 0) return false;
+    return _applyNativeSampleRate(rate);
+  }
+
+  Future<bool> _applyNativeSampleRate(double rate) async {
+    if (!Platform.isMacOS) return false;
+    try {
+      final ok = await _macSystemChannel
+          .invokeMethod<bool>('setSampleRate', {'sampleRate': rate});
+      debugPrint('[DacSettingService] 硬件采样率已切换为: $rate Hz, 状态: $ok');
+      return ok ?? false;
+    } catch (e) {
+      debugPrint('[DacSettingService] 切换硬件采样率失败: $e');
+      return false;
+    }
   }
 }

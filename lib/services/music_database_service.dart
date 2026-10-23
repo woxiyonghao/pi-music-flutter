@@ -25,7 +25,14 @@ class MusicDatabaseService extends ChangeNotifier {
   List<Playlist> get playlists => _playlists;
 
   MusicDatabaseService._() {
+    deleteSetting('setting_idle_screensaver_theme');
     loadLibrary();
+    if (_tracks.isEmpty) {
+      scanLibrary().catchError((e) {
+        debugPrint('[MusicDatabaseService] 初始自动扫描异常: $e');
+        return 0;
+      });
+    }
   }
 
   /// 获取 C++ SQLite 数据库默认绝对路径
@@ -102,6 +109,11 @@ class MusicDatabaseService extends ChangeNotifier {
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS dac_dx1ii_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      DELETE FROM app_settings WHERE key = 'setting_idle_screensaver_theme';
     ''');
 
     try {
@@ -220,6 +232,95 @@ class MusicDatabaseService extends ChangeNotifier {
       debugPrint('[MusicDatabaseService] setSettings batch error: $e');
       return false;
     }
+  }
+
+  /// 删除持久化设置项 (彻底清理废弃配置项)
+  bool deleteSetting(String key) {
+    _settingsCache.remove(key);
+    final dbFile = File(_databasePath);
+    if (!dbFile.existsSync()) return true;
+    try {
+      final db = _openDb();
+      final stmt = db.prepare('DELETE FROM app_settings WHERE key = ?;');
+      stmt.execute([key]);
+      stmt.close();
+      return true;
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] deleteSetting error for $key: $e');
+      return false;
+    }
+  }
+
+  /// 获取拓品 TOPPING DX1 II 专用硬件持久化设置
+  String getDacDx1iiSetting(String key, String defaultValue) {
+    final dbFile = File(_databasePath);
+    if (!dbFile.existsSync()) return defaultValue;
+    try {
+      final db = _openDb();
+      final stmt = db.prepare('SELECT value FROM dac_dx1ii_settings WHERE key = ? LIMIT 1;');
+      final ResultSet res = stmt.select([key]);
+      stmt.close();
+      String val = defaultValue;
+      if (res.isNotEmpty) {
+        val = (res.first['value'] as String? ?? defaultValue).trim();
+      }
+      return val;
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] getDacDx1iiSetting error for $key: $e');
+      return defaultValue;
+    }
+  }
+
+  /// 保存拓品 TOPPING DX1 II 专用硬件持久化设置
+  bool setDacDx1iiSetting(String key, String value) {
+    final dbFile = File(_databasePath);
+    try {
+      if (!dbFile.parent.existsSync()) {
+        dbFile.parent.createSync(recursive: true);
+      }
+      final db = _openDb();
+      final stmt = db.prepare('INSERT OR REPLACE INTO dac_dx1ii_settings (key, value) VALUES (?, ?);');
+      stmt.execute([key, value]);
+      stmt.close();
+      return true;
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] setDacDx1iiSetting error for $key: $e');
+      return false;
+    }
+  }
+
+  /// 获取拓品 TOPPING DX1 II 全量硬件配置字典
+  Map<String, String> getAllDacDx1iiSettings() {
+    final dbFile = File(_databasePath);
+    if (!dbFile.existsSync()) return {};
+    final map = <String, String>{};
+    try {
+      final db = _openDb();
+      final ResultSet res = db.select('SELECT key, value FROM dac_dx1ii_settings;');
+      for (final row in res) {
+        final k = row['key'] as String?;
+        final v = row['value'] as String?;
+        if (k != null && v != null) {
+          map[k] = v;
+        }
+      }
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] getAllDacDx1iiSettings error: $e');
+    }
+    return map;
+  }
+
+  /// 检查本地是否已有拓品 DX1 II 的专用配置表数据
+  bool hasDacDx1iiSettings() {
+    final dbFile = File(_databasePath);
+    if (!dbFile.existsSync()) return false;
+    try {
+      final db = _openDb();
+      final ResultSet res = db.select('SELECT count(*) as cnt FROM dac_dx1ii_settings;');
+      final cnt = res.isNotEmpty ? (res.first['cnt'] as int? ?? 0) : 0;
+      return cnt > 0;
+    } catch (_) {}
+    return false;
   }
   /// 智能解析并自愈音频路径 (1:1 严格对齐 C++ MusicDatabase::resolveTrackPath)
   /// 彻底根治 iOS / iPadOS 每次通过 Xcode 重新运行或版本升级导致 Sandbox Container UUID 变化失效的问题
@@ -690,5 +791,100 @@ class MusicDatabaseService extends ChangeNotifier {
       stmt.close();
     } catch (_) {}
     notifyListeners();
+  }
+
+  /// 从曲库与 SQLite 中删除指定曲目，并可选择是否物理删除磁盘源文件
+  Future<int> deleteTracks(Iterable<int> trackIds, {bool deleteSourceFiles = true}) async {
+    final idSet = trackIds.toSet();
+    if (idSet.isEmpty) return 0;
+
+    final tracksToDelete = _tracks.where((t) => idSet.contains(t.id)).toList();
+    if (tracksToDelete.isEmpty) return 0;
+
+    // 1. 物理删除源文件 (若 deleteSourceFiles 为 true)
+    if (deleteSourceFiles) {
+      final nonCuePaths = <String>{};
+      final cueAudioPaths = <String, Set<int>>{};
+      final cueFilePaths = <String>{};
+
+      for (final t in _tracks) {
+        final path = resolveTrackPath(t.filepath);
+        if (t.isCueTrack) {
+          cueAudioPaths.putIfAbsent(path, () => {}).add(t.id);
+          if (t.cuePath.isNotEmpty) {
+            cueFilePaths.add(resolveTrackPath(t.cuePath));
+          }
+        }
+      }
+
+      for (final t in tracksToDelete) {
+        final path = resolveTrackPath(t.filepath);
+        if (!t.isCueTrack) {
+          nonCuePaths.add(path);
+        }
+      }
+
+      for (final path in nonCuePaths) {
+        try {
+          final file = File(path);
+          if (file.existsSync()) {
+            file.deleteSync();
+            debugPrint('[MusicDatabaseService] 已物理删除音频文件: $path');
+          }
+        } catch (e) {
+          debugPrint('[MusicDatabaseService] 删除源文件失败 $path: $e');
+        }
+      }
+
+      for (final entry in cueAudioPaths.entries) {
+        final cueAudioPath = entry.key;
+        final allTrackIdsForCue = entry.value;
+        if (allTrackIdsForCue.every((id) => idSet.contains(id))) {
+          try {
+            final f = File(cueAudioPath);
+            if (f.existsSync()) {
+              f.deleteSync();
+              debugPrint('[MusicDatabaseService] 已物理删除整轨 CUE 音频: $cueAudioPath');
+            }
+          } catch (e) {
+            debugPrint('[MusicDatabaseService] 删除 CUE 音频失败: $e');
+          }
+        }
+      }
+      for (final cuePath in cueFilePaths) {
+        try {
+          final f = File(cuePath);
+          if (f.existsSync()) {
+            final base = p.withoutExtension(cuePath);
+            final possibleAudios = ['$base.wav', '$base.flac', '$base.ape', '$base.dsf'];
+            final hasRemainingAudio = possibleAudios.any((p) => File(p).existsSync());
+            if (!hasRemainingAudio) {
+              f.deleteSync();
+              debugPrint('[MusicDatabaseService] 已清理孤立 CUE 描述文件: $cuePath');
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 2. 从 SQLite 数据库中移除记录
+    try {
+      final db = _openDb();
+      final placeholders = List.filled(idSet.length, '?').join(',');
+      final stmt = db.prepare('DELETE FROM scanned_tracks WHERE id IN ($placeholders);');
+      stmt.execute(idSet.toList());
+      stmt.close();
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] SQLite 删除曲目失败: $e');
+    }
+
+    // 3. 从内存列表中移除
+    _tracks.removeWhere((t) => idSet.contains(t.id));
+    for (final pl in _playlists) {
+      pl.tracks.removeWhere((t) => idSet.contains(t.id));
+    }
+    notifyListeners();
+
+    return tracksToDelete.length;
   }
 }
