@@ -111,8 +111,14 @@ class PlatformAudioRuntime extends ChangeNotifier {
           await refreshOutput();
         }
       });
-      await _channel.invokeMethod<void>('prepareBackgroundStorage');
     }
+  }
+
+  /// Updating every file's protection can take time on a large library. It is
+  /// maintenance for background playback, not a prerequisite for showing UI.
+  Future<void> prepareBackgroundStorage() async {
+    if (!isIOS || _testing) return;
+    await _channel.invokeMethod<void>('prepareBackgroundStorage');
   }
 
   Future<bool> activate({int? sourceSampleRate}) async {

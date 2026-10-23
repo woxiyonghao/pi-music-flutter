@@ -41,6 +41,13 @@ void startPlayerServices() {
   if (!Platform.environment.containsKey('FLUTTER_TEST')) {
     unawaited(() async {
       try {
+        await PlatformAudioRuntime.instance.prepareBackgroundStorage();
+      } catch (error) {
+        debugPrint('[Startup] 后台文件保护设置失败: $error');
+      }
+    }());
+    unawaited(() async {
+      try {
         if (Platform.isIOS) {
           await PlatformAudioRuntime.instance
               .refreshOutput()
