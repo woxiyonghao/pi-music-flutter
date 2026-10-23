@@ -393,7 +393,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               _buildBadgeInfo('核心 DAC', dev.chipModel, Icons.memory_rounded),
               _buildBadgeInfo('传输界面', dev.usbInterface.isNotEmpty ? dev.usbInterface : '原生总线', Icons.sync_alt_rounded),
               _buildBadgeInfo('DSD 模式', dev.maxDsdRate, Icons.graphic_eq_rounded),
-              _buildBadgeInfo('协商速率', '${(dev.currentSampleRate / 1000).round()} kHz', Icons.speed_rounded),
+              _buildBadgeInfo('协商速率', '${(DacSettingService.instance.effectiveOutputSampleRate / 1000).round()} kHz', Icons.speed_rounded),
             ],
           ),
         ],

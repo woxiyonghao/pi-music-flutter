@@ -158,6 +158,7 @@ class DacSettingService extends ChangeNotifier {
     String id = 'usb_topping_dx1_ii',
     String name = 'TOPPING DX1 II',
     bool isDefault = true,
+    int? currentSampleRate,
   }) {
     return DacDeviceInfo(
       id: id,
@@ -165,7 +166,7 @@ class DacSettingService extends ChangeNotifier {
       isBuiltIn: false,
       isDefault: isDefault,
       transport: 'USB',
-      currentSampleRate: 384000,
+      currentSampleRate: currentSampleRate ?? 384000,
       maxSampleRate: 384000,
       maxBitDepth: 32,
       brand: 'TOPPING (拓品)',
@@ -523,15 +524,18 @@ class DacSettingService extends ChangeNotifier {
       // 0: 自动模式 (Bit-Perfect 源码直出)，同步当前曲目或默认母带采样率
       final currentRate =
           HifiAudioService.instance.currentTrack?.sampleRate ?? 44100;
+      _updateDeviceSampleRate(currentRate);
       await syncPlaybackSampleRate(currentRate.toDouble());
       debugPrint(
           '[DacSettingService] 已向拓品 DX1 II 反向设置当前母带采样率: $currentRate Hz (自动直出)');
     } else {
       final targetRate = supportedSampleRates[mode];
+      _updateDeviceSampleRate(targetRate.round());
       final ok = await _applyNativeSampleRate(targetRate);
       debugPrint(
           '[DacSettingService] 已向拓品 DX1 II 反向恢复硬件采样率: $targetRate Hz, 状态: $ok');
     }
+    notifyListeners();
   }
 
   /// 硬件输出采样率模式档位：
@@ -552,24 +556,82 @@ class DacSettingService extends ChangeNotifier {
     384000.0,
   ];
 
+  /// 最终生效的实际硬件直出/升频采样率 (Hz)
+  /// 当 sampleRateMode == 0 时为 Bit-Perfect 自动源码跟随曲目；
+  /// 当 sampleRateMode > 0 时为用户强制指定/提升的采样率 (如 384000 Hz)
+  int get effectiveOutputSampleRate {
+    final mode = sampleRateMode;
+    if (mode > 0 && mode < supportedSampleRates.length) {
+      return supportedSampleRates[mode].round();
+    }
+    return HifiAudioService.instance.currentTrack?.sampleRate ?? 44100;
+  }
+
+  /// 最终生效的实际硬件直出/升频位深 (Bit)
+  int get effectiveOutputBitDepth {
+    final mode = sampleRateMode;
+    if (mode > 0) {
+      // 强制升频或锁定硬件采样率时，硬件以 32-Bit 高精浮点/整数直通
+      return 32;
+    }
+    return HifiAudioService.instance.currentTrack?.bitDepth ?? 24;
+  }
+
+  /// 发烧直出规格展示文本，例如 "384.0k / 32b" 或 "192.0k / 24b"
+  String get effectiveSpecText {
+    final rate = effectiveOutputSampleRate;
+    final depth = effectiveOutputBitDepth;
+    final khz = rate / 1000.0;
+    final khzStr = khz.toStringAsFixed(1);
+    return '${khzStr}k / ${depth}b';
+  }
+
+  void _updateDeviceSampleRate(int rate) {
+    if (_connectedDevices.isNotEmpty) {
+      for (int i = 0; i < _connectedDevices.length; i++) {
+        final dev = _connectedDevices[i];
+        if (!dev.isBuiltIn || _connectedDevices.length == 1) {
+          _connectedDevices[i] = dev.copyWith(currentSampleRate: rate);
+        }
+      }
+    }
+  }
+
   Future<bool> setSampleRateMode(int modeIndex) async {
     final clamped = modeIndex.clamp(0, 5);
     setParam('topping_sample_rate_mode', clamped);
 
+    // 联动系统全局设置 setting_sample_rate (0: 源码直出, 1: 192k, 2: 384k)
+    final sysRateIndex = clamped == 5 ? 2 : (clamped == 4 ? 1 : 0);
+    MusicDatabaseService.instance.setSetting('setting_sample_rate', sysRateIndex.toString());
+
+    final targetRate = clamped == 0
+        ? (HifiAudioService.instance.currentTrack?.sampleRate ?? 44100).toDouble()
+        : supportedSampleRates[clamped];
+
+    _updateDeviceSampleRate(targetRate.round());
+    notifyListeners();
+
     if (clamped == 0) {
-      final currentRate =
-          HifiAudioService.instance.currentTrack?.sampleRate ?? 44100;
-      return syncPlaybackSampleRate(currentRate.toDouble());
+      return syncPlaybackSampleRate(targetRate);
     } else {
-      final targetRate = supportedSampleRates[clamped];
       return _applyNativeSampleRate(targetRate);
     }
   }
 
   Future<bool> syncPlaybackSampleRate(double rate) async {
-    if (sampleRateMode != 0) return false;
     if (rate <= 0) return false;
-    return _applyNativeSampleRate(rate);
+    if (sampleRateMode == 0) {
+      _updateDeviceSampleRate(rate.round());
+      notifyListeners();
+      return _applyNativeSampleRate(rate);
+    } else {
+      // 保持用户设定的强制目标采样率
+      final targetRate = supportedSampleRates[sampleRateMode];
+      _updateDeviceSampleRate(targetRate.round());
+      notifyListeners();
+      return _applyNativeSampleRate(targetRate);
+    }
   }
 
   Future<bool> _applyNativeSampleRate(double rate) async {

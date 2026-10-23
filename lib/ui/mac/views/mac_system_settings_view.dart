@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../core/platform_helper.dart';
+import '../../../services/dac_setting_service.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
@@ -35,7 +36,14 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
 
   void _loadSettings() {
     final db = MusicDatabaseService.instance;
-    _sampleRateMode = int.tryParse(db.getSetting('setting_sample_rate', '0'))?.clamp(0, 2) ?? 0;
+    final dacMode = DacSettingService.instance.sampleRateMode;
+    if (dacMode == 5) {
+      _sampleRateMode = 2;
+    } else if (dacMode == 4) {
+      _sampleRateMode = 1;
+    } else {
+      _sampleRateMode = int.tryParse(db.getSetting('setting_sample_rate', '0'))?.clamp(0, 2) ?? 0;
+    }
     _dsdMode = int.tryParse(db.getSetting('setting_dsd_mode', '0'))?.clamp(0, 2) ?? 0;
     _bufferSizeMode = int.tryParse(db.getSetting('setting_buffer_size', '1'))?.clamp(0, 2) ?? 1;
     _fadeDurationMode = int.tryParse(db.getSetting('setting_fade_duration_mode', '2'))?.clamp(0, 3) ?? 2;
@@ -48,7 +56,7 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: ThemeService.instance,
+      listenable: Listenable.merge([ThemeService.instance, DacSettingService.instance]),
       builder: (context, _) {
         return GlassCard(
       borderRadius: UIConfig.containerRounding,
@@ -83,10 +91,15 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                         '超采样 192kHz/24Bit',
                         '极频 384kHz/32Bit',
                       ],
-                      selectedIndex: _sampleRateMode,
+                      selectedIndex: () {
+                        final dacMode = DacSettingService.instance.sampleRateMode;
+                        return dacMode == 5 ? 2 : (dacMode == 4 ? 1 : (dacMode == 0 ? 0 : _sampleRateMode));
+                      }(),
                       onSelected: (idx) {
                         setState(() => _sampleRateMode = idx);
                         MusicDatabaseService.instance.setSetting('setting_sample_rate', idx.toString());
+                        final targetDacMode = idx == 2 ? 5 : (idx == 1 ? 4 : 0);
+                        DacSettingService.instance.setSampleRateMode(targetDacMode);
                       },
                     ),
                     const SizedBox(height: 10.0),

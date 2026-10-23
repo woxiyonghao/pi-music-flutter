@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../core/hifi_audio_service.dart';
 import '../../core/platform_helper.dart';
+import '../../services/dac_setting_service.dart';
 import '../../services/music_database_service.dart';
 import '../../services/pi_system_service.dart';
 import '../../services/theme_service.dart';
@@ -58,6 +59,7 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
         HifiAudioService.instance,
         ThemeService.instance,
         MusicDatabaseService.instance,
+        DacSettingService.instance,
       ]),
       builder: (context, _) {
         final piSys = PiSystemService.instance;
@@ -511,7 +513,15 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
                 ),
                 _buildOrbitPill(
                   '音频直通',
-                  _isMac ? 'CoreAudio HAL' : (_isIpad ? 'AVAudio Direct' : 'ALSA hw:0,0'),
+                  _isMac
+                      ? 'CoreAudio HAL'
+                      : (_isIpad
+                          ? 'AVAudio Direct'
+                          : (DacSettingService.instance.currentDevice != null
+                              ? (DacSettingService.instance.sampleRateMode > 0
+                                  ? 'ALSA · ${(DacSettingService.instance.effectiveOutputSampleRate / 1000).round()}k'
+                                  : 'ALSA · ${DacSettingService.instance.currentDevice!.name}')
+                              : 'ALSA hw:0,0')),
                   accent,
                 ),
               ],
@@ -610,10 +620,9 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
   // 中央中段：三联大指标 KPI 卡片 (1:1 对齐参考图三个大数字方框)
   // --------------------------------------------------------------------------
   Widget _buildThreeKpiBoxes(Color accent, PiSystemService piSys, HifiAudioService audio) {
-    final track = audio.currentTrackNotifier.value;
-    final specText = track != null
-        ? '${(track.sampleRate / 1000).toStringAsFixed(1)}k / ${track.bitDepth}b'
-        : '192k / 24b';
+    final dac = DacSettingService.instance;
+    final specText = dac.effectiveSpecText;
+    final isForced = dac.sampleRateMode > 0;
 
     return Row(
       children: [
@@ -621,7 +630,11 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
         const SizedBox(width: 8),
         Expanded(child: _buildSingleKpiBox('主动散热风扇', '${piSys.fanSpeedRpm} RPM', const Color(0xFF38BDF8))),
         const SizedBox(width: 8),
-        Expanded(child: _buildSingleKpiBox('发烧直出规格', specText, const Color(0xFF10B981))),
+        Expanded(child: _buildSingleKpiBox(
+          isForced ? '发烧直出规格 (强制提升)' : '发烧直出规格 (源码直通)',
+          specText,
+          const Color(0xFF10B981),
+        )),
       ],
     );
   }

@@ -81,6 +81,54 @@ class DacDeviceInfo {
     return '${khz}kHz / ${maxBitDepth}Bit$dsdPart';
   }
 
+  DacDeviceInfo copyWith({
+    String? id,
+    String? name,
+    bool? isBuiltIn,
+    bool? isDefault,
+    String? transport,
+    int? currentSampleRate,
+    int? maxSampleRate,
+    int? maxBitDepth,
+    String? brand,
+    String? model,
+    String? chipModel,
+    String? usbInterface,
+    String? maxDsdRate,
+    bool? supportsDsd,
+    bool? supportsHogMode,
+    bool? supportsUacMode,
+    bool? supportsDpll,
+    bool? supportsGainControl,
+    bool? supportsLineOutBypass,
+    List<String>? digitalFilters,
+    List<String>? filterDescriptions,
+  }) {
+    return DacDeviceInfo(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      isBuiltIn: isBuiltIn ?? this.isBuiltIn,
+      isDefault: isDefault ?? this.isDefault,
+      transport: transport ?? this.transport,
+      currentSampleRate: currentSampleRate ?? this.currentSampleRate,
+      maxSampleRate: maxSampleRate ?? this.maxSampleRate,
+      maxBitDepth: maxBitDepth ?? this.maxBitDepth,
+      brand: brand ?? this.brand,
+      model: model ?? this.model,
+      chipModel: chipModel ?? this.chipModel,
+      usbInterface: usbInterface ?? this.usbInterface,
+      maxDsdRate: maxDsdRate ?? this.maxDsdRate,
+      supportsDsd: supportsDsd ?? this.supportsDsd,
+      supportsHogMode: supportsHogMode ?? this.supportsHogMode,
+      supportsUacMode: supportsUacMode ?? this.supportsUacMode,
+      supportsDpll: supportsDpll ?? this.supportsDpll,
+      supportsGainControl: supportsGainControl ?? this.supportsGainControl,
+      supportsLineOutBypass: supportsLineOutBypass ?? this.supportsLineOutBypass,
+      digitalFilters: digitalFilters ?? this.digitalFilters,
+      filterDescriptions: filterDescriptions ?? this.filterDescriptions,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,

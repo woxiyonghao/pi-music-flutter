@@ -226,5 +226,27 @@ void main() {
       expect(find.text('ALSA 数字音频输出位深'), findsOneWidget);
       expect(find.text('CoreAudio 独占模式 (Exclusive Hog Mode)'), findsNothing);
     });
+
+    test('Hardware output sample rate forced boost and effective spec calculation', () async {
+      final service = DacSettingService.instance;
+
+      // 1. 设置为 384kHz 极频锁定 (模式 5)
+      await service.setSampleRateMode(5);
+      expect(service.sampleRateMode, equals(5));
+      expect(service.effectiveOutputSampleRate, equals(384000));
+      expect(service.effectiveOutputBitDepth, equals(32));
+      expect(service.effectiveSpecText, equals('384.0k / 32b'));
+
+      // 2. 设置为 192kHz 超采样 (模式 4)
+      await service.setSampleRateMode(4);
+      expect(service.sampleRateMode, equals(4));
+      expect(service.effectiveOutputSampleRate, equals(192000));
+      expect(service.effectiveOutputBitDepth, equals(32));
+      expect(service.effectiveSpecText, equals('192.0k / 32b'));
+
+      // 3. 恢复为 0 档 (自动跟随母带源码直出)
+      await service.setSampleRateMode(0);
+      expect(service.sampleRateMode, equals(0));
+    });
   });
 }

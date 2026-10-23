@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../models/track.dart';
 import '../models/playback_state.dart';
+import '../services/dac_setting_service.dart';
 import '../services/music_database_service.dart';
 import 'hifi_audio_bindings.dart';
 import '../platform/platform_audio_runtime.dart';
@@ -229,16 +230,20 @@ class HifiAudioService extends ChangeNotifier {
         return;
       }
 
+      final effectiveRate = DacSettingService.instance.effectiveOutputSampleRate;
+      final effectiveBitPerfect = DacSettingService.instance.sampleRateMode == 0 && isBitPerfect;
+
       // 仅在播放中或状态变更时通知监听者
       if (isPlaying ||
           _state.isPlaying != isPlaying ||
           _state.isPaused != isPaused ||
           _state.activeDeviceName != _hardwareDeviceName ||
-          _state.activeSampleRate != _hardwareSampleRate) {
+          _state.activeSampleRate != effectiveRate ||
+          _state.isBitPerfect != effectiveBitPerfect) {
         _state = PlaybackState(
           isPlaying: isPlaying,
           isPaused: isPaused,
-          isBitPerfect: isBitPerfect,
+          isBitPerfect: effectiveBitPerfect,
           currentTime: currentTime,
           duration: duration,
           progress: progress,
@@ -246,7 +251,7 @@ class HifiAudioService extends ChangeNotifier {
           isMuted: isMuted,
           playMode: _playMode,
           activeDeviceName: _hardwareDeviceName,
-          activeSampleRate: _hardwareSampleRate,
+          activeSampleRate: effectiveRate,
           spectrumLevels: spectrum,
         );
         notifyListeners();
@@ -382,16 +387,21 @@ class HifiAudioService extends ChangeNotifier {
     }
 
     lastDebugLog = 'SUCCESS_PLAY: $resolvedPath';
+    if (track.sampleRate > 0) {
+      DacSettingService.instance.syncPlaybackSampleRate(track.sampleRate.toDouble());
+    }
     final position = _pendingSeek ?? 0.0;
     if (_pendingSeek != null) _bindings.seek(position);
     if (!_playWhenPrepared) _bindings.pause();
     _consecutiveErrors = 0;
     _completion.reset();
     isPlayingNotifier.value = _playWhenPrepared;
+    final effectiveRate = DacSettingService.instance.effectiveOutputSampleRate;
+    final effectiveBitPerfect = DacSettingService.instance.sampleRateMode == 0 && _bindings.isBitPerfect();
     _state = PlaybackState(
       isPlaying: _playWhenPrepared,
       isPaused: !_playWhenPrepared,
-      isBitPerfect: _bindings.isBitPerfect(),
+      isBitPerfect: effectiveBitPerfect,
       currentTime: position,
       duration: track.durationSec.toDouble(),
       progress: track.durationSec > 0
@@ -401,7 +411,7 @@ class HifiAudioService extends ChangeNotifier {
       isMuted: _state.isMuted,
       playMode: _playMode,
       activeDeviceName: _bindings.getDeviceName(),
-      activeSampleRate: _bindings.getSampleRate(),
+      activeSampleRate: effectiveRate,
       spectrumLevels: _state.spectrumLevels,
     );
     notifyListeners();

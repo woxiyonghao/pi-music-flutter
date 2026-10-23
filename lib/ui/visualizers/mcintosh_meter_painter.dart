@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../core/hifi_audio_service.dart';
 import '../../core/platform_helper.dart';
+import '../../services/dac_setting_service.dart';
 
 /// 表头多品牌发烧视觉调色板 (1:1 严格对齐 C++ VUMeterRenderer.cpp 8大品牌名机 + Custom HSV 动态调色)
 class _MeterPalette {
@@ -342,12 +344,12 @@ class McIntoshMeterPainter extends CustomPainter {
               ? 'McIntosh Precision Power Output Meter · Apple Silicon AOP Direct'
               : (isMac
                   ? 'McIntosh Precision Power Output Meter · Bit-Perfect CoreAudio Engine'
-                  : 'McIntosh Precision Power Output Meter · Bit-Perfect 192kHz/24Bit ALSA'),
+                  : 'McIntosh Precision Power Output Meter · ${DacSettingService.instance.sampleRateMode > 0 ? "Forced ${(DacSettingService.instance.effectiveOutputSampleRate / 1000).round()}kHz" : "Bit-Perfect ${(HifiAudioService.instance.currentTrack?.sampleRate ?? 192000) ~/ 1000}kHz"}/24Bit ALSA'),
           footerRight: isIpad
               ? 'APPLE SILICON AOP · STUDIO GRADE MASTER CLOCK'
               : (isMac
                   ? 'APPLE STUDIO GRADE DIRECT BUS · FEMTOSECOND MASTER CLOCK'
-                  : 'AK4191EQ + AK4499EX VELVET SOUND · FEMTOSECOND CLOCK'),
+                  : '${DacSettingService.instance.dacName.toUpperCase()} · HIGH PRECISION MASTER CLOCK'),
         );
     }
   }
