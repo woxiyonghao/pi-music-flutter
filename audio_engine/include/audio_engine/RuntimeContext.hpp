@@ -59,7 +59,7 @@ public:
     bool policy(OutputPolicy policy) const { return (policies_.load() & policy) != 0; }
 
     bool updateHostOutput(HostOutput output) {
-        if (output.sample_rate < 8000 || output.sample_rate > 768000 ||
+        if ((output.sample_rate != 0 && (output.sample_rate < 8000 || output.sample_rate > 768000)) ||
             output.channels == 0 || output.channels > 8 ||
             output.id.empty() || output.name.empty()) return false;
         std::lock_guard lock(mutex_);
