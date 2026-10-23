@@ -635,15 +635,33 @@ class DacSettingService extends ChangeNotifier {
   }
 
   Future<bool> _applyNativeSampleRate(double rate) async {
-    if (!Platform.isMacOS) return false;
+    final rateInt = rate.round();
+    bool ffiOk = false;
     try {
-      final ok = await _macSystemChannel
-          .invokeMethod<bool>('setSampleRate', {'sampleRate': rate});
-      debugPrint('[DacSettingService] 硬件采样率已切换为: $rate Hz, 状态: $ok');
-      return ok ?? false;
+      ffiOk = HifiAudioBindings.instance.updateHostOutput({
+        'sampleRate': sampleRateMode == 0 ? 0 : rateInt,
+        'channels': 2,
+        'id': 'DX1 II',
+        'name': 'TOPPING DX1 II',
+        'transport': 'USB',
+      });
+      debugPrint(
+          '[DacSettingService] 底座 C++ 引擎输出格式更新: ${sampleRateMode == 0 ? "0 (Auto)" : "$rateInt Hz"}, 状态: $ffiOk');
     } catch (e) {
-      debugPrint('[DacSettingService] 切换硬件采样率失败: $e');
-      return false;
+      debugPrint('[DacSettingService] 更新底座 C++ 引擎输出格式失败: $e');
     }
+
+    if (Platform.isMacOS) {
+      try {
+        final ok = await _macSystemChannel
+            .invokeMethod<bool>('setSampleRate', {'sampleRate': rate});
+        debugPrint('[DacSettingService] macOS 硬件采样率已切换为: $rate Hz, 状态: $ok');
+        return ok ?? ffiOk;
+      } catch (e) {
+        debugPrint('[DacSettingService] 切换 macOS 硬件采样率失败: $e');
+        return ffiOk;
+      }
+    }
+    return ffiOk;
   }
 }
