@@ -3,6 +3,7 @@
 #include "audio_engine/IAudioSink.hpp"
 #include <SDL2/SDL.h>
 #include <atomic>
+#include <vector>
 
 namespace audio_engine {
 
@@ -34,6 +35,9 @@ private:
     std::string active_device_name_ = "系统默认音频输出";
     AudioCallback callback_;
     AudioFormatSpec actual_spec_;
+    AudioFormatSpec requested_spec_{};
+    SDL_AudioStream* resample_stream_ = nullptr;
+    std::vector<float> resample_input_buf_;
     std::atomic<bool> is_running_{false};
     double buffer_latency_sec_ = 0.0;
     uint32_t buffer_size_samples_ = 1024;

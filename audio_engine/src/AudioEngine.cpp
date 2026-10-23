@@ -330,8 +330,10 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
     releaseHogMode();
 #endif
 
-    // 2. 打开硬件输出设备 (根据音频文件的真实采样率和声道动态协商)
-    if (!sink_->isOpen() || sink_->getActualSpec().sample_rate != current_spec_.sample_rate || sink_->getActualSpec().channels != current_spec_.channels) {
+    // 2. 打开硬件输出设备 (根据用户设置的目标采样率与母带采样率协商)
+    uint32_t target_rate = runtimeContext().hostOutput().sample_rate;
+    uint32_t expected_sink_rate = (target_rate > 0) ? target_rate : current_spec_.sample_rate;
+    if (!sink_->isOpen() || sink_->getActualSpec().sample_rate != expected_sink_rate || sink_->getActualSpec().channels != current_spec_.channels) {
         sink_->close();
         if (!sink_->open(current_spec_, [this](float* output, size_t frame_count) {
                 onSinkDataNeeded(output, frame_count);
@@ -705,6 +707,31 @@ void AudioEngine::handleDefaultDeviceChanged() {
         seek(position);
         if (!playing) pause();
     }
+#else
+    std::lock_guard lock(device_mutex_);
+    const auto host = runtimeContext().hostOutput();
+    uint32_t target_rate = host.sample_rate;
+    if (sink_ && sink_->isOpen()) {
+        if (target_rate > 0 && sink_->getActualSpec().sample_rate == target_rate) {
+            return;
+        }
+        if (decoder_) {
+            bool was_playing = is_playing_.load(std::memory_order_acquire);
+            const auto file = current_filepath_;
+            const double position = getCurrentTimeSec();
+            const double section_start = section_start_sec_.load();
+            const double section_end = section_end_sec_.load();
+            stop();
+            sink_->close();
+            if (openAndPlaySection(file, section_start, section_end)) {
+                seek(position);
+                if (!was_playing) pause();
+                std::cout << "[AudioEngine] Linux SDL 推流管道已热切换至新采样率: " << target_rate << " Hz" << std::endl;
+            }
+        } else {
+            sink_->close();
+        }
+    }
 #endif
 }
 
@@ -754,10 +781,17 @@ uint32_t AudioEngine::getActiveHardwareSampleRate() const {
             return static_cast<uint32_t>(sr);
         }
     }
-#endif
-#if defined(__APPLE__) && TARGET_OS_IPHONE
+    return current_spec_.sample_rate > 0 ? current_spec_.sample_rate : 44100;
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
     return runtimeContext().hostOutput().sample_rate;
 #else
+    if (sink_ && sink_->isOpen()) {
+        return sink_->getActualSpec().sample_rate;
+    }
+    uint32_t host_sr = runtimeContext().hostOutput().sample_rate;
+    if (host_sr > 0) {
+        return host_sr;
+    }
     return current_spec_.sample_rate > 0 ? current_spec_.sample_rate : 44100;
 #endif
 }

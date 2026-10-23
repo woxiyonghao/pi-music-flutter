@@ -22,10 +22,16 @@ bool SdlAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback cal
     close();
 
     callback_ = callback;
+    requested_spec_ = requested_spec;
+
+    uint32_t target_rate = runtimeContext().hostOutput().sample_rate;
+    if (target_rate == 0) {
+        target_rate = requested_spec.sample_rate;
+    }
 
     SDL_AudioSpec desired;
     std::memset(&desired, 0, sizeof(desired));
-    desired.freq = static_cast<int>(requested_spec.sample_rate);
+    desired.freq = static_cast<int>(target_rate);
     desired.format = AUDIO_F32SYS; // 原生 32-bit Float
     desired.channels = static_cast<Uint8>((requested_spec.channels > 0) ? requested_spec.channels : 2);
 #if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
@@ -105,6 +111,32 @@ bool SdlAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback cal
 
     buffer_latency_sec_ = (obtained.freq > 0) ? (static_cast<double>(obtained.samples) / obtained.freq) : 0.0;
 
+    if (resample_stream_) {
+        SDL_FreeAudioStream(resample_stream_);
+        resample_stream_ = nullptr;
+    }
+    if (actual_spec_.sample_rate != requested_spec_.sample_rate ||
+        actual_spec_.channels != requested_spec_.channels) {
+        resample_stream_ = SDL_NewAudioStream(
+            AUDIO_F32SYS,
+            static_cast<Uint8>(requested_spec_.channels),
+            static_cast<int>(requested_spec_.sample_rate),
+            AUDIO_F32SYS,
+            static_cast<Uint8>(actual_spec_.channels),
+            static_cast<int>(actual_spec_.sample_rate)
+        );
+        if (!resample_stream_) {
+            std::cerr << "[SdlAudioSink] 创建 SDL_AudioStream 失败: " << SDL_GetError() << std::endl;
+        } else {
+            std::cout << "[SdlAudioSink] 启用实时升频/重采样: "
+                      << requested_spec_.sample_rate << " Hz (" << requested_spec_.channels << "ch) -> "
+                      << actual_spec_.sample_rate << " Hz (" << actual_spec_.channels << "ch)" << std::endl;
+        }
+        resample_input_buf_.resize(1024 * requested_spec_.channels);
+    } else {
+        resample_input_buf_.clear();
+    }
+
     return true;
 }
 
@@ -136,12 +168,22 @@ void SdlAudioSink::close() {
         SDL_CloseAudioDevice(device_id_);
         device_id_ = 0;
     }
+    if (resample_stream_) {
+        SDL_FreeAudioStream(resample_stream_);
+        resample_stream_ = nullptr;
+    }
+    resample_input_buf_.clear();
     is_running_.store(false, std::memory_order_release);
 }
 
 void SdlAudioSink::flush() {
     if (device_id_ > 0) {
+        SDL_LockAudioDevice(device_id_);
         SDL_ClearQueuedAudio(device_id_);
+        if (resample_stream_) {
+            SDL_AudioStreamClear(resample_stream_);
+        }
+        SDL_UnlockAudioDevice(device_id_);
     }
 }
 
@@ -161,6 +203,30 @@ void SdlAudioSink::sdlCallbackThunk(void* userdata, Uint8* stream, int len) {
     auto* self = static_cast<SdlAudioSink*>(userdata);
     if (!self || !self->is_running_.load(std::memory_order_acquire)) {
         std::memset(stream, 0, len);
+        return;
+    }
+
+    if (self->resample_stream_) {
+        const size_t in_channels = (self->requested_spec_.channels > 0) ? self->requested_spec_.channels : 2;
+        const size_t chunk_frames = (self->resample_input_buf_.size() >= in_channels)
+                                    ? (self->resample_input_buf_.size() / in_channels) : 1024;
+
+        while (SDL_AudioStreamAvailable(self->resample_stream_) < len &&
+               self->is_running_.load(std::memory_order_acquire)) {
+            if (self->callback_) {
+                self->callback_(self->resample_input_buf_.data(), chunk_frames);
+                SDL_AudioStreamPut(self->resample_stream_,
+                                   self->resample_input_buf_.data(),
+                                   static_cast<int>(chunk_frames * in_channels * sizeof(float)));
+            } else {
+                break;
+            }
+        }
+
+        int got = SDL_AudioStreamGet(self->resample_stream_, stream, len);
+        if (got < len) {
+            std::memset(stream + (got > 0 ? got : 0), 0, len - (got > 0 ? got : 0));
+        }
         return;
     }
 
