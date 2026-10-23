@@ -250,30 +250,13 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                         final opacity = (1.0 - easeT).clamp(0.0, 1.0);
                         final isFullyFullscreen = progress >= 0.999;
 
-                        final screensaverThemeIdx = int.tryParse(db.getSetting('setting_idle_screensaver_theme', '0')) ?? 0;
-                        final VisualizerType effectiveVisualizer;
-                        if (_isFullscreenIdle && screensaverThemeIdx > 0) {
-                          switch (screensaverThemeIdx) {
-                            case 1: effectiveVisualizer = VisualizerType.mcIntosh; break;
-                            case 2: effectiveVisualizer = VisualizerType.accuphase; break;
-                            case 3: effectiveVisualizer = VisualizerType.tapeReel; break;
-                            case 4: effectiveVisualizer = VisualizerType.siriWave; break;
-                            case 5: effectiveVisualizer = VisualizerType.bubbles; break;
-                            case 6: effectiveVisualizer = VisualizerType.glassClock; break;
-                            case 7: effectiveVisualizer = VisualizerType.piTelemetryDashboard; break;
-                            default: effectiveVisualizer = activeVisualizer; break;
-                          }
-                        } else {
-                          effectiveVisualizer = activeVisualizer;
-                        }
-
                         return Stack(
                           fit: StackFit.expand,
                           children: [
                             // 1. 全景底层背景与音乐律动动效 (独立 GPU 图层隔离)
                             RepaintBoundary(
                               child: MacBackgroundWidget(
-                                visualizerType: effectiveVisualizer,
+                                visualizerType: activeVisualizer,
                                 fullscreenProgress: progress,
                                 platform: widget.platform,
                               ),
@@ -415,60 +398,6 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        DropdownButtonHideUnderline(
-                                          child: DropdownButton<VisualizerType>(
-                                            value: effectiveVisualizer,
-                                            dropdownColor: const Color(0xFF161B24),
-                                            icon: Icon(Icons.style_rounded, size: 16, color: theme.accentColor),
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              color: UIConfig.textActive,
-                                              fontWeight: FontWeight.bold,
-                                              fontFamilyFallback: [
-                                                'WenQuanYi Micro Hei',
-                                                'WenQuanYi Zen Hei',
-                                                'Noto Sans CJK SC',
-                                                'PingFang SC',
-                                                'sans-serif',
-                                              ],
-                                            ),
-                                            items: VisualizerType.values.map((type) {
-                                              return DropdownMenuItem<VisualizerType>(
-                                                value: type,
-                                                child: Text(
-                                                  type.getDisplayName(widget.platform),
-                                                  style: const TextStyle(
-                                                    fontFamilyFallback: [
-                                                      'WenQuanYi Micro Hei',
-                                                      'WenQuanYi Zen Hei',
-                                                      'Noto Sans CJK SC',
-                                                      'PingFang SC',
-                                                      'sans-serif',
-                                                    ],
-                                                  ),
-                                                ),
-                                              );
-                                            }).toList(),
-                                            onChanged: (newType) {
-                                              if (newType != null) {
-                                                ThemeService.instance.setBackgroundVisualMode(newType.index);
-                                                int sIdx = 0;
-                                                switch (newType) {
-                                                  case VisualizerType.mcIntosh: sIdx = 1; break;
-                                                  case VisualizerType.accuphase: sIdx = 2; break;
-                                                  case VisualizerType.tapeReel: sIdx = 3; break;
-                                                  case VisualizerType.siriWave: sIdx = 4; break;
-                                                  case VisualizerType.bubbles: sIdx = 5; break;
-                                                  case VisualizerType.glassClock: sIdx = 6; break;
-                                                  case VisualizerType.piTelemetryDashboard: sIdx = 7; break;
-                                                  default: sIdx = 0; break;
-                                                }
-                                                db.setSetting('setting_idle_screensaver_theme', sIdx.toString());
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8.0),
                                         IconButton(
                                           icon: const Icon(Icons.fullscreen_exit_rounded, size: 18, color: UIConfig.iconNormal),
                                           padding: EdgeInsets.zero,

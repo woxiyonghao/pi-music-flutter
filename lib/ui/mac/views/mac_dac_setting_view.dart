@@ -529,9 +529,51 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     );
   }
 
-  /// 外接解码器专属设置区 (以 TOPPING DX12 / ESS ES9039Q2M 架构为核心)
+  /// 外接解码器专属设置区 (以 TOPPING DX12 / DX1 II / ESS ES9039Q2M 架构为核心)
   Widget _buildExternalDacSettings(DacDeviceInfo dev, DacSettingService dac, Color accent) {
-    final filterIdx = dac.getParam('topping_filter', 0).clamp(0, dev.digitalFilters.length - 1);
+    final isDx1 = dev.name.toLowerCase().contains('dx1') ||
+        dev.model.toLowerCase().contains('dx1') ||
+        dev.brand.toLowerCase().contains('topping');
+
+    final filters = dev.digitalFilters.isNotEmpty
+        ? dev.digitalFilters
+        : (isDx1
+            ? const [
+                '最小相位快速滚降 (Fast Roll-off, Minimum Phase)',
+                '线性相位快速滚降 (Fast Roll-off, Linear Phase)',
+                '最小相位慢速滚降 (Slow Roll-off, Minimum Phase)',
+                '线性相位慢速滚降 (Slow Roll-off, Linear Phase)',
+                '切趾快速滚降 (Apodizing Fast Roll-off)',
+                '混合滤波 (Hybrid)',
+                '砖墙滤波 (Brickwall)',
+                '低色散滤波 (Low Dispersion)',
+              ]
+            : const [
+                '硬件芯片原生滤波 (Hardware Direct)',
+                '最小相位平滑模式',
+              ]);
+
+    final filterDescs = dev.filterDescriptions.isNotEmpty
+        ? dev.filterDescriptions
+        : (isDx1
+            ? const [
+                '[默认推荐] 瞬态极佳，无预振铃，人声与现代流行音乐首选',
+                '声场开阔自然，交响乐、大编制与古典弦乐首选',
+                '温暖醇厚，消除高频数码毛刺，听感柔和耐听',
+                '模拟黑胶唱片般的温润质感，音质厚实自然',
+                '抑制瞬态冲激预振铃失真，极高保真母带重现',
+                '兼顾空间结像深度与低频瞬态打击力度',
+                '极陡峭阻带截止，高频细节与线条感极强',
+                '全音频频带降低群延迟与相位失真',
+              ]
+            : const [
+                '使用外接声卡硬件内部默认超采样滤波',
+                '软件层提供平滑瞬态抗混叠',
+              ]);
+
+    final filterIdx = filters.isNotEmpty
+        ? dac.getParam('topping_filter', 0).clamp(0, filters.length - 1)
+        : 0;
     final dpllIdx = dac.getParam('topping_dpll', 1).clamp(0, 4);
     final dsdCutoffIdx = dac.getParam('topping_dsd_cutoff', 0).clamp(0, 3);
     final uacIdx = dac.getParam('topping_uac_mode', 0).clamp(0, 1);
@@ -593,10 +635,10 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               const SizedBox(height: 12),
               // 8 种滤波网格/列表
               Column(
-                children: List.generate(dev.digitalFilters.length, (idx) {
+                children: List.generate(filters.length, (idx) {
                   final isSel = (filterIdx == idx);
-                  final filterName = dev.digitalFilters[idx];
-                  final desc = idx < dev.filterDescriptions.length ? dev.filterDescriptions[idx] : '';
+                  final filterName = filters[idx];
+                  final desc = idx < filterDescs.length ? filterDescs[idx] : '';
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 6),

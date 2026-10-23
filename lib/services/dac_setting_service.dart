@@ -154,25 +154,151 @@ class DacSettingService extends ChangeNotifier {
     }
   }
 
-  /// 从底层 C++ 实时刷新所连接的全部音频硬件设备列表 (JSON 反序列化)
+  static DacDeviceInfo createToppingDx1iiDeviceInfo({
+    String id = 'usb_topping_dx1_ii',
+    String name = 'TOPPING DX1 II',
+    bool isDefault = true,
+  }) {
+    return DacDeviceInfo(
+      id: id,
+      name: name,
+      isBuiltIn: false,
+      isDefault: isDefault,
+      transport: 'USB',
+      currentSampleRate: 384000,
+      maxSampleRate: 384000,
+      maxBitDepth: 32,
+      brand: 'TOPPING (拓品)',
+      model: 'DX1 II (桌面平衡解码耳放)',
+      chipModel: 'ESS Sabre (ES9039Q2M)',
+      usbInterface: 'XMOS XU316 超低抖动异步传输',
+      maxDsdRate: 'DSD256 (Native / DoP)',
+      supportsDsd: true,
+      supportsHogMode: true,
+      supportsUacMode: true,
+      supportsDpll: true,
+      supportsGainControl: true,
+      supportsLineOutBypass: true,
+      digitalFilters: const [
+        '最小相位快速滚降 (Fast Roll-off, Minimum Phase)',
+        '线性相位快速滚降 (Fast Roll-off, Linear Phase)',
+        '最小相位慢速滚降 (Slow Roll-off, Minimum Phase)',
+        '线性相位慢速滚降 (Slow Roll-off, Linear Phase)',
+        '切趾快速滚降 (Apodizing Fast Roll-off)',
+        '混合滤波 (Hybrid)',
+        '砖墙滤波 (Brickwall)',
+        '低色散滤波 (Low Dispersion)',
+      ],
+      filterDescriptions: const [
+        '[默认推荐] 瞬态极佳，无预振铃，人声与现代流行音乐首选',
+        '声场开阔自然，交响乐、大编制与古典弦乐首选',
+        '温暖醇厚，消除高频数码毛刺，听感柔和耐听',
+        '模拟黑胶唱片般的温润质感，音质厚实自然',
+        '抑制瞬态冲激预振铃失真，极高保真母带重现',
+        '兼顾空间结像深度与低频瞬态打击力度',
+        '极陡峭阻带截止，高频细节与线条感极强',
+        '全音频频带降低群延迟与相位失真',
+      ],
+    );
+  }
+
+  /// 从底层 C++ 实时刷新所连接的全部音频硬件设备列表 (JSON 反序列化 + 树莓派真实物理声卡自愈)
   void refreshDevices() {
+    final parsed = <DacDeviceInfo>[];
     try {
       final bindings = HifiAudioBindings.instance;
       final jsonStr = bindings.getConnectedDevicesJson();
       if (jsonStr.isNotEmpty && jsonStr != '[]') {
         final List<dynamic> list = jsonDecode(jsonStr);
-        final parsed = list.map((item) => DacDeviceInfo.fromJson(item as Map<String, dynamic>)).toList();
-        if (parsed.isNotEmpty) {
-          _connectedDevices = parsed;
-          if (_selectedDeviceIndex >= _connectedDevices.length) {
-            _selectedDeviceIndex = 0;
-          }
-          notifyListeners();
-          return;
-        }
+        parsed.addAll(list.map((item) => DacDeviceInfo.fromJson(item as Map<String, dynamic>)));
       }
     } catch (e) {
       debugPrint('[DacSettingService] refreshDevices error: $e');
+    }
+
+    // 在 Linux / 树莓派上：直接读取系统真实的物理 ALSA 声卡 (/proc/asound/cards)
+    if (Platform.isLinux) {
+      try {
+        final cardsFile = File('/proc/asound/cards');
+        if (cardsFile.existsSync()) {
+          final content = cardsFile.readAsStringSync();
+          final lines = content.split('\n');
+          final reg = RegExp(r'^\s*(\d+)\s+\[([^\]]+)\]:\s+([^-]+)\s*-\s*(.+)$');
+          bool foundDx1 = false;
+          final alsaCards = <DacDeviceInfo>[];
+
+          for (final line in lines) {
+            final match = reg.firstMatch(line);
+            if (match != null) {
+              final cardNum = match.group(1)!;
+              final shortName = match.group(2)!.trim();
+              final longName = match.group(4)!.trim();
+              final combined = '$shortName $longName'.toLowerCase();
+
+              if (combined.contains('dx1') || combined.contains('topping')) {
+                foundDx1 = true;
+                alsaCards.add(createToppingDx1iiDeviceInfo(
+                  id: 'alsa_hw_$cardNum',
+                  name: 'TOPPING DX1 II (Card $cardNum)',
+                  isDefault: true,
+                ));
+              }
+            }
+          }
+
+          if (foundDx1) {
+            // 移除可能存在的未完整匹配的通用条目，替换为精准的 DX1 II 专用画像
+            parsed.removeWhere((d) =>
+                d.name.toLowerCase().contains('dx1') ||
+                d.model.toLowerCase().contains('dx1') ||
+                d.id.startsWith('alsa_hw_'));
+            parsed.insertAll(0, alsaCards);
+          } else if (parsed.isEmpty) {
+            // 没有 DX1 时，如果存在系统内置 ALSA，添加内置直通卡片
+            parsed.add(const DacDeviceInfo(
+              id: 'alsa_builtin_pi',
+              name: '树莓派 ALSA 直通声卡',
+              isBuiltIn: true,
+              isDefault: true,
+              transport: 'BuiltIn (ALSA)',
+              currentSampleRate: 192000,
+              maxSampleRate: 192000,
+              maxBitDepth: 32,
+              brand: 'Raspberry Pi / Linux',
+              model: '树莓派 ALSA 硬件直通',
+              chipModel: 'BCM2712 Direct / I2S Master Clock',
+              usbInterface: 'Broadcom I2S / DMA Direct',
+              maxDsdRate: '无',
+              supportsDsd: false,
+              supportsHogMode: false,
+              supportsUacMode: false,
+              supportsDpll: false,
+              supportsGainControl: false,
+              supportsLineOutBypass: true,
+              digitalFilters: ['ALSA 物理硬件直通 (Bit-Perfect)'],
+              filterDescriptions: ['无重采样、无色彩渲染的系统级纯音直通'],
+            ));
+          }
+        }
+      } catch (e) {
+        debugPrint('[DacSettingService] Linux ALSA 物理声卡探测异常: $e');
+      }
+    }
+
+    if (parsed.isNotEmpty) {
+      _connectedDevices = parsed;
+      // 优先选择外接的 HiFi 解码器 (如拓品 DX1 II)
+      final dx1Index = _connectedDevices.indexWhere((d) =>
+          d.name.toLowerCase().contains('dx1') ||
+          d.model.toLowerCase().contains('dx1') ||
+          d.brand.toLowerCase().contains('topping'));
+      if (dx1Index >= 0) {
+        _selectedDeviceIndex = dx1Index;
+      } else if (_selectedDeviceIndex >= _connectedDevices.length || _selectedDeviceIndex < 0) {
+        _selectedDeviceIndex = 0;
+      }
+      notifyListeners();
+      return;
     }
 
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
@@ -346,7 +472,20 @@ class DacSettingService extends ChangeNotifier {
         d.brand.toLowerCase().contains('topping'));
     if (hasInDevices) return true;
 
-    // 2. macOS 专属底层 CoreAudio 实时查询
+    // 2. Linux / 树莓派底层 ALSA 物理声卡直查
+    if (Platform.isLinux) {
+      try {
+        final cardsFile = File('/proc/asound/cards');
+        if (cardsFile.existsSync()) {
+          final content = cardsFile.readAsStringSync().toLowerCase();
+          if (content.contains('dx1') || content.contains('topping')) {
+            return true;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. macOS 专属底层 CoreAudio 实时查询
     if (Platform.isMacOS) {
       try {
         final info = await _macSystemChannel
