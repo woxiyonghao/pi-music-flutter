@@ -28,6 +28,27 @@ import AVFoundation
                 result(["sampleRate": Int(session.sampleRate.rounded()),
                         "channels": session.outputNumberOfChannels,
                         "id": output?.uid ?? "", "name": output?.portName ?? "", "transport": transport])
+            case "setPreferredSampleRate":
+                let arguments = call.arguments as? [String: Any]
+                guard let rate = arguments?["sampleRate"] as? NSNumber,
+                      let routeID = arguments?["routeId"] as? String,
+                      let output = session.currentRoute.outputs.first,
+                      output.portType == .usbAudio, output.uid == routeID else {
+                    result(FlutterError(code: "route_changed", message: "USB output changed", details: nil)); return
+                }
+                let name = output.portName.precomposedStringWithCompatibilityMapping.uppercased()
+                    .replacingOccurrences(of: "[^A-Z0-9]", with: "", options: .regularExpression)
+                let sampleRate = rate.doubleValue
+                guard name.contains("DX1II"), sampleRate.isFinite,
+                      (8000...384000).contains(sampleRate) else {
+                    result(FlutterError(code: "unsupported_rate", message: "Unsupported DX1 II PCM preference", details: nil)); return
+                }
+                do {
+                    try session.setPreferredSampleRate(sampleRate)
+                    result(nil)
+                } catch {
+                    result(FlutterError(code: "sample_rate_preference", message: error.localizedDescription, details: nil))
+                }
             case "setPreferredBufferFrames":
                 let arguments = call.arguments as? [String: Any]
                 let frames = arguments?["frames"] as? Int ?? 256
@@ -39,14 +60,17 @@ import AVFoundation
                     result(nil)
                 } catch { result(FlutterError(code: "buffer_preference", message: error.localizedDescription, details: nil)) }
             case "prepareBackgroundStorage":
-                self?.configureBackgroundReadableFiles()
-                result(nil)
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    self?.configureBackgroundReadableFiles()
+                    DispatchQueue.main.async { result(nil) }
+                }
             default: result(FlutterMethodNotImplemented)
             }
         }
         routeObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification,
-            object: nil, queue: .main) { [weak self] _ in
-                self?.audioChannel?.invokeMethod("routeChanged", arguments: nil)
+            object: nil, queue: .main) { [weak self] notification in
+                let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+                self?.audioChannel?.invokeMethod("routeChanged", arguments: ["reason": reason])
             }
     }
 

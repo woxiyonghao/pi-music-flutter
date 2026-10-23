@@ -8,6 +8,7 @@ class DacDeviceInfo {
   final int currentSampleRate;
   final int maxSampleRate;
   final int maxBitDepth;
+  final bool isHostManaged;
 
   // 硬件芯片画像
   final String brand;
@@ -33,6 +34,7 @@ class DacDeviceInfo {
     this.currentSampleRate = 44100,
     this.maxSampleRate = 384000,
     this.maxBitDepth = 32,
+    this.isHostManaged = false,
     required this.brand,
     required this.model,
     required this.chipModel,
@@ -58,6 +60,7 @@ class DacDeviceInfo {
       currentSampleRate: json['currentSampleRate'] as int? ?? 44100,
       maxSampleRate: json['maxSampleRate'] as int? ?? 384000,
       maxBitDepth: json['maxBitDepth'] as int? ?? 32,
+      isHostManaged: json['isHostManaged'] as bool? ?? false,
       brand: json['brand'] as String? ?? '',
       model: json['model'] as String? ?? '',
       chipModel: json['chipModel'] as String? ?? '',
@@ -82,6 +85,12 @@ class DacDeviceInfo {
 
   /// 规格角标徽章 (如 "384kHz / 32Bit · DSD256")
   String get specBadge {
+    if (isHostManaged) {
+      final rate = (currentSampleRate / 1000)
+          .toStringAsFixed(1)
+          .replaceFirst(RegExp(r'\.0$'), '');
+      return '${rate}kHz · 系统 PCM';
+    }
     if (isSystemManagedOutput) {
       return '${(currentSampleRate / 1000).round()}kHz · 系统 PCM';
     }
@@ -92,7 +101,8 @@ class DacDeviceInfo {
 
   bool get isSystemManagedOutput {
     final bus = transport.toLowerCase();
-    return bus.contains('bluetooth') ||
+    return isHostManaged ||
+        bus.contains('bluetooth') ||
         bus.contains('hdmi') ||
         bus.contains('displayport') ||
         bus.contains('airplay') ||
@@ -113,6 +123,7 @@ class DacDeviceInfo {
         'currentSampleRate': currentSampleRate,
         'maxSampleRate': maxSampleRate,
         'maxBitDepth': maxBitDepth,
+        'isHostManaged': isHostManaged,
         'brand': brand,
         'model': model,
         'chipModel': chipModel,

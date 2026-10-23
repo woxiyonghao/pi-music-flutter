@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../core/hifi_audio_bindings.dart';
 import '../core/platform_helper.dart';
 import '../models/dac_device_info.dart';
+import '../platform/platform_audio_runtime.dart';
 import 'music_database_service.dart';
 
 /// DAC 解码设置跨端双向同步与动态外设管理服务
@@ -53,11 +54,14 @@ class DacSettingService extends ChangeNotifier {
   final String Function()? _readDevices;
   final bool Function(String)? _selectOutput;
   final bool? _followsSystemOutputOverride;
+  final PlatformAudioRuntime _runtime;
+  PlatformAudioRuntime get audioRuntime => _runtime;
 
   /// macOS 的播放设备由系统管理；列表用于显示连接状态，不在播放中试切声卡。
   bool get followsSystemOutput =>
       _followsSystemOutputOverride ??
-      (Platform.isMacOS && HifiAudioBindings.instance.isLoaded);
+      (_runtime.isIOS ||
+          (Platform.isMacOS && HifiAudioBindings.instance.isLoaded));
 
   bool canSelectDevice(int index) =>
       !followsSystemOutput &&
@@ -68,8 +72,11 @@ class DacSettingService extends ChangeNotifier {
   DacSettingService._()
       : _readDevices = null,
         _selectOutput = null,
-        _followsSystemOutputOverride = null {
+        _followsSystemOutputOverride = null,
+        _runtime = PlatformAudioRuntime.instance {
     _loadFromDatabase();
+    _runtime.restoreSampleRateMode(sampleRateMode);
+    _runtime.addListener(refreshDevices);
     refreshDevices();
   }
 
@@ -78,9 +85,12 @@ class DacSettingService extends ChangeNotifier {
     required String Function() readDevices,
     required bool Function(String) selectOutput,
     required bool followsSystemOutput,
+    PlatformAudioRuntime? runtime,
   })  : _readDevices = readDevices,
         _selectOutput = selectOutput,
-        _followsSystemOutputOverride = followsSystemOutput {
+        _followsSystemOutputOverride = followsSystemOutput,
+        _runtime = runtime ?? PlatformAudioRuntime.instance {
+    _runtime.addListener(refreshDevices);
     refreshDevices();
   }
 
@@ -165,10 +175,50 @@ class DacSettingService extends ChangeNotifier {
       final valStr = db.getSetting('setting_dac_$k', '0');
       _params[k] = int.tryParse(valStr) ?? 0;
     }
+    _params['topping_sample_rate_mode'] =
+        int.tryParse(db.getDacDx1iiSetting('sample_rate_mode', '0'))
+                ?.clamp(0, 5) ??
+            0;
   }
 
   /// 从底层 C++ 实时刷新所连接的全部音频硬件设备列表 (JSON 反序列化)
   void refreshDevices() {
+    final output = _runtime.output;
+    if (_runtime.isIOS && output != null) {
+      final id = output['id'] as String? ?? '';
+      final name = output['name'] as String? ?? '';
+      final transport = output['transport'] as String? ?? 'System';
+      _connectedDevices = id.isEmpty
+          ? []
+          : [
+              DacDeviceInfo(
+                id: id,
+                name: name,
+                isBuiltIn: transport == 'BuiltIn',
+                isDefault: true,
+                transport: transport,
+                isHostManaged: true,
+                currentSampleRate: _runtime.negotiatedSampleRate,
+                maxSampleRate: _runtime.negotiatedSampleRate,
+                maxBitDepth: 0,
+                brand: _runtime.isDx1iiConnected ? 'TOPPING' : 'iPadOS',
+                model: _runtime.isDx1iiConnected ? 'DX1 II' : name,
+                chipModel: '系统协商 PCM',
+                usbInterface: transport,
+                maxDsdRate: 'DSD 转 PCM',
+                supportsDsd: false,
+                supportsHogMode: false,
+                supportsUacMode: false,
+                supportsDpll: false,
+                supportsGainControl: false,
+                supportsLineOutBypass: false,
+              )
+            ];
+      _selectedDeviceIndex = _connectedDevices.isEmpty ? -1 : 0;
+      notifyListeners();
+      onBroadcastNeeded?.call();
+      return;
+    }
     try {
       final bindings = HifiAudioBindings.instance;
       final jsonStr =
@@ -353,11 +403,37 @@ class DacSettingService extends ChangeNotifier {
     final cleanKey = key.startsWith('setting_dac_')
         ? key.substring('setting_dac_'.length)
         : key;
+    if (cleanKey == 'topping_sample_rate_mode') {
+      setSampleRateMode(val);
+      return;
+    }
     if (_params[cleanKey] == val) return;
     _params[cleanKey] = val;
     MusicDatabaseService.instance
         .setSetting('setting_dac_$cleanKey', val.toString());
+    if (cleanKey.startsWith('topping_')) {
+      MusicDatabaseService.instance.setDacDx1iiSetting(
+          cleanKey.substring('topping_'.length), val.toString());
+    }
     notifyListeners();
     onBroadcastNeeded?.call();
+  }
+
+  int get sampleRateMode => getParam('topping_sample_rate_mode', 0).clamp(0, 5);
+
+  Future<void> setSampleRateMode(int mode) async {
+    final value = mode.clamp(0, 5);
+    _params['topping_sample_rate_mode'] = value;
+    MusicDatabaseService.instance
+        .setDacDx1iiSetting('sample_rate_mode', '$value');
+    notifyListeners();
+    onBroadcastNeeded?.call();
+    await _runtime.setSampleRateMode(value);
+  }
+
+  @override
+  void dispose() {
+    _runtime.removeListener(refreshDevices);
+    super.dispose();
   }
 }

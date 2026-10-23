@@ -207,9 +207,10 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('iPadOS 硬件音频会话直通 (AVAudio Direct Session)'), findsOneWidget);
-      expect(find.text('iPad 硬件 I/O 缓冲区深度 (Hardware Buffer Size)'), findsOneWidget);
-      expect(find.text('iPadOS 数字音频输出位深'), findsOneWidget);
+      expect(find.text('iPadOS 音频输出'), findsOneWidget);
+      expect(find.textContaining('实际协商采样率'), findsOneWidget);
+      expect(find.text('模拟接入 TOPPING DX12 调校'), findsNothing);
+      expect(find.text('iPadOS 数字音频输出位深'), findsNothing);
       expect(find.text('CoreAudio 独占模式 (Exclusive Hog Mode)'), findsNothing);
     });
 

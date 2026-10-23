@@ -313,7 +313,7 @@ class HifiAudioService extends ChangeNotifier {
     try {
       await (_prepareFileOverride ?? _prepareFile)(resolvedPath);
       if (generation != _loadGeneration) return;
-      if (!await PlatformAudioRuntime.instance.activate()) {
+      if (!await PlatformAudioRuntime.instance.activate(sourceSampleRate: track.sampleRate)) {
         throw StateError('Audio session activation was denied');
       }
     } catch (error) {

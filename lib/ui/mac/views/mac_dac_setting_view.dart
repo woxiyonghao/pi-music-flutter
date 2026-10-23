@@ -5,6 +5,7 @@ import '../../../core/hifi_audio_bindings.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../core/platform_helper.dart';
 import '../../../models/dac_device_info.dart';
+import '../../../platform/platform_audio_runtime.dart';
 import '../../../services/dac_setting_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
@@ -80,8 +81,11 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               _buildConnectedDeviceTabs(devices, dac, accent),
               if (dac.followsSystemOutput) ...[
                 const SizedBox(height: 8),
-                const Text('显示器输出已过滤；系统选中显示器时自动切换到本机音频，键盘音量键同步生效。',
-                    style: TextStyle(color: Colors.white54, fontSize: 11)),
+                Text(
+                    _isIpad
+                        ? '输出由 iPadOS 管理，连接或拔出 USB DAC 后自动更新；拔出设备会暂停播放。'
+                        : '显示器输出已过滤；系统选中显示器时自动切换到本机音频，键盘音量键同步生效。',
+                    style: const TextStyle(color: Colors.white54, fontSize: 11)),
               ],
               const SizedBox(height: 14),
 
@@ -99,7 +103,9 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                             const SizedBox(height: 14),
 
                             // 专有设置选项
-                            if (currentDev.isSystemManagedOutput)
+                            if (_isIpad)
+                              _buildIpadOutputSettings(currentDev, dac, accent)
+                            else if (currentDev.isSystemManagedOutput)
                               _buildSystemOutputSettings(currentDev, accent)
                             else if (currentDev.isBuiltIn)
                               _buildBuiltinSettings(currentDev, dac, accent)
@@ -193,7 +199,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
           ),
         ),
         // 模拟/物理外接设备调试开关 (方便用户在买到真机前调校)
-        if (!dac.hasExternalDac)
+        if (!_isIpad && !dac.hasExternalDac)
           TextButton.icon(
             style: TextButton.styleFrom(
               backgroundColor: Colors.white.withValues(alpha: 0.05),
@@ -209,7 +215,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               dac.toggleMockExternal(true);
             },
           )
-        else
+        else if (!_isIpad)
           TextButton.icon(
             style: TextButton.styleFrom(
               backgroundColor: Colors.white.withValues(alpha: 0.05),
@@ -267,7 +273,11 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               selected: isSelected,
               enabled: canSelect || isSelected,
               child: Tooltip(
-                message: isInactive ? '未启用：请在 macOS 系统声音设置中切换输出' : dev.name,
+                message: isInactive
+                    ? (_isIpad
+                        ? '请在 iPad 控制中心选择音频输出'
+                        : '未启用：请在 macOS 系统声音设置中切换输出')
+                    : dev.name,
                 child: Opacity(
                   opacity: isInactive ? 0.4 : 1,
                   child: GestureDetector(
@@ -536,6 +546,71 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         ),
       ],
     );
+  }
+
+  Widget _buildIpadOutputSettings(
+      DacDeviceInfo dev, DacSettingService dac, Color accent) {
+    final isDx1ii = dev.transport.toUpperCase() == 'USB' &&
+        PlatformAudioRuntime.isDx1iiName('${dev.name} ${dev.model}');
+    String formatRate(int rate) => rate <= 0
+        ? '尚未协商'
+        : '${(rate / 1000).toStringAsFixed(1).replaceFirst(RegExp(r'\.0$'), '')} kHz';
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _buildSectionTitle(
+          isDx1ii ? 'TOPPING DX1 II · iPadOS USB 音频' : 'iPadOS 音频输出',
+          Icons.usb_rounded,
+          accent),
+      const SizedBox(height: 12),
+      Text('当前输出：${dev.name}\n实际协商采样率：${formatRate(dev.currentSampleRate)}',
+          style: const TextStyle(
+              color: UIConfig.textNormal, fontSize: 13, height: 1.8)),
+      if (isDx1ii) ...[
+        const SizedBox(height: 12),
+        _buildCapsuleSelector(
+          title: 'USB 输出采样率偏好',
+          subtitle: '自动模式跟随 PCM 音源；DSD 转为 PCM。iPadOS 与 DAC 协商后，以实际采样率为准。',
+          options: const [
+            '自动跟随音源',
+            '44.1 kHz',
+            '48 kHz',
+            '96 kHz',
+            '192 kHz',
+            '384 kHz'
+          ],
+          selectedIndex: dac.sampleRateMode,
+          accent: accent,
+          onSelected: (index) {
+            dac.setSampleRateMode(index);
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(dac.audioRuntime.sampleRateStatus,
+            style: const TextStyle(color: UIConfig.textMuted, fontSize: 12)),
+        const SizedBox(height: 12),
+        TextButton.icon(
+          icon: const Icon(Icons.info_outline_rounded),
+          label: const Text('DX1 II 的 UAC 模式说明'),
+          onPressed: () => showDialog<void>(
+              context: context,
+              builder: (context) => AlertDialog(
+                    title: const Text('DX1 II · UAC 物理开关'),
+                    content: const Text('连接 iPad 建议使用机身背部的 UAC 2.0 档位。\n\n'
+                        '更改 UAC 模式后，请拔出并重新连接 USB 线。应用无法代替物理拨片切换 UAC，'
+                        '也无法通过 iPadOS 读取拨片档位。\n\n'
+                        '滤波器、增益、前级/DAC 模式请通过 DX1 II 机身或遥控器设置。'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('知道了'))
+                    ],
+                  )),
+        ),
+      ],
+      const SizedBox(height: 10),
+      const Text('音频输出由 iPadOS 协商。USB DAC 的插拔、蓝牙切换及音频中断后会更新实际输出状态。',
+          style:
+              TextStyle(color: UIConfig.textMuted, fontSize: 12, height: 1.6)),
+    ]);
   }
 
   /// 本机解码器专属设置区 (Apple Direct / Linux ALSA Direct)

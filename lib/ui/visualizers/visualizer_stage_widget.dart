@@ -304,6 +304,7 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           rightAngle: _tapeRightAngle,
           isPlaying: state.isPlaying,
           elapsedSec: state.currentTime,
+          spectrumLevels: state.spectrumLevels,
           accentColor: ThemeService.instance.accentColor,
         );
         break;

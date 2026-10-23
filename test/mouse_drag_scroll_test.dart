@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
+import 'package:hide_player_flutter/models/track.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:hide_player_flutter/theme/ui_config.dart';
 import 'package:hide_player_flutter/ui/mac/views/mac_scan_music_view.dart';
@@ -131,6 +133,22 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
 
 
+    final temp = Directory.systemTemp.createTempSync('scroll_fixture_');
+    final db = MusicDatabaseService.instance;
+    db.customDatabasePathForTesting = '${temp.path}/library.db';
+    db.saveScannedTracks(List.generate(6, (index) {
+      final file = File('${temp.path}/song_$index.dsf')..writeAsStringSync('fixture');
+      return Track(id: index + 1, title: 'Scroll fixture $index', artist: '', album: '',
+          filepath: file.path, format: AudioFormat.dsdDsf,
+          sampleRate: 2822400, bitDepth: 1, durationSec: 180);
+    }));
+    addTearDown(() {
+      db.customDatabasePathForTesting = null;
+      db.loadLibrary();
+      temp.deleteSync(recursive: true);
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
     await tester.pumpWidget(
       const MaterialApp(
         scrollBehavior: MouseDraggableScrollBehavior(),
@@ -142,7 +160,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     // Find first track card under DSD-DSF
-    final cardFinder = find.text('decaud-goldberg-var5-dsd128');
+    final cardFinder = find.text('Scroll fixture 0');
     expect(cardFinder, findsOneWidget);
 
     final initialCenter = tester.getCenter(cardFinder);
