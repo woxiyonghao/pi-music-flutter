@@ -1,157 +1,95 @@
 import 'package:flutter/material.dart';
-import '../../core/hifi_audio_service.dart';
-import '../../theme/hifi_theme.dart';
-import '../shared/vu_meter_widget.dart';
-import '../shared/spectrum_analyzer_widget.dart';
-import '../shared/playback_controls_widget.dart';
-import '../shared/glass_container.dart';
+import 'package:flutter/services.dart';
+import 'iphone_landscape_view.dart';
+import 'iphone_portrait_view.dart';
+import 'widgets/iphone_orientation_dialog.dart';
 
-/// iPhone 移动端竖屏沉浸式 UI
-class IphoneMainView extends StatelessWidget {
+/// iPhone 移动端发烧纯音主视窗
+/// 具备：
+/// 1. 每次冷启动弹出横竖屏操作模式选择对话框 (不持久化记住，每次自由选择)
+/// 2. 竖屏模式：1:1 严格对齐四大层级设计手稿 (顶部Sidebar、内容视窗、歌曲信息卡片、iPad/Mac播放底栏)
+/// 3. 横屏模式：1:1 严格对齐 Mac 经典固定 4 块架构 (左上功能歌单、左下DAC卡片、右上主舞台、右下播放胶囊栏)
+/// 4. 无息屏屏保，无全屏打扰，所有板块常驻单手触控
+class IphoneMainView extends StatefulWidget {
   const IphoneMainView({super.key});
 
   @override
+  State<IphoneMainView> createState() => _IphoneMainViewState();
+}
+
+class _IphoneMainViewState extends State<IphoneMainView> {
+  // 启动模式选择状态 (内存变量：每次 App 启动均访问用户，不记住偏好)
+  bool _hasSelectedOrientation = false;
+  bool _isLandscape = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 默认允许自由旋转以配合启动检测
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
+  void _onOrientationConfirmed(bool isLandscape) {
+    setState(() {
+      _isLandscape = isLandscape;
+      _hasSelectedOrientation = true;
+    });
+
+    if (isLandscape) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+    }
+  }
+
+  void _switchToLandscape() {
+    setState(() {
+      _isLandscape = true;
+    });
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
+  void _switchToPortrait() {
+    setState(() {
+      _isLandscape = false;
+    });
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: HifiAudioService.instance,
-      builder: (context, _) {
-        final service = HifiAudioService.instance;
-        final state = service.state;
-        final track = service.currentTrack;
+    return Stack(
+      children: [
+        // 主工作台界面 (横屏或竖屏)
+        Positioned.fill(
+          child: _isLandscape
+              ? IphoneLandscapeView(onSwitchToPortrait: _switchToPortrait)
+              : IphonePortraitView(onSwitchToLandscape: _switchToLandscape),
+        ),
 
-        // 计算双声道 VU 摆动 (从频谱抽取低频与中频)
-        final leftLevel = state.spectrumLevels.isNotEmpty ? state.spectrumLevels[1] : 0.0;
-        final rightLevel = state.spectrumLevels.length > 2 ? state.spectrumLevels[2] : 0.0;
-
-        return Scaffold(
-          backgroundColor: HifiTheme.background,
-          body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                children: [
-                  // 1. 顶部状态栏：HiFi 标志与 Bit-Perfect 直通指示
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          '🎵 MyHiFi Streamer',
-                          style: TextStyle(
-                            color: HifiTheme.textPrimary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: state.isBitPerfect
-                                ? HifiTheme.mcIntoshBlue.withValues(alpha: 0.3)
-                                : Colors.grey.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: state.isBitPerfect ? HifiTheme.mcIntoshGlow : Colors.grey,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.circle,
-                                size: 8,
-                                color: state.isBitPerfect ? HifiTheme.neonCyan : Colors.grey,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                state.isBitPerfect ? 'BIT-PERFECT' : 'DSP ACTIVE',
-                                style: TextStyle(
-                                  color: state.isBitPerfect
-                                      ? HifiTheme.mcIntoshGlow
-                                      : HifiTheme.textMuted,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // 2. 经典麦景图湖蓝夜光双表头
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: VuMeterWidget(
-                      leftLevel: leftLevel,
-                      rightLevel: rightLevel,
-                      height: 140,
-                    ),
-                  ),
-
-                  // 3. 12 频段音频频谱
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: SpectrumAnalyzerWidget(
-                      levels: state.spectrumLevels,
-                      height: 70,
-                    ),
-                  ),
-
-                  // 4. 当前正在播放曲目信息
-                  Expanded(
-                    child: Center(
-                      child: GlassContainer(
-                        width: double.infinity,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              track?.title ?? '暂无播放曲目',
-                              style: const TextStyle(
-                                color: HifiTheme.textPrimary,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              track != null ? '${track.artist} - ${track.album}' : '请选择本地母带曲目或连接树莓派',
-                              style: const TextStyle(
-                                color: HifiTheme.textMuted,
-                                fontSize: 13,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 8),
-                            if (track != null)
-                              Text(
-                                '${track.format} | ${track.sampleRate ~/ 1000}kHz | ${track.bitDepth}Bit',
-                                style: const TextStyle(
-                                  color: HifiTheme.accuphaseGold,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // 5. 底部播放控制面板
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.0),
-                    child: PlaybackControlsWidget(compact: true),
-                  ),
-                ],
-              ),
+        // 每次启动冷启动弹窗：横竖屏选择模态框 (覆盖在主视窗上)
+        if (!_hasSelectedOrientation)
+          Positioned.fill(
+            child: IphoneOrientationDialog(
+              initialIsLandscape: _isLandscape,
+              onConfirmed: _onOrientationConfirmed,
             ),
           ),
-        );
-      },
+      ],
     );
   }
 }
