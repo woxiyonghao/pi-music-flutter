@@ -446,6 +446,12 @@ class DacSettingService extends ChangeNotifier {
     final cleanKey = key.startsWith('setting_dac_')
         ? key.substring('setting_dac_'.length)
         : key;
+
+    if (cleanKey == 'topping_sample_rate_mode' || cleanKey == 'sample_rate_mode') {
+      setSampleRateMode(val);
+      return;
+    }
+
     _params[cleanKey] = val;
     MusicDatabaseService.instance
         .setSetting('setting_dac_$cleanKey', val.toString());
@@ -599,7 +605,16 @@ class DacSettingService extends ChangeNotifier {
 
   Future<bool> setSampleRateMode(int modeIndex) async {
     final clamped = modeIndex.clamp(0, 5);
-    setParam('topping_sample_rate_mode', clamped);
+    _params['topping_sample_rate_mode'] = clamped;
+    _params['sample_rate_mode'] = clamped;
+    MusicDatabaseService.instance
+        .setSetting('setting_dac_topping_sample_rate_mode', clamped.toString());
+    MusicDatabaseService.instance
+        .setSetting('setting_dac_sample_rate_mode', clamped.toString());
+    MusicDatabaseService.instance
+        .setDacDx1iiSetting('topping_sample_rate_mode', clamped.toString());
+    MusicDatabaseService.instance
+        .setDacDx1iiSetting('sample_rate_mode', clamped.toString());
 
     // 联动系统全局设置 setting_sample_rate (0: 源码直出, 1: 44.1k, 2: 192k, 3: 384k)
     final sysRateIndex = clamped == 5 ? 3 : (clamped == 4 ? 2 : (clamped == 1 ? 1 : 0));
@@ -611,6 +626,7 @@ class DacSettingService extends ChangeNotifier {
 
     _updateDeviceSampleRate(targetRate.round());
     notifyListeners();
+    onBroadcastNeeded?.call();
 
     if (clamped == 0) {
       return syncPlaybackSampleRate(targetRate);
