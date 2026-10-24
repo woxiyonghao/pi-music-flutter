@@ -243,4 +243,54 @@ void main() {
       matchesGoldenFile('goldens/iphone_landscape_settings.png'),
     );
   });
+
+  testWidgets('Golden: iPhone Landscape Equalizer View', (tester) async {
+    tester.view.physicalSize = const Size(844, 390);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.equalizer.index.toString());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: HifiTheme.darkTheme,
+        home: IphoneLandscapeView(
+          onSwitchToPortrait: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await expectLater(
+      find.byType(IphoneLandscapeView),
+      matchesGoldenFile('goldens/iphone_landscape_eq.png'),
+    );
+  });
+
+  testWidgets('Golden: iPhone Landscape Scan Music View', (tester) async {
+    tester.view.physicalSize = const Size(844, 390);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.scanMusic.index.toString());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: HifiTheme.darkTheme,
+        home: IphoneLandscapeView(
+          onSwitchToPortrait: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await expectLater(
+      find.byType(IphoneLandscapeView),
+      matchesGoldenFile('goldens/iphone_landscape_scan.png'),
+    );
+  });
 }

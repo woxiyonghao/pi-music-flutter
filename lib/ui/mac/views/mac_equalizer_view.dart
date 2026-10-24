@@ -95,198 +95,211 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
       builder: (context, _) {
         final accent = ThemeService.instance.accentColor;
 
-        return GlassCard(
-      borderRadius: UIConfig.containerRounding,
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. 顶部 Header 栏：标题 + 副标题 + 复原按钮 + EQ 激活胶囊按钮
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Column(
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final isCompact = constraints.maxHeight < 420;
+            final padH = isCompact ? 14.0 : 20.0;
+            final padV = isCompact ? 10.0 : 16.0;
+            final gap = isCompact ? 8.0 : 12.0;
+            final curveHeight = isCompact
+                ? (constraints.maxHeight * 0.26).clamp(55.0, 95.0)
+                : 140.0;
+
+            return GlassCard(
+              borderRadius: UIConfig.containerRounding,
+              padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '图形均衡器',
-                    style: TextStyle(
-                      fontSize: UIConfig.fontMedium,
-                      fontWeight: FontWeight.bold,
-                      color: UIConfig.textActive,
-                    ),
-                  ),
-                  SizedBox(height: 3.0),
-                  Text(
-                    '10 段专业频段精调 · 纯净硬件直通',
-                    style: TextStyle(
-                      fontSize: UIConfig.fontSmall,
-                      color: UIConfig.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  // 复原按钮
-                  InkWell(
-                    onTap: _resetToFlat,
-                    borderRadius: BorderRadius.circular(6.0),
-                    child: Container(
-                      height: 28.0,
-                      padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: const Color.fromRGBO(40, 48, 64, 0.7),
-                        borderRadius: BorderRadius.circular(6.0),
-                        border: Border.all(
-                          color: const Color.fromRGBO(255, 255, 255, 0.12),
-                        ),
-                      ),
-                      child: const Text(
-                        '复原',
-                        style: TextStyle(
-                          fontSize: UIConfig.fontSmall,
-                          color: UIConfig.textNormal,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10.0),
-
-                  // EQ 激活/旁路胶囊按钮
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        _isEnabled = !_isEnabled;
-                        _saveSettings();
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(14.0),
-                    child: Container(
-                      height: 28.0,
-                      padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _isEnabled
-                            ? accent.withValues(alpha: 0.25)
-                            : const Color.fromRGBO(255, 255, 255, 0.05),
-                        borderRadius: BorderRadius.circular(14.0),
-                        border: Border.all(
-                          color: _isEnabled
-                              ? accent
-                              : const Color.fromRGBO(255, 255, 255, 0.15),
-                        ),
-                      ),
-                      child: Row(
+                  // 1. 顶部 Header 栏：标题 + 副标题 + 复原按钮 + EQ 激活胶囊按钮
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 6.0,
-                            height: 6.0,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _isEnabled ? const Color(0xFF34C759) : Colors.grey,
+                          Text(
+                            '图形均衡器',
+                            style: TextStyle(
+                              fontSize: isCompact ? 16.0 : UIConfig.fontMedium,
+                              fontWeight: FontWeight.bold,
+                              color: UIConfig.textActive,
                             ),
                           ),
-                          const SizedBox(width: 6.0),
+                          const SizedBox(height: 2.0),
                           Text(
-                            _isEnabled ? 'EQ 已激活' : 'EQ 已旁路',
+                            '10 段专业频段精调 · 纯净硬件直通',
                             style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.bold,
-                              color: _isEnabled ? UIConfig.textActive : UIConfig.textMuted,
+                              fontSize: isCompact ? 10.5 : UIConfig.fontSmall,
+                              color: UIConfig.textMuted,
                             ),
                           ),
                         ],
                       ),
+                      Row(
+                        children: [
+                          // 复原按钮
+                          InkWell(
+                            onTap: _resetToFlat,
+                            borderRadius: BorderRadius.circular(6.0),
+                            child: Container(
+                              height: isCompact ? 24.0 : 28.0,
+                              padding: EdgeInsets.symmetric(horizontal: isCompact ? 10.0 : 14.0),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: const Color.fromRGBO(40, 48, 64, 0.7),
+                                borderRadius: BorderRadius.circular(6.0),
+                                border: Border.all(
+                                  color: const Color.fromRGBO(255, 255, 255, 0.12),
+                                ),
+                              ),
+                              child: Text(
+                                '复原',
+                                style: TextStyle(
+                                  fontSize: isCompact ? 11.0 : UIConfig.fontSmall,
+                                  color: UIConfig.textNormal,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: isCompact ? 6.0 : 10.0),
+
+                          // EQ 激活/旁路胶囊按钮
+                          InkWell(
+                            onTap: () {
+                              setState(() {
+                                _isEnabled = !_isEnabled;
+                                _saveSettings();
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(14.0),
+                            child: Container(
+                              height: isCompact ? 24.0 : 28.0,
+                              padding: EdgeInsets.symmetric(horizontal: isCompact ? 10.0 : 14.0),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _isEnabled
+                                    ? accent.withValues(alpha: 0.25)
+                                    : const Color.fromRGBO(255, 255, 255, 0.05),
+                                borderRadius: BorderRadius.circular(14.0),
+                                border: Border.all(
+                                  color: _isEnabled
+                                      ? accent
+                                      : const Color.fromRGBO(255, 255, 255, 0.15),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 6.0,
+                                    height: 6.0,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: _isEnabled ? const Color(0xFF34C759) : Colors.grey,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5.0),
+                                  Text(
+                                    _isEnabled ? 'EQ 已激活' : 'EQ 已旁路',
+                                    style: TextStyle(
+                                      fontSize: isCompact ? 10.5 : 11.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: _isEnabled ? UIConfig.textActive : UIConfig.textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: gap),
+
+                  // 2. 预设方案水平胶囊栏 (8款发烧经典预设)
+                  Row(
+                    children: [
+                      for (int i = 0; i < presets.length; i++) ...[
+                        if (i > 0) SizedBox(width: isCompact ? 4.0 : 8.0),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _applyPreset(i),
+                            borderRadius: BorderRadius.circular(13.0),
+                            child: Container(
+                              height: isCompact ? 22.0 : 26.0,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _selectedPreset == i
+                                    ? accent.withValues(alpha: 0.28)
+                                    : const Color.fromRGBO(255, 255, 255, 0.04),
+                                borderRadius: BorderRadius.circular(13.0),
+                                border: Border.all(
+                                  color: _selectedPreset == i
+                                      ? accent
+                                      : const Color.fromRGBO(255, 255, 255, 0.1),
+                                  width: 1.0,
+                                ),
+                              ),
+                              child: Text(
+                                presets[i]['name'] as String,
+                                style: TextStyle(
+                                  fontSize: isCompact ? 10.0 : 11.5,
+                                  fontWeight: _selectedPreset == i
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: _selectedPreset == i
+                                      ? UIConfig.textActive
+                                      : UIConfig.textNormal,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  SizedBox(height: gap),
+
+                  // 3. 动态频响 Catmull-Rom 贝塞尔三次样条响应曲线视窗 (Curve Canvas)
+                  SizedBox(
+                    height: curveHeight,
+                    child: _SplineCurveCanvas(
+                      bandGains: _bandGains,
+                      isEnabled: _isEnabled,
+                      accentColor: accent,
+                    ),
+                  ),
+                  SizedBox(height: gap),
+
+                  // 4. 10 段发烧级图形推子控制区 (Mixer Faders)
+                  Expanded(
+                    child: Row(
+                      children: [
+                        for (int i = 0; i < 10; i++) ...[
+                          if (i > 0) SizedBox(width: isCompact ? 4.0 : 8.0),
+                          Expanded(
+                            child: _MixerFaderColumn(
+                              key: ValueKey('eq_${i}_${accent.toARGB32()}'),
+                              index: i,
+                              label: bandLabels[i],
+                              gain: _bandGains[i],
+                              isEnabled: _isEnabled,
+                              accentColor: accent,
+                              isCompact: isCompact,
+                              onGainChanged: (val) => _updateBand(i, val),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 14.0),
-
-          // 2. 预设方案水平胶囊栏 (8款发烧经典预设)
-          Row(
-            children: [
-              for (int i = 0; i < presets.length; i++) ...[
-                if (i > 0) const SizedBox(width: 8.0),
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _applyPreset(i),
-                    borderRadius: BorderRadius.circular(13.0),
-                    child: Container(
-                      height: 26.0,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _selectedPreset == i
-                            ? accent.withValues(alpha: 0.28)
-                            : const Color.fromRGBO(255, 255, 255, 0.04),
-                        borderRadius: BorderRadius.circular(13.0),
-                        border: Border.all(
-                          color: _selectedPreset == i
-                              ? accent
-                              : const Color.fromRGBO(255, 255, 255, 0.1),
-                          width: 1.0,
-                        ),
-                      ),
-                      child: Text(
-                        presets[i]['name'] as String,
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: _selectedPreset == i
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: _selectedPreset == i
-                              ? UIConfig.textActive
-                              : UIConfig.textNormal,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12.0),
-
-          // 3. 动态频响 Catmull-Rom 贝塞尔三次样条响应曲线视窗 (Curve Canvas)
-          SizedBox(
-            height: 140.0,
-            child: _SplineCurveCanvas(
-              bandGains: _bandGains,
-              isEnabled: _isEnabled,
-              accentColor: accent,
-            ),
-          ),
-          const SizedBox(height: 12.0),
-
-          // 4. 10 段发烧级图形推子控制区 (Mixer Faders)
-          Expanded(
-            child: Row(
-              children: [
-                for (int i = 0; i < 10; i++) ...[
-                  if (i > 0) const SizedBox(width: 8.0),
-                  Expanded(
-                    child: _MixerFaderColumn(
-                      key: ValueKey('eq_${i}_${accent.toARGB32()}'),
-                      index: i,
-                      label: bandLabels[i],
-                      gain: _bandGains[i],
-                      isEnabled: _isEnabled,
-                      accentColor: accent,
-                      onGainChanged: (val) => _updateBand(i, val),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+            );
+          },
+        );
       },
     );
   }
@@ -488,6 +501,7 @@ class _MixerFaderColumn extends StatelessWidget {
   final double gain;
   final bool isEnabled;
   final Color accentColor;
+  final bool isCompact;
   final ValueChanged<double> onGainChanged;
 
   const _MixerFaderColumn({
@@ -497,6 +511,7 @@ class _MixerFaderColumn extends StatelessWidget {
     required this.gain,
     required this.isEnabled,
     required this.accentColor,
+    this.isCompact = false,
     required this.onGainChanged,
   });
 
@@ -521,13 +536,13 @@ class _MixerFaderColumn extends StatelessWidget {
         Text(
           gainStr,
           style: TextStyle(
-            fontSize: 11.0,
+            fontSize: isCompact ? 9.5 : 11.0,
             fontFamily: 'monospace',
             fontWeight: FontWeight.bold,
             color: isEnabled && gain.abs() > 0.05 ? UIConfig.textActive : UIConfig.textMuted,
           ),
         ),
-        const SizedBox(height: 6.0),
+        SizedBox(height: isCompact ? 3.0 : 6.0),
 
         // 垂直推子轨道交互区
         Expanded(
@@ -553,13 +568,13 @@ class _MixerFaderColumn extends StatelessWidget {
             );
           }),
         ),
-        const SizedBox(height: 6.0),
+        SizedBox(height: isCompact ? 3.0 : 6.0),
 
         // 底部频段标签 (31Hz, 1kHz 等)
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 11.0,
+          style: TextStyle(
+            fontSize: isCompact ? 9.5 : 11.0,
             color: UIConfig.textNormal,
           ),
         ),

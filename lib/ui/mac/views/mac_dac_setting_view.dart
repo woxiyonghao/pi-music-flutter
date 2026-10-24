@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
@@ -202,32 +203,40 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 8.0,
-                      height: 8.0,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: accent,
-                        boxShadow: [
-                          BoxShadow(
-                            color: accent.withValues(alpha: 0.7),
-                            blurRadius: 4.0,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 8.0,
+                        height: 8.0,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: accent,
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.7),
+                              blurRadius: 4.0,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10.0),
+                      Expanded(
+                        child: Text(
+                          Platform.isIOS
+                              ? '声卡硬件: iPhone 扬声器  |  独占模式就绪  |  44.1 kHz'
+                              : '声卡硬件: Mac mini扬声器  |  独占模式就绪 (起播锁定)  |  44 kHz',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: UIConfig.fontSmall,
+                            color: UIConfig.textActive,
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10.0),
-                    const Text(
-                      '声卡硬件: Mac mini扬声器  |  独占模式就绪 (起播锁定)  |  44 kHz',
-                      style: TextStyle(
-                        fontSize: UIConfig.fontSmall,
-                        color: UIConfig.textActive,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8.0),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
@@ -382,9 +391,9 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
           children: [
             _buildDeviceRow(
               index: 0,
-              name: 'LS27B61x',
+              name: Platform.isIOS ? 'AirPods / 外接音频' : 'LS27B61x',
               arch: '架构: AppleHDA',
-              isBuiltIn: true,
+              isBuiltIn: !Platform.isIOS,
               isCurrent: _selectedDeviceIndex == 0,
               onTap: () => setState(() => _selectedDeviceIndex = 0),
               accent: accent,
@@ -392,7 +401,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
             const SizedBox(height: 6.0),
             _buildDeviceRow(
               index: 1,
-              name: 'Mac mini扬声器',
+              name: Platform.isIOS ? 'iPhone 扬声器' : 'Mac mini扬声器',
               arch: '架构: AppleHDA',
               isBuiltIn: true,
               isCurrent: _selectedDeviceIndex == 1,

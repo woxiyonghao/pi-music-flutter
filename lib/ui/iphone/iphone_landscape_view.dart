@@ -9,11 +9,11 @@ import '../visualizers/visualizer_type.dart';
 import '../mac/mac_background_widget.dart';
 import '../mac/mac_sidebar_widget.dart';
 import 'widgets/iphone_bottom_bar_widget.dart';
-import 'views/iphone_all_music_view.dart';
-import 'views/iphone_dac_setting_view.dart';
-import 'views/iphone_equalizer_view.dart';
-import 'views/iphone_theme_setting_view.dart';
-import 'views/iphone_system_settings_view.dart';
+import '../mac/views/mac_all_music_view.dart';
+import '../mac/views/mac_dac_setting_view.dart';
+import '../mac/views/mac_equalizer_view.dart';
+import '../mac/views/mac_theme_setting_view.dart';
+import '../mac/views/mac_system_settings_view.dart';
 import '../mac/views/mac_magic_tuning_view.dart';
 import '../mac/views/mac_scan_music_view.dart';
 import '../mac/views/mac_web_service_view.dart';
@@ -109,9 +109,14 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView> {
                 ),
               ),
 
-              // 2. 统一纯音横屏边距 (不依赖 SafeArea 造成的大幅不对称切角，保持紧凑发烧间距)
+              // 2. 统一纯音横屏边距 (依要求：左边间距+8px，右边间距距离屏幕多加32px，上多加12px，下多加12px)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+                padding: const EdgeInsets.only(
+                  left: 18.0,
+                  right: 42.0,
+                  top: 20.0,
+                  bottom: 20.0,
+                ),
                 child: Row(
                   children: [
                     // 左侧列 (包含块 1 与块 2，严格填满高并与右侧顶底对齐)
@@ -143,7 +148,7 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView> {
                     Expanded(
                       child: Column(
                         children: [
-                          // 块 3: 中央主舞台视图
+                          // 块 3: 中央主舞台视图 (1:1 严格对齐 Mac 原生视图架构与 GlassCard 背景)
                           Expanded(
                             child: _buildMainStage(tracks, activeVisualizer),
                           ),
@@ -174,20 +179,50 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView> {
     return IndexedStack(
       index: idx,
       children: [
-        const IphoneAllMusicView(),
-        const IphoneAllMusicView(),
+        // 0: allMusic
+        MacAllMusicView(
+          tracks: tracks.cast(),
+          onNavigateToScan: () {
+            setState(() {
+              _currentTab = SidebarTab.scanMusic;
+            });
+          },
+        ),
+        // 1: customPlaylist
+        MacAllMusicView(
+          tracks: tracks.cast(),
+          onNavigateToScan: () {
+            setState(() {
+              _currentTab = SidebarTab.scanMusic;
+            });
+          },
+        ),
+        // 2: scanMusic
         MacScanMusicView(
           scannedCount: tracks.length,
           onScanComplete: () => MusicDatabaseService.instance.loadLibrary(),
         ),
-        const IphoneEqualizerView(),
+        // 3: equalizer
+        const MacEqualizerView(),
+        // 4: msebTuning
         const MacMagicTuningView(),
-        const IphoneDacSettingView(),
-        const IphoneThemeSettingView(),
-        IphoneSystemSettingsView(onSwitchOrientation: widget.onSwitchToPortrait),
+        // 5: dacSettings
+        const MacDACSettingView(),
+        // 6: themeSettings
+        MacThemeSettingView(
+          currentVisualizer: activeVisualizer,
+          onVisualizerChanged: (type) {
+            ThemeService.instance.setBackgroundVisualMode(type.index);
+          },
+        ),
+        // 7: systemSettings
+        const MacSystemSettingsView(),
+        // 8: webService
         const MacWebServiceView(isWifiTransfer: false),
+        // 9: wifiTransfer
         const MacWebServiceView(isWifiTransfer: true),
-        IphoneSystemSettingsView(onSwitchOrientation: widget.onSwitchToPortrait),
+        // 10: terminal
+        const MacSystemSettingsView(),
       ],
     );
   }

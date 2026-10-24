@@ -101,23 +101,98 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
     super.dispose();
   }
 
-  void _triggerScan() {
+  void _triggerScan() async {
     setState(() {
       _state = ScanUIState.scanning;
       _isEditMode = false;
       _selectedTrackIds.clear();
     });
 
-    // 异步扫描音乐文件
-    Timer(const Duration(milliseconds: 2200), () {
-      if (mounted) {
-        MusicDatabaseService.instance.loadLibrary();
-        widget.onScanComplete?.call();
-        setState(() {
-          _state = ScanUIState.completed;
-        });
-      }
-    });
+    try {
+      await MusicDatabaseService.instance.scanLibrary();
+    } catch (e) {
+      debugPrint('[MacScanView] 扫描异常: $e');
+    }
+
+    if (mounted) {
+      widget.onScanComplete?.call();
+      setState(() {
+        _state = ScanUIState.completed;
+      });
+    }
+  }
+
+  Future<void> _confirmAndDeleteSelected() async {
+    if (_selectedTrackIds.isEmpty) return;
+
+    final count = _selectedTrackIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return Center(
+          child: GlassCard(
+            width: 320.0,
+            borderRadius: 14.0,
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '确认删除',
+                  style: TextStyle(
+                    fontSize: 16.0,
+                    fontWeight: FontWeight.bold,
+                    color: UIConfig.textActive,
+                  ),
+                ),
+                const SizedBox(height: 10.0),
+                Text(
+                  '确定要从曲库中删除选中的 $count 首音乐吗？\n此操作将同步更新数据库。',
+                  style: const TextStyle(
+                    fontSize: UIConfig.fontSmall,
+                    color: UIConfig.textNormal,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 18.0),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('取消', style: TextStyle(color: UIConfig.textMuted)),
+                    ),
+                    const SizedBox(width: 8.0),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEF4444),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6.0),
+                        ),
+                      ),
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: const Text('删除'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      await MusicDatabaseService.instance.deleteTracks(_selectedTrackIds);
+      setState(() {
+        _selectedTrackIds.clear();
+        _isEditMode = false;
+      });
+      widget.onScanComplete?.call();
+    }
   }
 
   @override
@@ -251,13 +326,20 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
 
     return Column(
       children: [
-        // 顶部操作栏：「选择」多选模式切换 +「重新扫描」
+        // 顶部操作栏：「选择」多选模式切换 +「重新扫描」/「删除」
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _isEditMode = !_isEditMode),
+              onTap: () {
+                setState(() {
+                  _isEditMode = !_isEditMode;
+                  if (!_isEditMode) {
+                    _selectedTrackIds.clear();
+                  }
+                });
+              },
               child: Container(
                 height: 28.0,
                 padding: const EdgeInsets.symmetric(horizontal: 14.0),
@@ -283,29 +365,59 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
               ),
             ),
             const SizedBox(width: 8.0),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _triggerScan,
-              child: Container(
-                height: 28.0,
-                padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color.fromRGBO(40, 48, 64, 0.7),
-                  borderRadius: BorderRadius.circular(6.0),
-                  border: Border.all(
-                    color: const Color.fromRGBO(255, 255, 255, 0.12),
+            if (!_isEditMode)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _triggerScan,
+                child: Container(
+                  height: 28.0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(40, 48, 64, 0.7),
+                    borderRadius: BorderRadius.circular(6.0),
+                    border: Border.all(
+                      color: const Color.fromRGBO(255, 255, 255, 0.12),
+                    ),
+                  ),
+                  child: const Text(
+                    '重新扫描',
+                    style: TextStyle(
+                      fontSize: UIConfig.fontSmall,
+                      color: UIConfig.textNormal,
+                    ),
                   ),
                 ),
-                child: const Text(
-                  '重新扫描',
-                  style: TextStyle(
-                    fontSize: UIConfig.fontSmall,
-                    color: UIConfig.textNormal,
+              )
+            else
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _selectedTrackIds.isEmpty ? null : _confirmAndDeleteSelected,
+                child: Container(
+                  height: 28.0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _selectedTrackIds.isNotEmpty
+                        ? const Color.fromRGBO(239, 68, 68, 0.3)
+                        : const Color.fromRGBO(40, 48, 64, 0.4),
+                    borderRadius: BorderRadius.circular(6.0),
+                    border: Border.all(
+                      color: _selectedTrackIds.isNotEmpty
+                          ? const Color(0xFFEF4444)
+                          : const Color.fromRGBO(255, 255, 255, 0.08),
+                    ),
+                  ),
+                  child: Text(
+                    _selectedTrackIds.isNotEmpty ? '删除 (${_selectedTrackIds.length})' : '删除',
+                    style: TextStyle(
+                      fontSize: UIConfig.fontSmall,
+                      color: _selectedTrackIds.isNotEmpty ? const Color(0xFFEF4444) : UIConfig.textMuted,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 8.0),
@@ -346,7 +458,7 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
     };
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24.0),
+      padding: const EdgeInsets.only(bottom: 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -367,11 +479,11 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
               color: UIConfig.textMuted,
             ),
           ),
-          const SizedBox(height: 12.0),
+          const SizedBox(height: 10.0),
 
           // 卡片横向滚动行 (支持鼠标全指针拖拽与状态保持)
           SizedBox(
-            height: 220.0,
+            height: 216.0,
             child: ScrollConfiguration(
               behavior: const MouseDraggableScrollBehavior(),
               child: ListView.separated(
@@ -379,7 +491,7 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 itemCount: tracks.length,
-                separatorBuilder: (context, _) => const SizedBox(width: 16.0),
+                separatorBuilder: (context, _) => const SizedBox(width: 14.0),
 
               itemBuilder: (context, index) {
                 final track = tracks[index];
