@@ -1,3 +1,4 @@
+_main
 _hifi_audio_get_abi_version
 _hifi_audio_init_for_platform
 _hifi_audio_get_capabilities_json

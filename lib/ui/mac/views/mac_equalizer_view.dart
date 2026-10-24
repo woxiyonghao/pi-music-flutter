@@ -1,8 +1,10 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/web_remote_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
 
@@ -16,47 +18,130 @@ class MacEqualizerView extends StatefulWidget {
 
 class _MacEqualizerViewState extends State<MacEqualizerView> {
   static const List<String> bandLabels = [
-    '31Hz', '62Hz', '125Hz', '250Hz', '500Hz',
-    '1kHz', '2kHz', '4kHz', '8kHz', '16kHz',
+    '31Hz',
+    '62Hz',
+    '125Hz',
+    '250Hz',
+    '500Hz',
+    '1kHz',
+    '2kHz',
+    '4kHz',
+    '8kHz',
+    '16kHz',
   ];
 
   static const List<Map<String, dynamic>> presets = [
-    {'name': '原音直通', 'gains': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]},
-    {'name': '流行音乐', 'gains': [2.5, 1.5, 0.0, -1.0, -1.5, 1.0, 2.5, 3.5, 2.5, 1.5]},
-    {'name': '摇滚现场', 'gains': [4.5, 3.5, 2.0, 0.0, -1.0, 1.5, 3.5, 4.0, 4.5, 4.0]},
-    {'name': '经典人声', 'gains': [-2.0, -1.0, 0.0, 2.0, 3.5, 4.0, 3.0, 1.5, 0.0, -1.0]},
-    {'name': '古典交响', 'gains': [3.5, 3.0, 2.0, 1.0, -1.0, 0.0, 1.5, 2.5, 3.5, 3.5]},
-    {'name': '震撼低音', 'gains': [6.0, 5.0, 3.5, 2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]},
-    {'name': '通透高音', 'gains': [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.5, 4.5, 6.0, 6.0]},
-    {'name': '自定义',   'gains': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]},
+    {
+      'name': '原音直通',
+      'gains': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    },
+    {
+      'name': '流行音乐',
+      'gains': [2.5, 1.5, 0.0, -1.0, -1.5, 1.0, 2.5, 3.5, 2.5, 1.5]
+    },
+    {
+      'name': '摇滚现场',
+      'gains': [4.5, 3.5, 2.0, 0.0, -1.0, 1.5, 3.5, 4.0, 4.5, 4.0]
+    },
+    {
+      'name': '经典人声',
+      'gains': [-2.0, -1.0, 0.0, 2.0, 3.5, 4.0, 3.0, 1.5, 0.0, -1.0]
+    },
+    {
+      'name': '古典交响',
+      'gains': [3.5, 3.0, 2.0, 1.0, -1.0, 0.0, 1.5, 2.5, 3.5, 3.5]
+    },
+    {
+      'name': '震撼低音',
+      'gains': [6.0, 5.0, 3.5, 2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    },
+    {
+      'name': '通透高音',
+      'gains': [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.5, 4.5, 6.0, 6.0]
+    },
+    {
+      'name': '自定义',
+      'gains': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    },
   ];
 
-  int _selectedPreset = 0; // 原音直通
-  late List<double> _bandGains = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+  int _selectedPreset = 0; // 0: 原音直通 (初始纯净直通，无人工染色)
+  late List<double> _bandGains = List.filled(10, 0.0);
   bool _isEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    HifiAudioService.instance.addListener(_onAudioServiceChanged);
+  }
+
+  @override
+  void dispose() {
+    HifiAudioService.instance.removeListener(_onAudioServiceChanged);
+    super.dispose();
+  }
+
+  void _onAudioServiceChanged() {
+    if (!mounted) return;
+    final audio = HifiAudioService.instance;
+    if (_isEnabled != audio.eqEnabled ||
+        !listEquals(_bandGains, audio.eqBands)) {
+      setState(() {
+        _isEnabled = audio.eqEnabled;
+        _bandGains = List<double>.from(audio.eqBands);
+        _matchOrUpdatePreset();
+      });
+    }
+  }
+
+  void _matchOrUpdatePreset() {
+    for (int i = 0; i < presets.length - 1; i++) {
+      final pGains = (presets[i]['gains'] as List)
+          .map((e) => (e as num).toDouble())
+          .toList();
+      bool match = true;
+      for (int b = 0; b < 10; b++) {
+        if ((_bandGains[b] - pGains[b]).abs() > 0.05) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        _selectedPreset = i;
+        return;
+      }
+    }
+    _selectedPreset = presets.length - 1; // 自定义
   }
 
   void _loadSettings() {
+    final audio = HifiAudioService.instance;
+    _isEnabled = audio.eqEnabled;
+    _bandGains = List<double>.from(audio.eqBands);
+
     final db = MusicDatabaseService.instance;
-    _isEnabled = HifiAudioService.instance.eqEnabled;
-    _selectedPreset = int.tryParse(db.getSetting('eq_selected_preset', '0'))?.clamp(0, presets.length - 1) ?? 0;
-    _bandGains = HifiAudioService.instance.eqBands.toList();
+    final savedPreset = int.tryParse(db.getSetting('eq_selected_preset', '-1'));
+    if (savedPreset != null &&
+        savedPreset >= 0 &&
+        savedPreset < presets.length) {
+      _selectedPreset = savedPreset;
+    } else {
+      _matchOrUpdatePreset();
+    }
   }
 
   void _saveSettings() {
-    HifiAudioService.instance.setEqAndBands(_isEnabled, _bandGains,
-        selectedPreset: _selectedPreset);
+    HifiAudioService.instance
+        .setEqAndBands(_isEnabled, _bandGains, selectedPreset: _selectedPreset);
+    WebRemoteService.instance.broadcastState();
   }
 
   void _applyPreset(int index) {
     setState(() {
       _selectedPreset = index;
-      _bandGains = List<double>.from(presets[index]['gains'] as List);
+      _bandGains = List<double>.from(
+          (presets[index]['gains'] as List).map((e) => (e as num).toDouble()));
       _isEnabled = index != 0;
       _saveSettings();
     });
@@ -67,7 +152,8 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
       _selectedPreset = 0;
       _bandGains = List.filled(10, 0.0);
       _isEnabled = false;
-      _saveSettings();
+      HifiAudioService.instance.resetEq();
+      WebRemoteService.instance.broadcastState();
     });
   }
 
@@ -83,215 +169,221 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([ThemeService.instance, HifiAudioService.instance.eqSettingsRevision]),
+      listenable: ThemeService.instance,
       builder: (context, _) {
-        _loadSettings();
         final accent = ThemeService.instance.accentColor;
 
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final isCompact = constraints.maxHeight < 420;
-            final padH = isCompact ? 14.0 : 20.0;
-            final padV = isCompact ? 10.0 : 16.0;
-            final gap = isCompact ? 8.0 : 12.0;
-            final curveHeight = isCompact
-                ? (constraints.maxHeight * 0.26).clamp(55.0, 95.0)
-                : 140.0;
-
-            return GlassCard(
-              borderRadius: UIConfig.containerRounding,
-              padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. 顶部 Header 栏：标题 + 副标题 + 复原按钮 + EQ 激活胶囊按钮
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '图形均衡器',
-                            style: TextStyle(
-                              fontSize: isCompact ? 16.0 : UIConfig.fontMedium,
-                              fontWeight: FontWeight.bold,
-                              color: UIConfig.textActive,
-                            ),
-                          ),
-                          const SizedBox(height: 2.0),
-                          Text(
-                            '10 段专业频段精调 · 纯净硬件直通',
-                            style: TextStyle(
-                              fontSize: isCompact ? 10.5 : UIConfig.fontSmall,
-                              color: UIConfig.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          // 复原按钮
-                          InkWell(
-                            onTap: _resetToFlat,
-                            borderRadius: BorderRadius.circular(6.0),
-                            child: Container(
-                              height: isCompact ? 24.0 : 28.0,
-                              padding: EdgeInsets.symmetric(horizontal: isCompact ? 10.0 : 14.0),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: const Color.fromRGBO(40, 48, 64, 0.7),
-                                borderRadius: BorderRadius.circular(6.0),
-                                border: Border.all(
-                                  color: const Color.fromRGBO(255, 255, 255, 0.12),
-                                ),
-                              ),
-                              child: Text(
-                                '复原',
-                                style: TextStyle(
-                                  fontSize: isCompact ? 11.0 : UIConfig.fontSmall,
-                                  color: UIConfig.textNormal,
-                                ),
+        return GlassCard(
+          borderRadius: UIConfig.containerRounding,
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          child: LayoutBuilder(builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: SizedBox(
+                height: math.max(constraints.maxHeight, 440),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 1. 顶部 Header 栏：标题 + 副标题 + 复原按钮 + EQ 激活胶囊按钮
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      runSpacing: 8,
+                      spacing: 12,
+                      children: [
+                        const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '图形均衡器',
+                              style: TextStyle(
+                                fontSize: UIConfig.fontMedium,
+                                fontWeight: FontWeight.bold,
+                                color: UIConfig.textActive,
                               ),
                             ),
-                          ),
-                          SizedBox(width: isCompact ? 6.0 : 10.0),
+                            SizedBox(height: 3.0),
+                            Text(
+                              '10 段专业频段精调 · 实时 DSP 处理',
+                              style: TextStyle(
+                                fontSize: UIConfig.fontSmall,
+                                color: UIConfig.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            // 复原按钮
+                            InkWell(
+                              onTap: _resetToFlat,
+                              borderRadius: BorderRadius.circular(6.0),
+                              child: Container(
+                                height: 28.0,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14.0),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: const Color.fromRGBO(40, 48, 64, 0.7),
+                                  borderRadius: BorderRadius.circular(6.0),
+                                  border: Border.all(
+                                    color: const Color.fromRGBO(
+                                        255, 255, 255, 0.12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  '复原',
+                                  style: TextStyle(
+                                    fontSize: UIConfig.fontSmall,
+                                    color: UIConfig.textNormal,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10.0),
 
-                          // EQ 激活/旁路胶囊按钮
-                          InkWell(
-                            onTap: () {
-                              setState(() {
-                                _isEnabled = !_isEnabled;
-                                _saveSettings();
-                              });
-                            },
-                            borderRadius: BorderRadius.circular(14.0),
-                            child: Container(
-                              height: isCompact ? 24.0 : 28.0,
-                              padding: EdgeInsets.symmetric(horizontal: isCompact ? 10.0 : 14.0),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: _isEnabled
-                                    ? accent.withValues(alpha: 0.25)
-                                    : const Color.fromRGBO(255, 255, 255, 0.05),
-                                borderRadius: BorderRadius.circular(14.0),
-                                border: Border.all(
+                            // EQ 激活/旁路胶囊按钮
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _isEnabled = !_isEnabled;
+                                  _saveSettings();
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(14.0),
+                              child: Container(
+                                height: 28.0,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14.0),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
                                   color: _isEnabled
-                                      ? accent
-                                      : const Color.fromRGBO(255, 255, 255, 0.15),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 6.0,
-                                    height: 6.0,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: _isEnabled ? const Color(0xFF34C759) : Colors.grey,
-                                    ),
+                                      ? accent.withValues(alpha: 0.25)
+                                      : const Color.fromRGBO(
+                                          255, 255, 255, 0.05),
+                                  borderRadius: BorderRadius.circular(14.0),
+                                  border: Border.all(
+                                    color: _isEnabled
+                                        ? accent
+                                        : const Color.fromRGBO(
+                                            255, 255, 255, 0.15),
                                   ),
-                                  const SizedBox(width: 5.0),
-                                  Text(
-                                    _isEnabled ? 'EQ 已激活' : 'EQ 已旁路',
-                                    style: TextStyle(
-                                      fontSize: isCompact ? 10.5 : 11.5,
-                                      fontWeight: FontWeight.bold,
-                                      color: _isEnabled ? UIConfig.textActive : UIConfig.textMuted,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: gap),
-
-                  // 2. 预设方案水平胶囊栏 (8款发烧经典预设)
-                  Row(
-                    children: [
-                      for (int i = 0; i < presets.length; i++) ...[
-                        if (i > 0) SizedBox(width: isCompact ? 4.0 : 8.0),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () => _applyPreset(i),
-                            borderRadius: BorderRadius.circular(13.0),
-                            child: Container(
-                              height: isCompact ? 22.0 : 26.0,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: _selectedPreset == i
-                                    ? accent.withValues(alpha: 0.28)
-                                    : const Color.fromRGBO(255, 255, 255, 0.04),
-                                borderRadius: BorderRadius.circular(13.0),
-                                border: Border.all(
-                                  color: _selectedPreset == i
-                                      ? accent
-                                      : const Color.fromRGBO(255, 255, 255, 0.1),
-                                  width: 1.0,
                                 ),
-                              ),
-                              child: Text(
-                                presets[i]['name'] as String,
-                                style: TextStyle(
-                                  fontSize: isCompact ? 10.0 : 11.5,
-                                  fontWeight: _selectedPreset == i
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                  color: _selectedPreset == i
-                                      ? UIConfig.textActive
-                                      : UIConfig.textNormal,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 6.0,
+                                      height: 6.0,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: _isEnabled
+                                            ? const Color(0xFF34C759)
+                                            : Colors.grey,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6.0),
+                                    Text(
+                                      _isEnabled ? 'EQ 已激活' : 'EQ 已旁路',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: _isEnabled
+                                            ? UIConfig.textActive
+                                            : UIConfig.textMuted,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
-                    ],
-                  ),
-                  SizedBox(height: gap),
-
-                  // 3. 动态频响 Catmull-Rom 贝塞尔三次样条响应曲线视窗 (Curve Canvas)
-                  SizedBox(
-                    height: curveHeight,
-                    child: _SplineCurveCanvas(
-                      bandGains: _bandGains,
-                      isEnabled: _isEnabled,
-                      accentColor: accent,
                     ),
-                  ),
-                  SizedBox(height: gap),
+                    const SizedBox(height: 14.0),
 
-                  // 4. 10 段发烧级图形推子控制区 (Mixer Faders)
-                  Expanded(
-                    child: Row(
+                    // 2. 预设方案水平胶囊栏 (8款发烧经典预设)
+                    Row(
                       children: [
-                        for (int i = 0; i < 10; i++) ...[
-                          if (i > 0) SizedBox(width: isCompact ? 4.0 : 8.0),
+                        for (int i = 0; i < presets.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 8.0),
                           Expanded(
-                            child: _MixerFaderColumn(
-                              key: ValueKey('eq_${i}_${accent.toARGB32()}'),
-                              index: i,
-                              label: bandLabels[i],
-                              gain: _bandGains[i],
-                              isEnabled: _isEnabled,
-                              accentColor: accent,
-                              isCompact: isCompact,
-                              onGainChanged: (val) => _updateBand(i, val),
+                            child: InkWell(
+                              onTap: () => _applyPreset(i),
+                              borderRadius: BorderRadius.circular(13.0),
+                              child: Container(
+                                height: 26.0,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: _selectedPreset == i
+                                      ? accent.withValues(alpha: 0.28)
+                                      : const Color.fromRGBO(
+                                          255, 255, 255, 0.04),
+                                  borderRadius: BorderRadius.circular(13.0),
+                                  border: Border.all(
+                                    color: _selectedPreset == i
+                                        ? accent
+                                        : const Color.fromRGBO(
+                                            255, 255, 255, 0.1),
+                                    width: 1.0,
+                                  ),
+                                ),
+                                child: Text(
+                                  presets[i]['name'] as String,
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: _selectedPreset == i
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                    color: _selectedPreset == i
+                                        ? UIConfig.textActive
+                                        : UIConfig.textNormal,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12.0),
+
+                    // 3. 动态频响 Catmull-Rom 贝塞尔三次样条响应曲线视窗 (Curve Canvas)
+                    SizedBox(
+                      height: 140.0,
+                      child: _SplineCurveCanvas(
+                        bandGains: _bandGains,
+                        isEnabled: _isEnabled,
+                        accentColor: accent,
+                      ),
+                    ),
+                    const SizedBox(height: 12.0),
+
+                    // 4. 10 段发烧级图形推子控制区 (Mixer Faders)
+                    Expanded(
+                      child: Row(
+                        children: [
+                          for (int i = 0; i < 10; i++) ...[
+                            if (i > 0) const SizedBox(width: 8.0),
+                            Expanded(
+                              child: _MixerFaderColumn(
+                                key: ValueKey('eq_${i}_${accent.toARGB32()}'),
+                                index: i,
+                                label: bandLabels[i],
+                                gain: _bandGains[i],
+                                isEnabled: _isEnabled,
+                                accentColor: accent,
+                                onGainChanged: (val) => _updateBand(i, val),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
-          },
+          }),
         );
       },
     );
@@ -326,17 +418,27 @@ class _SplineCurveCanvas extends StatelessWidget {
           Positioned(
             left: 10.0,
             top: 10.0,
-            child: Text('+12', style: TextStyle(fontSize: 10.0, color: UIConfig.textMuted.withValues(alpha: 0.7))),
+            child: Text('+12',
+                style: TextStyle(
+                    fontSize: 10.0,
+                    color: UIConfig.textMuted.withValues(alpha: 0.7))),
           ),
           Positioned(
             left: 10.0,
             top: 60.0,
-            child: Text('0dB', style: TextStyle(fontSize: 10.0, color: UIConfig.textMuted.withValues(alpha: 0.9), fontWeight: FontWeight.bold)),
+            child: Text('0dB',
+                style: TextStyle(
+                    fontSize: 10.0,
+                    color: UIConfig.textMuted.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.bold)),
           ),
           Positioned(
             left: 10.0,
             bottom: 10.0,
-            child: Text('-12', style: TextStyle(fontSize: 10.0, color: UIConfig.textMuted.withValues(alpha: 0.7))),
+            child: Text('-12',
+                style: TextStyle(
+                    fontSize: 10.0,
+                    color: UIConfig.textMuted.withValues(alpha: 0.7))),
           ),
 
           // 样条曲线与渐变区域
@@ -373,8 +475,16 @@ class _CurvePainter extends CustomPainter {
   Offset _catmullRom(Offset p0, Offset p1, Offset p2, Offset p3, double t) {
     final t2 = t * t;
     final t3 = t2 * t;
-    final x = 0.5 * ((2.0 * p1.dx) + (-p0.dx + p2.dx) * t + (2.0 * p0.dx - 5.0 * p1.dx + 4.0 * p2.dx - p3.dx) * t2 + (-p0.dx + 3.0 * p1.dx - 3.0 * p2.dx + p3.dx) * t3);
-    final y = 0.5 * ((2.0 * p1.dy) + (-p0.dy + p2.dy) * t + (2.0 * p0.dy - 5.0 * p1.dy + 4.0 * p2.dy - p3.dy) * t2 + (-p0.dy + 3.0 * p1.dy - 3.0 * p2.dy + p3.dy) * t3);
+    final x = 0.5 *
+        ((2.0 * p1.dx) +
+            (-p0.dx + p2.dx) * t +
+            (2.0 * p0.dx - 5.0 * p1.dx + 4.0 * p2.dx - p3.dx) * t2 +
+            (-p0.dx + 3.0 * p1.dx - 3.0 * p2.dx + p3.dx) * t3);
+    final y = 0.5 *
+        ((2.0 * p1.dy) +
+            (-p0.dy + p2.dy) * t +
+            (2.0 * p0.dy - 5.0 * p1.dy + 4.0 * p2.dy - p3.dy) * t2 +
+            (-p0.dy + 3.0 * p1.dy - 3.0 * p2.dy + p3.dy) * t3);
     return Offset(x, y);
   }
 
@@ -393,9 +503,11 @@ class _CurvePainter extends CustomPainter {
       ..color = const Color.fromRGBO(255, 255, 255, 0.18)
       ..strokeWidth = 1.0;
 
-    canvas.drawLine(Offset(0, yMid - maxDev), Offset(size.width, yMid - maxDev), gridPaint);
+    canvas.drawLine(
+        Offset(0, yMid - maxDev), Offset(size.width, yMid - maxDev), gridPaint);
     canvas.drawLine(Offset(0, yMid), Offset(size.width, yMid), zeroLinePaint);
-    canvas.drawLine(Offset(0, yMid + maxDev), Offset(size.width, yMid + maxDev), gridPaint);
+    canvas.drawLine(
+        Offset(0, yMid + maxDev), Offset(size.width, yMid + maxDev), gridPaint);
 
     // 2. 计算 10 个频段的中心采样点
     final pts = <Offset>[];
@@ -462,7 +574,8 @@ class _CurvePainter extends CustomPainter {
       canvas.drawPath(
         strokePath,
         Paint()
-          ..color = isEnabled ? accentColor : const Color.fromRGBO(160, 175, 195, 0.5)
+          ..color =
+              isEnabled ? accentColor : const Color.fromRGBO(160, 175, 195, 0.5)
           ..strokeWidth = isEnabled ? 2.5 : 1.8
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round,
@@ -472,18 +585,22 @@ class _CurvePainter extends CustomPainter {
     // 6. 10 个频段频点发光圆环节点
     for (int i = 0; i < numBands; i++) {
       if (isEnabled) {
-        canvas.drawCircle(pts[i], 4.5, Paint()..color = accentColor.withValues(alpha: 0.35));
+        canvas.drawCircle(
+            pts[i], 4.5, Paint()..color = accentColor.withValues(alpha: 0.35));
         canvas.drawCircle(pts[i], 3.0, Paint()..color = accentColor);
         canvas.drawCircle(pts[i], 1.5, Paint()..color = Colors.white);
       } else {
-        canvas.drawCircle(pts[i], 2.5, Paint()..color = const Color.fromRGBO(160, 175, 195, 0.6));
+        canvas.drawCircle(pts[i], 2.5,
+            Paint()..color = const Color.fromRGBO(160, 175, 195, 0.6));
       }
     }
   }
 
   @override
   bool shouldRepaint(covariant _CurvePainter old) {
-    return old.isEnabled != isEnabled || old.accentColor != accentColor || old.bandGains != bandGains;
+    return old.isEnabled != isEnabled ||
+        old.accentColor != accentColor ||
+        old.bandGains != bandGains;
   }
 }
 
@@ -494,7 +611,6 @@ class _MixerFaderColumn extends StatelessWidget {
   final double gain;
   final bool isEnabled;
   final Color accentColor;
-  final bool isCompact;
   final ValueChanged<double> onGainChanged;
 
   const _MixerFaderColumn({
@@ -504,16 +620,17 @@ class _MixerFaderColumn extends StatelessWidget {
     required this.gain,
     required this.isEnabled,
     required this.accentColor,
-    this.isCompact = false,
     required this.onGainChanged,
   });
 
   void _handleTouch(Offset localPos, double railH) {
-    // 0dB 在 railH / 2
-    final railMid = railH / 2;
-    final norm = ((railMid - localPos.dy) / (railH / 2)).clamp(-1.0, 1.0);
+    const pad = 10.0;
+    final usableH = railH - pad * 2;
+    if (usableH <= 0) return;
+    final clampedY = (localPos.dy - pad).clamp(0.0, usableH);
+    final norm = 1.0 - (clampedY / (usableH / 2));
     var newGain = (norm * 12.0 * 10).round() / 10.0;
-    if (newGain.abs() < 0.15) newGain = 0.0;
+    if (newGain.abs() < 0.2) newGain = 0.0;
     onGainChanged(newGain);
   }
 
@@ -529,13 +646,15 @@ class _MixerFaderColumn extends StatelessWidget {
         Text(
           gainStr,
           style: TextStyle(
-            fontSize: isCompact ? 9.5 : 11.0,
+            fontSize: 11.0,
             fontFamily: 'monospace',
             fontWeight: FontWeight.bold,
-            color: isEnabled && gain.abs() > 0.05 ? UIConfig.textActive : UIConfig.textMuted,
+            color: isEnabled && gain.abs() > 0.05
+                ? UIConfig.textActive
+                : UIConfig.textMuted,
           ),
         ),
-        SizedBox(height: isCompact ? 3.0 : 6.0),
+        const SizedBox(height: 6.0),
 
         // 垂直推子轨道交互区
         Expanded(
@@ -544,11 +663,14 @@ class _MixerFaderColumn extends StatelessWidget {
             final w = constraints.maxWidth;
 
             return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanStart: (d) => _handleTouch(d.localPosition, h),
               onPanDown: (d) => _handleTouch(d.localPosition, h),
               onPanUpdate: (d) => _handleTouch(d.localPosition, h),
+              onTapDown: (d) => _handleTouch(d.localPosition, h),
               onDoubleTap: () => onGainChanged(0.0),
               child: SizedBox(
-                width: w,
+                width: math.max(w, 36.0),
                 height: h,
                 child: CustomPaint(
                   painter: _FaderPainter(
@@ -561,13 +683,13 @@ class _MixerFaderColumn extends StatelessWidget {
             );
           }),
         ),
-        SizedBox(height: isCompact ? 3.0 : 6.0),
+        const SizedBox(height: 6.0),
 
         // 底部频段标签 (31Hz, 1kHz 等)
         Text(
           label,
-          style: TextStyle(
-            fontSize: isCompact ? 9.5 : 11.0,
+          style: const TextStyle(
+            fontSize: 11.0,
             color: UIConfig.textNormal,
           ),
         ),
@@ -601,13 +723,15 @@ class _FaderPainter extends CustomPainter {
       Rect.fromLTRB(cx - trackW / 2, railTop, cx + trackW / 2, railBot),
       const Radius.circular(2.0),
     );
-    canvas.drawRRect(trackRect, Paint()..color = const Color.fromRGBO(255, 255, 255, 0.12));
+    canvas.drawRRect(
+        trackRect, Paint()..color = const Color.fromRGBO(255, 255, 255, 0.12));
 
     // 2. 0 dB 中心基准参考线横向短刻度
     final notchPaint = Paint()
       ..color = const Color.fromRGBO(255, 255, 255, 0.3)
       ..strokeWidth = 1.0;
-    canvas.drawLine(Offset(cx - 7.0, railMid), Offset(cx + 7.0, railMid), notchPaint);
+    canvas.drawLine(
+        Offset(cx - 7.0, railMid), Offset(cx + 7.0, railMid), notchPaint);
 
     // 3. 计算滑块物理 Y 坐标
     final thumbNorm = (gain / 12.0).clamp(-1.0, 1.0);
@@ -641,27 +765,32 @@ class _FaderPainter extends CustomPainter {
     const thumbW = 28.0;
     const thumbH = 13.0;
     final thumbRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(cx, thumbY), width: thumbW, height: thumbH),
+      Rect.fromCenter(
+          center: Offset(cx, thumbY), width: thumbW, height: thumbH),
       const Radius.circular(4.0),
     );
 
     // 阴影
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(cx, thumbY + 1.5), width: thumbW, height: thumbH),
+        Rect.fromCenter(
+            center: Offset(cx, thumbY + 1.5), width: thumbW, height: thumbH),
         const Radius.circular(4.0),
       ),
       Paint()..color = Colors.black45,
     );
 
     // 手柄本体金属底
-    canvas.drawRRect(thumbRect, Paint()..color = const Color.fromRGBO(35, 42, 56, 1.0));
+    canvas.drawRRect(
+        thumbRect, Paint()..color = const Color.fromRGBO(35, 42, 56, 1.0));
 
     // 手柄边框
     canvas.drawRRect(
       thumbRect,
       Paint()
-        ..color = isEnabled && gain.abs() > 0.05 ? accentColor : const Color.fromRGBO(255, 255, 255, 0.2)
+        ..color = isEnabled && gain.abs() > 0.05
+            ? accentColor
+            : const Color.fromRGBO(255, 255, 255, 0.2)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.0,
     );
@@ -670,12 +799,16 @@ class _FaderPainter extends CustomPainter {
     canvas.drawLine(
       Offset(cx - 8.0, thumbY),
       Offset(cx + 8.0, thumbY),
-      Paint()..color = const Color.fromRGBO(255, 255, 255, 0.6)..strokeWidth = 1.0,
+      Paint()
+        ..color = const Color.fromRGBO(255, 255, 255, 0.6)
+        ..strokeWidth = 1.0,
     );
   }
 
   @override
   bool shouldRepaint(covariant _FaderPainter old) {
-    return old.gain != gain || old.isEnabled != isEnabled || old.accentColor != accentColor;
+    return old.gain != gain ||
+        old.isEnabled != isEnabled ||
+        old.accentColor != accentColor;
   }
 }

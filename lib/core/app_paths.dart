@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 /// 统一跨平台路径管理中心 (解决 iOS 物理真机沙盒 Documents 路径定位)
 class AppPaths {
@@ -29,6 +30,37 @@ class AppPaths {
       return '$home/Documents';
     }
     return Directory.current.path;
+  }
+
+  /// Rebase persisted iOS sandbox paths after reinstall/update. Keep the full
+  /// Documents-relative album path so duplicate CDImage.wav names stay distinct.
+  static String resolveDocumentsPath(
+    String path, {
+    String? documentsRoot,
+    bool? isIOS,
+  }) {
+    if (path.isEmpty || !(isIOS ?? Platform.isIOS)) return path;
+    final docs = documentsRoot ?? documentsDirectory;
+    final normalized = p.normalize(path);
+    final marker = normalized.indexOf('/Documents/');
+    String? relative;
+    if (marker >= 0) {
+      relative = normalized.substring(marker + '/Documents/'.length);
+    } else if (normalized.endsWith('/Documents')) {
+      relative = '';
+    }
+    if (relative != null) {
+      final remapped = p.normalize(p.join(docs, relative));
+      if (FileSystemEntity.typeSync(remapped) !=
+          FileSystemEntityType.notFound) {
+        return remapped;
+      }
+    }
+    if (FileSystemEntity.typeSync(normalized) !=
+        FileSystemEntityType.notFound) {
+      return normalized;
+    }
+    return path;
   }
 
   /// 获取音乐存储目录

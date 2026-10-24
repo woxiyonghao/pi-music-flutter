@@ -114,17 +114,18 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
   }
 
   static const List<IconData> _visualModeIcons = [
-    Icons.equalizer_rounded,           // 48列全景 LED 频谱
-    Icons.speed_rounded,               // 名机动圈大表头
-    Icons.speed_outlined,              // 金嗓子旗舰大表头
-    Icons.album_rounded,               // 复古开盘磁带机
-    Icons.waves_rounded,               // Siri 流光声波
-    Icons.lens_blur_rounded,           // Siri 悬浮微光球
-    Icons.bubble_chart_rounded,        // 音乐微光气泡
-    Icons.nightlight_round,            // 极简纯黑纯音直通
-    Icons.graphic_eq_rounded,          // 电光霓虹声波
-    Icons.grid_4x4_rounded,            // 赛博粒子网格
-    Icons.access_time_filled_rounded,  // 液态玻璃时钟
+    Icons.equalizer_rounded, // 48列全景 LED 频谱
+    Icons.speed_rounded, // 名机动圈大表头
+    Icons.speed_outlined, // 金嗓子旗舰大表头
+    Icons.album_rounded, // 复古开盘磁带机
+    Icons.waves_rounded, // Siri 流光声波
+    Icons.lens_blur_rounded, // Siri 悬浮微光球
+    Icons.bubble_chart_rounded, // 音乐微光气泡
+    Icons.nightlight_round, // 极简纯黑纯音直通
+    Icons.graphic_eq_rounded, // 电光霓虹声波
+    Icons.grid_4x4_rounded, // 赛博粒子网格
+    Icons.access_time_filled_rounded, // 液态玻璃时钟
+    Icons.memory_rounded, // 实时硬件遥测
   ];
 
   /// 毛玻璃板块卡片容器
@@ -205,7 +206,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
             onTap: () {
               theme.setTheme(p.id);
               widget.onVisualizerChanged(
-                VisualizerType.values[p.defaultVisualMode.clamp(0, VisualizerType.values.length - 1)],
+                VisualizerType.values[p.defaultVisualMode
+                    .clamp(0, VisualizerType.values.length - 1)],
               );
             },
             child: AnimatedContainer(
@@ -266,7 +268,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                       color: p.accentColor,
                       boxShadow: [
                         BoxShadow(
-                          color: p.accentColor.withValues(alpha: isCur ? 0.75 : 0.35),
+                          color: p.accentColor
+                              .withValues(alpha: isCur ? 0.75 : 0.35),
                           blurRadius: isCur ? 8.0 : 4.0,
                         ),
                       ],
@@ -297,7 +300,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: UIConfig.fontRegular,
-                            fontWeight: isCur ? FontWeight.w600 : FontWeight.normal,
+                            fontWeight:
+                                isCur ? FontWeight.w600 : FontWeight.normal,
                             color: isCur
                                 ? UIConfig.textActive
                                 : const Color.fromRGBO(220, 230, 245, 0.9),
@@ -422,7 +426,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
             onTap: () {
               theme.setBackgroundVisualMode(i);
               widget.onVisualizerChanged(
-                VisualizerType.values[i.clamp(0, VisualizerType.values.length - 1)],
+                VisualizerType
+                    .values[i.clamp(0, VisualizerType.values.length - 1)],
               );
             },
             child: AnimatedContainer(
@@ -482,7 +487,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: isCur ? FontWeight.w600 : FontWeight.normal,
-                        color: isCur ? UIConfig.textActive : UIConfig.textNormal,
+                        color:
+                            isCur ? UIConfig.textActive : UIConfig.textNormal,
                       ),
                     ),
                   ),
@@ -607,7 +613,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
   }
 
   Widget _buildHexPill(Color c) {
-    final hex = '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+    final hex =
+        '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
     final cr = (c.r * 255).round();
     final cg = (c.g * 255).round();
     final cb = (c.b * 255).round();
@@ -767,7 +774,8 @@ class _ColorWheelPainter extends CustomPainter {
 
     // 3. 绘制明度遮罩 (黑色半透)
     if (value < 0.99) {
-      final valPaint = Paint()..color = Colors.black.withValues(alpha: 1.0 - value);
+      final valPaint = Paint()
+        ..color = Colors.black.withValues(alpha: 1.0 - value);
       canvas.drawCircle(center, radius, valPaint);
     }
 
@@ -781,11 +789,24 @@ class _ColorWheelPainter extends CustomPainter {
     // 5. 准星指示器 (Crosshair Reticle)
     final angle = hue * math.pi / 180.0;
     final dist = saturation * radius;
-    final retPos = Offset(center.dx + math.cos(angle) * dist, center.dy + math.sin(angle) * dist);
+    final retPos = Offset(
+        center.dx + math.cos(angle) * dist, center.dy + math.sin(angle) * dist);
 
     // 准星外阴影与白环
-    canvas.drawCircle(retPos, 7.0, Paint()..color = const Color.fromRGBO(0, 0, 0, 0.85)..style = PaintingStyle.stroke..strokeWidth = 2.5);
-    canvas.drawCircle(retPos, 6.0, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.6);
+    canvas.drawCircle(
+        retPos,
+        7.0,
+        Paint()
+          ..color = const Color.fromRGBO(0, 0, 0, 0.85)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5);
+    canvas.drawCircle(
+        retPos,
+        6.0,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.6);
     canvas.drawCircle(retPos, 3.2, Paint()..color = accentColor);
   }
 

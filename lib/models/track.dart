@@ -49,11 +49,17 @@ class Track {
       return "UNKNOWN";
     }
     if (format == AudioFormat.dsdDsf || format == AudioFormat.dsdDff) {
-      final multiplier = sampleRate > 0 ? (sampleRate / 44100).round() : 64;
+      if (sampleRate <= 0) return 'DSD · 采样率未知';
+      final multiplier = (sampleRate / 44100).round();
       return "DSD ${multiplier}x";
     }
-    final khz = (sampleRate / 1000).round();
-    return "${khz}kHz / ${bitDepth}bit";
+    if (sampleRate <= 0 && bitDepth <= 0) return format.name.toUpperCase();
+    if (sampleRate <= 0) return '${bitDepth}bit · 采样率未知';
+    final khz = sampleRate / 1000;
+    final rate = khz == khz.roundToDouble()
+        ? khz.toInt().toString()
+        : khz.toStringAsFixed(1);
+    return bitDepth > 0 ? '${rate}kHz / ${bitDepth}bit' : '${rate}kHz';
   }
 
   String get durationString {
@@ -171,6 +177,5 @@ class Playlist {
     List<Track>? tracks,
   }) : tracks = tracks ?? [];
 
-  int get totalDurationSec =>
-      tracks.fold(0, (sum, t) => sum + t.durationSec);
+  int get totalDurationSec => tracks.fold(0, (sum, t) => sum + t.durationSec);
 }

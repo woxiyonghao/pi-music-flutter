@@ -15,6 +15,7 @@ import 'siri_wave_painter.dart';
 import 'audio_bubbles_painter.dart';
 import 'cyber_grid_painter.dart';
 import 'glass_clock_painter.dart';
+import 'mobile_telemetry_dashboard_widget.dart';
 
 /// 统一发烧动效舞台容器 (专为横屏设备打造，内置 60fps 物理阻尼与动画引擎)
 class VisualizerStageWidget extends StatefulWidget {
@@ -119,13 +120,6 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
     _currentType = widget.activeType ?? widget.initialType;
     HifiAudioService.instance.isPlayingNotifier.addListener(_onPlayStateChanged);
 
-    final state = HifiAudioService.instance.state;
-    final isMeterMode = _currentType == VisualizerType.mcIntosh ||
-        _currentType == VisualizerType.accuphase ||
-        _currentType == VisualizerType.tapeReel ||
-        _currentType == VisualizerType.ledSpectrum ||
-        _currentType == VisualizerType.pureBlack;
-
     _ticker = createTicker((elapsed) {
       final t = elapsed.inMicroseconds / 1000000.0;
       final dt = (_lastTimestamp > 0.0) ? (t - _lastTimestamp).clamp(0.001, 0.05) : 0.016;
@@ -133,26 +127,10 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
 
       _updatePhysics(dt);
 
-      if (!HifiAudioService.instance.state.isPlaying && isMeterMode) {
-        final atRest = (_leftAngle - McIntoshMeterPainter.minAngle).abs() < 0.002 &&
-            (_rightAngle - McIntoshMeterPainter.minAngle).abs() < 0.002 &&
-            _accuphaseValL < 0.002 &&
-            _accuphaseValR < 0.002;
-        if (atRest) {
-          _leftAngle = McIntoshMeterPainter.minAngle;
-          _rightAngle = McIntoshMeterPainter.minAngle;
-          _accuphaseValL = 0.0;
-          _accuphaseValR = 0.0;
-          _ticker.stop(); // 彻底停止 Ticker，释放 OS VSync，CPU 直降至 0.0%
-        }
-      }
-
       setState(() {});
     });
 
-    if (state.isPlaying || !isMeterMode) {
-      _ticker.start();
-    }
+    _ticker.start();
   }
 
   @override
@@ -160,8 +138,8 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
     super.didUpdateWidget(oldWidget);
     if (widget.activeType != oldWidget.activeType && widget.activeType != null) {
       _currentType = widget.activeType!;
+      _lastTimestamp = 0.0;
       if (!_ticker.isTicking) {
-        _lastTimestamp = 0.0;
         _ticker.start();
       }
       setState(() {});
@@ -172,9 +150,24 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
     final state = HifiAudioService.instance.state;
     final levels = state.spectrumLevels;
 
-    // 1. 双声道目标声压电平
-    final rawL = levels.isNotEmpty ? levels[1] : 0.0;
-    final rawR = levels.length > 2 ? levels[2] : 0.0;
+    // 1. 双声道目标声压电平计算 (覆盖全频段：低频、中频、高频复合加权)
+    double rawL = 0.0;
+    double rawR = 0.0;
+
+    if (state.isPlaying && levels.isNotEmpty) {
+      final len = levels.length;
+      final bass = (levels[0] + (len > 1 ? levels[1] : 0.0) + (len > 2 ? levels[2] : 0.0)) / 3.0;
+      final mid = len > 6 ? (levels[3] + levels[4] + levels[5] + levels[6]) / 4.0 : (len > 3 ? levels[3] : bass);
+      final treble = len > 10 ? (levels[7] + levels[8] + levels[9] + levels[10]) / 4.0 : 0.0;
+
+      rawL = (bass * 0.60 + mid * 0.45 + (len > 1 ? levels[1] : 0.0) * 0.35).clamp(0.0, 1.0);
+      rawR = (bass * 0.45 + mid * 0.55 + treble * 0.30 + (len > 2 ? levels[2] : 0.0) * 0.35).clamp(0.0, 1.0);
+    } else {
+      // 待机轻微拟真模拟待机呼吸微动 (表现模拟大表头通电待机温润感)
+      final idleBreath = 0.004 * sin(_animTime * 1.8);
+      rawL = idleBreath.clamp(0.0, 0.015);
+      rawR = (0.0035 * sin(_animTime * 1.8 + 0.5)).clamp(0.0, 0.015);
+    }
 
     // 2. 指针物理惯性阻尼计算 (Attack 快速瞬态击打 0.32, Decay 慢速柔和释放 0.06)
     final normL = pow(rawL.clamp(0.0, 1.0), 0.9).toDouble();
@@ -226,7 +219,9 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
     }
 
     // 5. 波形与能量球演进时间
-    final avgEnergy = levels.isNotEmpty ? levels.reduce((a, b) => a + b) / levels.length : 0.0;
+    final avgEnergy = (state.isPlaying && levels.isNotEmpty)
+        ? levels.reduce((a, b) => a + b) / levels.length
+        : 0.0;
     _animTime += (1.5 + avgEnergy * 3.5) * dt;
 
     // 6. 音乐微光气泡物理更新
@@ -309,6 +304,7 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           rightAngle: _tapeRightAngle,
           isPlaying: state.isPlaying,
           elapsedSec: state.currentTime,
+          spectrumLevels: state.spectrumLevels,
           accentColor: ThemeService.instance.accentColor,
         );
         break;
@@ -384,15 +380,24 @@ class _VisualizerStageWidgetState extends State<VisualizerStageWidget> with Sing
           accentColor: ThemeService.instance.accentColor,
         );
         break;
+      case VisualizerType.ipadTelemetryDashboard:
+        painter = LedSpectrumPainter(
+          levels: state.spectrumLevels,
+          peakHold: _peakHold,
+          accentColor: ThemeService.instance.accentColor,
+        );
+        break;
     }
+
+    final Widget mainContent = (effectiveType == VisualizerType.ipadTelemetryDashboard)
+        ? const MobileTelemetryDashboardWidget()
+        : CustomPaint(painter: painter);
 
     return Stack(
       children: [
         // 核心渲染画布
         Positioned.fill(
-          child: CustomPaint(
-            painter: painter,
-          ),
+          child: mainContent,
         ),
 
         // 右上角动效切换 Pill 胶囊控件 (可选)

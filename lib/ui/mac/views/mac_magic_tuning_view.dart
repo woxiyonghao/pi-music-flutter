@@ -49,7 +49,7 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
     MSEBParamDef(
       title: '低音质感',
       enTitle: 'Bass Texture',
-      desc: '低频速度与弹性',
+      desc: '62–250Hz 低频厚薄',
       leftLabel: '速度迅捷',
       rightLabel: '蓬松弹性',
     ),
@@ -82,9 +82,9 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
       rightLabel: '原生锋芒',
     ),
     MSEBParamDef(
-      title: '冲激响应',
-      enTitle: 'Impulse Response',
-      desc: '瞬态与打击力度',
+      title: '瞬态存在感',
+      enTitle: 'Attack Presence',
+      desc: '2–4kHz 打击感调节',
       leftLabel: '柔和松弛',
       rightLabel: '硬朗凌厉',
     ),
@@ -96,9 +96,9 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
       rightLabel: '空灵弥漫',
     ),
     MSEBParamDef(
-      title: '声场重塑',
-      enTitle: 'Soundstage Width',
-      desc: '现场全景环绕感',
+      title: '声场明亮度',
+      enTitle: 'Stage Brightness',
+      desc: '低中频与高频平衡',
       leftLabel: '紧凑聚焦',
       rightLabel: '宏大宽广',
     ),
@@ -170,115 +170,123 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
         final accent = ThemeService.instance.accentColor;
 
         return GlassCard(
-      borderRadius: UIConfig.containerRounding,
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 顶部 Header 栏：左侧标题，右侧按钮组
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          borderRadius: UIConfig.containerRounding,
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '调音魔棒',
-                style: TextStyle(
-                  fontSize: UIConfig.fontMedium,
-                  fontWeight: FontWeight.bold,
-                  color: UIConfig.textActive,
-                ),
-              ),
+              const Text('10 段 DSP 音色映射 · 与图形均衡器叠加',
+                  style: TextStyle(fontSize: 11, color: UIConfig.textMuted)),
+              const SizedBox(height: 8),
+              // 顶部 Header 栏：左侧标题，右侧按钮组
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // 开关胶囊按钮
-                  InkWell(
-                    onTap: () {
-                      setState(() {
-                        _isEnabled = !_isEnabled;
-                        MsebService.instance.setEnabled(_isEnabled);
-                        WebRemoteService.instance.broadcastMseb();
-                        WebRemoteService.instance.broadcastState();
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(6.0),
-                    child: Container(
-                      height: 28.0,
-                      padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _isEnabled
-                            ? accent.withValues(alpha: 0.28)
-                            : const Color.fromRGBO(255, 255, 255, 0.05),
-                        borderRadius: BorderRadius.circular(6.0),
-                        border: Border.all(
-                          color: _isEnabled
-                              ? accent
-                              : const Color.fromRGBO(255, 255, 255, 0.15),
-                        ),
-                      ),
-                      child: Text(
-                        _isEnabled ? '魔棒调音 · 已开启' : '魔棒调音 · 已旁路',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: _isEnabled ? UIConfig.textActive : UIConfig.textMuted,
-                        ),
-                      ),
+                  const Text(
+                    '调音魔棒',
+                    style: TextStyle(
+                      fontSize: UIConfig.fontMedium,
+                      fontWeight: FontWeight.bold,
+                      color: UIConfig.textActive,
                     ),
                   ),
-                  const SizedBox(width: 8.0),
-
-                  // 一键全复位按钮
-                  InkWell(
-                    onTap: _resetAll,
-                    borderRadius: BorderRadius.circular(6.0),
-                    child: Container(
-                      height: 28.0,
-                      padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: const Color.fromRGBO(40, 48, 64, 0.7),
+                  Row(
+                    children: [
+                      // 开关胶囊按钮
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _isEnabled = !_isEnabled;
+                            MsebService.instance.setEnabled(_isEnabled);
+                            WebRemoteService.instance.broadcastMseb();
+                            WebRemoteService.instance.broadcastState();
+                          });
+                        },
                         borderRadius: BorderRadius.circular(6.0),
-                        border: Border.all(
-                          color: const Color.fromRGBO(255, 255, 255, 0.12),
+                        child: Container(
+                          height: 28.0,
+                          padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: _isEnabled
+                                ? accent.withValues(alpha: 0.28)
+                                : const Color.fromRGBO(255, 255, 255, 0.05),
+                            borderRadius: BorderRadius.circular(6.0),
+                            border: Border.all(
+                              color: _isEnabled
+                                  ? accent
+                                  : const Color.fromRGBO(255, 255, 255, 0.15),
+                            ),
+                          ),
+                          child: Text(
+                            _isEnabled ? '魔棒调音 · 已开启' : '魔棒调音 · 已旁路',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: _isEnabled
+                                  ? UIConfig.textActive
+                                  : UIConfig.textMuted,
+                            ),
+                          ),
                         ),
                       ),
-                      child: const Text(
-                        '一键全复位',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: UIConfig.textNormal,
+                      const SizedBox(width: 8.0),
+
+                      // 一键全复位按钮
+                      InkWell(
+                        onTap: _resetAll,
+                        borderRadius: BorderRadius.circular(6.0),
+                        child: Container(
+                          height: 28.0,
+                          padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: const Color.fromRGBO(40, 48, 64, 0.7),
+                            borderRadius: BorderRadius.circular(6.0),
+                            border: Border.all(
+                              color: const Color.fromRGBO(255, 255, 255, 0.12),
+                            ),
+                          ),
+                          child: const Text(
+                            '一键全复位',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: UIConfig.textNormal,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
+              const SizedBox(height: 14.0),
+
+              // 核心列表区
+              Expanded(
+                child: ListView.separated(
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: params.length,
+                  separatorBuilder: (context, _) => const SizedBox(height: 8.0),
+                  itemBuilder: (context, i) {
+                    return _buildParamCard(i, params[i], _values[i], accent);
+                  },
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 14.0),
-
-          // 核心列表区
-          Expanded(
-            child: ListView.separated(
-              physics: const BouncingScrollPhysics(),
-              itemCount: params.length,
-              separatorBuilder: (context, _) => const SizedBox(height: 8.0),
-              itemBuilder: (context, i) {
-                return _buildParamCard(i, params[i], _values[i], accent);
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+        );
       },
     );
   }
 
-  Widget _buildParamCard(int index, MSEBParamDef def, double val, Color accent) {
+  Widget _buildParamCard(
+      int index, MSEBParamDef def, double val, Color accent) {
     final hasVal = val.abs() > 0.05;
-    final valStr = val > 0 ? '+${val.toStringAsFixed(1)}' : val.toStringAsFixed(1);
-    final activeDesc = val > 0 ? def.rightLabel : (val < 0 ? def.leftLabel : '原音直通');
+    final valStr =
+        val > 0 ? '+${val.toStringAsFixed(1)}' : val.toStringAsFixed(1);
+    final activeDesc =
+        val > 0 ? def.rightLabel : (val < 0 ? def.leftLabel : '原音直通');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
@@ -334,7 +342,8 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
               // 右侧胶囊状态徽标
               if (hasVal)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8.0, vertical: 2.0),
                   decoration: BoxDecoration(
                     color: accent.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4.0),
@@ -449,19 +458,27 @@ class _MSEBBipolarSlider extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final w = constraints.maxWidth;
-      const h = 26.0;
+      const h = 32.0;
 
       return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (d) => _handleTouch(d.localPosition, w),
         onPanDown: (d) => _handleTouch(d.localPosition, w),
         onPanUpdate: (d) => _handleTouch(d.localPosition, w),
+        onTapDown: (d) => _handleTouch(d.localPosition, w),
         onDoubleTap: () => onChanged(0.0),
-        child: SizedBox(
+        child: Container(
           width: w,
           height: h,
-          child: CustomPaint(
-            painter: _MSEBSliderPainter(
-              value: value,
-              accentColor: accentColor,
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: w,
+            height: 26.0,
+            child: CustomPaint(
+              painter: _MSEBSliderPainter(
+                value: value,
+                accentColor: accentColor,
+              ),
             ),
           ),
         ),
@@ -496,7 +513,8 @@ class _MSEBSliderPainter extends CustomPainter {
     final centerTickPaint = Paint()
       ..color = const Color.fromRGBO(110, 125, 150, 0.7)
       ..strokeWidth = 1.5;
-    canvas.drawLine(Offset(cx, cy - 5.0), Offset(cx, cy + 5.0), centerTickPaint);
+    canvas.drawLine(
+        Offset(cx, cy - 5.0), Offset(cx, cy + 5.0), centerTickPaint);
 
     // 3. 计算滑块位置
     final norm = ((value + 10.0) / 20.0).clamp(0.0, 1.0);
@@ -526,7 +544,8 @@ class _MSEBSliderPainter extends CustomPainter {
     const thumbW = 26.0;
     const thumbH = 14.0;
     final thumbRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(thumbX, cy), width: thumbW, height: thumbH),
+      Rect.fromCenter(
+          center: Offset(thumbX, cy), width: thumbW, height: thumbH),
       const Radius.circular(7.0),
     );
 
@@ -534,21 +553,28 @@ class _MSEBSliderPainter extends CustomPainter {
     if (value.abs() > 0.05) {
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(thumbX, cy), width: thumbW + 3.0, height: thumbH + 3.0),
+          Rect.fromCenter(
+              center: Offset(thumbX, cy),
+              width: thumbW + 3.0,
+              height: thumbH + 3.0),
           const Radius.circular(8.5),
         ),
-        Paint()..color = accentColor.withValues(alpha: 0.2)..style = PaintingStyle.stroke..strokeWidth = 1.5,
+        Paint()
+          ..color = accentColor.withValues(alpha: 0.2)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
       );
     }
 
     // 滑块主体
-    final thumbBgPaint = Paint()
-      ..color = const Color.fromRGBO(36, 45, 62, 1.0);
+    final thumbBgPaint = Paint()..color = const Color.fromRGBO(36, 45, 62, 1.0);
     canvas.drawRRect(thumbRect, thumbBgPaint);
 
     // 滑块边框
     final thumbBorderPaint = Paint()
-      ..color = value.abs() > 0.05 ? accentColor : const Color.fromRGBO(85, 100, 125, 0.7)
+      ..color = value.abs() > 0.05
+          ? accentColor
+          : const Color.fromRGBO(85, 100, 125, 0.7)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
     canvas.drawRRect(thumbRect, thumbBorderPaint);
@@ -557,7 +583,8 @@ class _MSEBSliderPainter extends CustomPainter {
     final notchPaint = Paint()
       ..color = const Color.fromRGBO(255, 255, 255, 0.7)
       ..strokeWidth = 1.2;
-    canvas.drawLine(Offset(thumbX, cy - 3.5), Offset(thumbX, cy + 3.5), notchPaint);
+    canvas.drawLine(
+        Offset(thumbX, cy - 3.5), Offset(thumbX, cy + 3.5), notchPaint);
   }
 
   @override

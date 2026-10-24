@@ -1,6 +1,11 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../core/hifi_audio_service.dart';
+import '../../core/platform_helper.dart';
 import '../../models/sidebar_tab.dart';
+import '../../models/track.dart';
+import '../../services/dac_setting_service.dart';
 import '../../services/music_database_service.dart';
 import '../../services/theme_service.dart';
 import '../../theme/ui_config.dart';
@@ -18,50 +23,114 @@ import '../mac/views/mac_magic_tuning_view.dart';
 import '../mac/views/mac_scan_music_view.dart';
 import '../mac/views/mac_web_service_view.dart';
 
-/// iPhone 横屏发烧纯音工作台 (1:1 严格对齐 Mac 经典固定 4 块架构)
-/// 依要求：
-/// 1. 块 1 左上：功能与歌单卡片（保留“主题”、“DAC”、“均衡器”、“所有音乐”等）
-/// 2. 块 2 左下：固定 DAC 状态指示卡片 (TOPPING DX1 II 🟢)
-/// 3. 块 3 右上：完整中央主舞台视图
-/// 4. 块 4 右下：底部液态玻璃播放胶囊栏
-/// 5. 底层：发烧律动背景透视
-/// 6. 彻底移除全屏屏保与息屏包含/息屏时间设置，所有卡片常驻
+/// iPad's landscape workspace, fitted to iPhone safe areas and touch controls.
+/// Orientation is selected once by IphoneMainView for the app session.
 class IphoneLandscapeView extends StatefulWidget {
-  final VoidCallback onSwitchToPortrait;
-
-  const IphoneLandscapeView({
-    super.key,
-    required this.onSwitchToPortrait,
-  });
+  const IphoneLandscapeView({super.key});
 
   @override
   State<IphoneLandscapeView> createState() => _IphoneLandscapeViewState();
 }
 
-class _IphoneLandscapeViewState extends State<IphoneLandscapeView> {
+class _IphoneLandscapeViewState extends State<IphoneLandscapeView>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   SidebarTab _currentTab = SidebarTab.allMusic;
   int _selectedPlaylistId = 0;
   bool _showCreatePlaylistModal = false;
-  final TextEditingController _playlistNameController = TextEditingController();
+  final _playlistNameController = TextEditingController();
+  late final AnimationController _fullscreenController;
+  late final Animation<double> _fullscreenAnim;
+  Timer? _idleCheckTimer;
+  int _idleSeconds = 0;
+  bool _isFullscreen = false;
+  bool _isActive = true;
 
   @override
   void initState() {
     super.initState();
-    final savedTabIdx = int.tryParse(MusicDatabaseService.instance.getSetting('active_sidebar_tab', '0'));
-    if (savedTabIdx != null && savedTabIdx >= 0 && savedTabIdx < SidebarTab.values.length) {
-      _currentTab = SidebarTab.values[savedTabIdx];
+    WidgetsBinding.instance.addObserver(this);
+    final db = MusicDatabaseService.instance;
+    final savedTab = int.tryParse(db.getSetting('active_sidebar_tab', '0'));
+    if (savedTab != null &&
+        savedTab >= 0 &&
+        savedTab < SidebarTab.values.length) {
+      _currentTab = SidebarTab.values[savedTab];
+    }
+    _selectedPlaylistId =
+        int.tryParse(db.getSetting('active_playlist_id', '0')) ?? 0;
+    if (_currentTab == SidebarTab.customPlaylist &&
+        !db.playlists.any((p) => p.id == _selectedPlaylistId)) {
+      _currentTab = SidebarTab.allMusic;
+    }
+    _fullscreenController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 400));
+    _fullscreenAnim = CurvedAnimation(
+        parent: _fullscreenController, curve: Curves.easeInOutCubic);
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      _idleCheckTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!_isActive || _showCreatePlaylistModal || _isFullscreen) return;
+        final mode =
+            int.tryParse(db.getSetting('setting_idle_fullscreen', '4')) ?? 4;
+        final timeout =
+            switch (mode) { 0 => 15, 1 => 30, 2 => 60, 3 => 300, _ => 0 };
+        if (timeout == 0) {
+          _idleSeconds = 0;
+          return;
+        }
+        if (++_idleSeconds >= timeout) _setFullscreen(true);
+      });
     }
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isActive = state == AppLifecycleState.resumed;
+    _idleSeconds = 0;
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _idleCheckTimer?.cancel();
+    _fullscreenController.dispose();
     _playlistNameController.dispose();
     super.dispose();
   }
 
+  void _setFullscreen(bool value) {
+    if (_isFullscreen == value) return;
+    setState(() => _isFullscreen = value);
+    _idleSeconds = 0;
+    if (value) {
+      _fullscreenController.forward();
+    } else {
+      _fullscreenController.reverse();
+    }
+  }
+
+  void _onUserActivity() {
+    _idleSeconds = 0;
+    if (_isFullscreen) _setFullscreen(false);
+  }
+
   void _onTabSelected(SidebarTab tab) {
-    setState(() => _currentTab = tab);
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', tab.index.toString());
+    setState(() {
+      _currentTab = tab;
+      _selectedPlaylistId = 0;
+    });
+    MusicDatabaseService.instance
+        .setSetting('active_sidebar_tab', tab.index.toString());
+  }
+
+  void _selectPlaylist(int id) {
+    setState(() {
+      _currentTab = SidebarTab.customPlaylist;
+      _selectedPlaylistId = id;
+    });
+    final db = MusicDatabaseService.instance;
+    db.setSetting(
+        'active_sidebar_tab', SidebarTab.customPlaylist.index.toString());
+    db.setSetting('active_playlist_id', id.toString());
   }
 
   void _openCreatePlaylistModal() {
@@ -69,16 +138,16 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView> {
     setState(() => _showCreatePlaylistModal = true);
   }
 
-  void _closeCreatePlaylistModal() {
-    setState(() => _showCreatePlaylistModal = false);
-  }
+  void _closeCreatePlaylistModal() =>
+      setState(() => _showCreatePlaylistModal = false);
 
   void _submitCreatePlaylist() {
     final name = _playlistNameController.text.trim();
-    if (name.isNotEmpty) {
-      MusicDatabaseService.instance.createPlaylist(name);
-    }
+    if (name.isEmpty) return;
+    final db = MusicDatabaseService.instance;
+    db.createPlaylist(name);
     _closeCreatePlaylistModal();
+    if (db.playlists.isNotEmpty) _selectPlaylist(db.playlists.last.id);
   }
 
   @override
@@ -88,143 +157,166 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView> {
         MusicDatabaseService.instance,
         HifiAudioService.instance,
         ThemeService.instance,
+        DacSettingService.instance,
       ]),
       builder: (context, _) {
         final theme = ThemeService.instance;
-        final activeVisualizer = VisualizerType.values[theme.backgroundVisualMode.clamp(0, VisualizerType.values.length - 1)];
-        final db = MusicDatabaseService.instance;
-        final tracks = db.tracks;
-        final playlists = db.playlists;
-
+        final visualizer = VisualizerType.values[theme.backgroundVisualMode
+            .clamp(0, VisualizerType.values.length - 1)];
+        final dac = DacSettingService.instance;
         return Scaffold(
+          resizeToAvoidBottomInset: false,
           backgroundColor: UIConfig.mainStageBg,
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
-              // 1. 全景底层发烧律动背景 (透视呈现)
-              RepaintBoundary(
-                child: MacBackgroundWidget(
-                  visualizerType: activeVisualizer,
-                  fullscreenProgress: 0.0,
-                ),
-              ),
-
-              // 2. 统一纯音横屏边距 (依要求：左边间距+8px，右边间距距离屏幕多加32px，上多加12px，下多加12px)
-              Padding(
-                padding: const EdgeInsets.only(
-                  left: 18.0,
-                  right: 42.0,
-                  top: 20.0,
-                  bottom: 20.0,
-                ),
-                child: Row(
-                  children: [
-                    // 左侧列 (包含块 1 与块 2，严格填满高并与右侧顶底对齐)
-                    SizedBox(
-                      width: 170.0,
-                      child: MacSidebarWidget(
-                        width: 170.0,
-                        padding: EdgeInsets.zero,
-                        gap: 6.0,
-                        currentTab: _currentTab,
-                        selectedPlaylistId: _selectedPlaylistId,
-                        playlists: playlists,
-                        dacName: 'TOPPING DX1 II',
-                        isDacConnected: true,
-                        onTabSelected: _onTabSelected,
-                        onPlaylistSelected: (plId) {
-                          setState(() {
-                            _currentTab = SidebarTab.customPlaylist;
-                            _selectedPlaylistId = plId;
-                          });
-                        },
-                        onCreatePlaylist: _openCreatePlaylistModal,
-                        onDacClicked: () => _onTabSelected(SidebarTab.dacSettings),
-                      ),
+          body: AnimatedBuilder(
+            animation: _fullscreenAnim,
+            builder: (context, _) {
+              final progress = _fullscreenAnim.value;
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  RepaintBoundary(
+                      child: MacBackgroundWidget(
+                          visualizerType: visualizer,
+                          fullscreenProgress: progress)),
+                  SafeArea(
+                    child: Listener(
+                      behavior: HitTestBehavior.translucent,
+                      onPointerDown: (_) => _onUserActivity(),
+                      onPointerMove: (_) => _onUserActivity(),
+                      child: LayoutBuilder(builder: (context, constraints) {
+                        final sidebarWidth =
+                            constraints.maxWidth < 700 ? 160.0 : 180.0;
+                        const margin = 10.0;
+                        const gap = 8.0;
+                        final mainLeft = sidebarWidth + margin + gap;
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (progress < 0.999) ...[
+                              Positioned(
+                                left: margin,
+                                top: margin,
+                                bottom: margin,
+                                width: sidebarWidth,
+                                child: _panel(
+                                    progress,
+                                    Offset(-sidebarWidth - margin, -150),
+                                    MacSidebarWidget(
+                                      width: sidebarWidth,
+                                      padding: EdgeInsets.zero,
+                                      gap: gap,
+                                      currentTab: _currentTab,
+                                      selectedPlaylistId: _selectedPlaylistId,
+                                      playlists: MusicDatabaseService
+                                          .instance.playlists,
+                                      dacName: dac.dacName,
+                                      isDacConnected: dac.currentDevice != null,
+                                      onTabSelected: _onTabSelected,
+                                      onPlaylistSelected: _selectPlaylist,
+                                      onCreatePlaylist:
+                                          _openCreatePlaylistModal,
+                                      onDacClicked: () => _onTabSelected(
+                                          SidebarTab.dacSettings),
+                                    )),
+                              ),
+                              Positioned(
+                                left: mainLeft,
+                                right: margin,
+                                top: margin,
+                                bottom: margin + UIConfig.bottomBarHeight + gap,
+                                child: _panel(
+                                    progress,
+                                    Offset(constraints.maxWidth, -150),
+                                    _buildMainStage(visualizer)),
+                              ),
+                              Positioned(
+                                left: mainLeft,
+                                right: margin,
+                                bottom: margin,
+                                height: UIConfig.bottomBarHeight,
+                                child: _panel(
+                                    progress,
+                                    Offset(constraints.maxWidth,
+                                        constraints.maxHeight / 3),
+                                    IphoneBottomBarWidget(
+                                        onToggleFullscreen: () =>
+                                            _setFullscreen(true))),
+                              ),
+                            ],
+                            if (progress > 0.05)
+                              Positioned(
+                                top: 10,
+                                right: 10,
+                                child: IconButton.filledTonal(
+                                  tooltip: '退出全屏',
+                                  onPressed: () => _setFullscreen(false),
+                                  icon:
+                                      const Icon(Icons.fullscreen_exit_rounded),
+                                ),
+                              ),
+                            if (_showCreatePlaylistModal)
+                              _buildCreatePlaylistModal(),
+                          ],
+                        );
+                      }),
                     ),
-                    const SizedBox(width: 8.0),
-
-                    // 右侧列 (包含块 3 主舞台与块 4 底部播放胶囊条)
-                    Expanded(
-                      child: Column(
-                        children: [
-                          // 块 3: 中央主舞台视图 (1:1 严格对齐 Mac 原生视图架构与 GlassCard 背景)
-                          Expanded(
-                            child: _buildMainStage(tracks, activeVisualizer),
-                          ),
-                          const SizedBox(height: 6.0),
-
-                          // 块 4: 底部液态玻璃播放胶囊栏 (内置横竖屏旋转按键，彻底避免右上方浮动图标遮挡卡片)
-                          IphoneBottomBarWidget(
-                            onSwitchOrientation: widget.onSwitchToPortrait,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 3. 新建播放列表模态框
-              if (_showCreatePlaylistModal) _buildCreatePlaylistModal(),
-            ],
+                  ),
+                ],
+              );
+            },
           ),
         );
       },
     );
   }
 
-  Widget _buildMainStage(List<dynamic> tracks, VisualizerType activeVisualizer) {
-    final idx = _currentTab.index.clamp(0, SidebarTab.values.length - 1);
-    return IndexedStack(
-      index: idx,
-      children: [
-        // 0: allMusic
-        MacAllMusicView(
-          tracks: tracks.cast(),
-          onNavigateToScan: () {
-            setState(() {
-              _currentTab = SidebarTab.scanMusic;
-            });
-          },
+  Widget _panel(double progress, Offset offset, Widget child) => IgnorePointer(
+        ignoring: progress > 0.4,
+        child: Transform.translate(
+          offset: offset * progress,
+          child: Opacity(opacity: (1 - progress).clamp(0, 1), child: child),
         ),
-        // 1: customPlaylist
-        MacAllMusicView(
-          tracks: tracks.cast(),
-          onNavigateToScan: () {
-            setState(() {
-              _currentTab = SidebarTab.scanMusic;
-            });
-          },
-        ),
-        // 2: scanMusic
-        MacScanMusicView(
-          scannedCount: tracks.length,
-          onScanComplete: () => MusicDatabaseService.instance.loadLibrary(),
-        ),
-        // 3: equalizer
-        const MacEqualizerView(),
-        // 4: msebTuning
-        const MacMagicTuningView(),
-        // 5: dacSettings
-        const MacDACSettingView(),
-        // 6: themeSettings
-        MacThemeSettingView(
-          currentVisualizer: activeVisualizer,
-          onVisualizerChanged: (type) {
-            ThemeService.instance.setBackgroundVisualMode(type.index);
-          },
-        ),
-        // 7: systemSettings
-        const MacSystemSettingsView(),
-        // 8: webService
-        const MacWebServiceView(isWifiTransfer: false),
-        // 9: wifiTransfer
-        const MacWebServiceView(isWifiTransfer: true),
-        // 10: terminal
-        const MacSystemSettingsView(),
-      ],
-    );
+      );
+
+  Widget _buildMainStage(VisualizerType visualizer) {
+    final db = MusicDatabaseService.instance;
+    switch (_currentTab) {
+      case SidebarTab.allMusic:
+        return MacAllMusicView(
+            tracks: db.tracks,
+            onNavigateToScan: () => _onTabSelected(SidebarTab.scanMusic));
+      case SidebarTab.customPlaylist:
+        final playlist =
+            db.playlists.where((p) => p.id == _selectedPlaylistId).firstOrNull;
+        return MacAllMusicView(
+            key: ValueKey(_selectedPlaylistId),
+            title: playlist?.name ?? '播放列表',
+            isPlaylist: true,
+            playlistId: playlist?.id,
+            tracks: playlist?.tracks ?? const <Track>[],
+            onNavigateToScan: () => _onTabSelected(SidebarTab.scanMusic));
+      case SidebarTab.scanMusic:
+        return MacScanMusicView(
+            scannedCount: db.tracks.length, onScanComplete: db.loadLibrary);
+      case SidebarTab.equalizer:
+        return const MacEqualizerView();
+      case SidebarTab.msebTuning:
+        return const MacMagicTuningView();
+      case SidebarTab.dacSettings:
+        return const MacDACSettingView(platform: HifiPlatformType.iphone);
+      case SidebarTab.themeSettings:
+        return MacThemeSettingView(
+            currentVisualizer: visualizer,
+            onVisualizerChanged: (type) =>
+                ThemeService.instance.setBackgroundVisualMode(type.index));
+      case SidebarTab.systemSettings:
+      case SidebarTab.terminal:
+        return const MacSystemSettingsView();
+      case SidebarTab.webService:
+        return const MacWebServiceView(isWifiTransfer: false);
+      case SidebarTab.wifiTransfer:
+        return const MacWebServiceView(isWifiTransfer: true);
+    }
   }
 
   Widget _buildCreatePlaylistModal() {
@@ -236,45 +328,59 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView> {
           child: Container(color: Colors.black.withValues(alpha: 0.5)),
         ),
         Center(
-          child: GlassCard(
-            width: 320.0,
-            borderRadius: 14.0,
-            padding: const EdgeInsets.all(18.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '新建播放列表',
-                  style: TextStyle(fontSize: 15.0, fontWeight: FontWeight.bold, color: Colors.white),
-                ),
-                const SizedBox(height: 10.0),
-                TextField(
-                  controller: _playlistNameController,
-                  autofocus: true,
-                  maxLength: 8,
-                  style: const TextStyle(fontSize: 13.0, color: Colors.white),
-                  decoration: InputDecoration(
-                    counterText: '',
-                    filled: true,
-                    fillColor: const Color(0xD90A0E14),
-                    hintText: '输入新歌单名称...',
-                    hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12.0),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(6.0)),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(context).bottom),
+            child: GlassCard(
+              width: 320.0,
+              borderRadius: 14.0,
+              padding: const EdgeInsets.all(18.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '新建播放列表',
+                    style: TextStyle(
+                        fontSize: 15.0,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white),
                   ),
-                  onSubmitted: (_) => _submitCreatePlaylist(),
-                ),
-                const SizedBox(height: 12.0),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(onPressed: _closeCreatePlaylistModal, child: const Text('取消')),
-                    const SizedBox(width: 8.0),
-                    ElevatedButton(onPressed: _submitCreatePlaylist, child: const Text('创建')),
-                  ],
-                ),
-              ],
+                  const SizedBox(height: 10.0),
+                  TextField(
+                    controller: _playlistNameController,
+                    autofocus: true,
+                    maxLength: 8,
+                    style: const TextStyle(fontSize: 13.0, color: Colors.white),
+                    decoration: InputDecoration(
+                      counterText: '',
+                      filled: true,
+                      fillColor: const Color(0xD90A0E14),
+                      hintText: '输入新歌单名称...',
+                      hintStyle: const TextStyle(
+                          color: Color(0xFF64748B), fontSize: 12.0),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10.0, vertical: 8.0),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6.0)),
+                    ),
+                    onSubmitted: (_) => _submitCreatePlaylist(),
+                  ),
+                  const SizedBox(height: 12.0),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                          onPressed: _closeCreatePlaylistModal,
+                          child: const Text('取消')),
+                      const SizedBox(width: 8.0),
+                      ElevatedButton(
+                          onPressed: _submitCreatePlaylist,
+                          child: const Text('创建')),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

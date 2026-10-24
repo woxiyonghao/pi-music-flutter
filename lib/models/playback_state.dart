@@ -24,17 +24,32 @@ class PlaybackState {
   const PlaybackState({
     this.isPlaying = false,
     this.isPaused = false,
-    this.isBitPerfect = true,
+    this.isBitPerfect = false,
     this.currentTime = 0.0,
     this.duration = 0.0,
     this.progress = 0.0,
     this.volume = 0.77,
     this.isMuted = false,
     this.playMode = PlayMode.loopList,
-    this.activeDeviceName = 'Apple Direct',
-    this.activeSampleRate = 192000,
+    this.activeDeviceName = '',
+    this.activeSampleRate = 0,
     this.spectrumLevels = const [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   });
+
+  PlaybackState withBitPerfect(bool value) => PlaybackState(
+        isPlaying: isPlaying,
+        isPaused: isPaused,
+        isBitPerfect: value,
+        currentTime: currentTime,
+        duration: duration,
+        progress: progress,
+        volume: volume,
+        isMuted: isMuted,
+        playMode: playMode,
+        activeDeviceName: activeDeviceName,
+        activeSampleRate: activeSampleRate,
+        spectrumLevels: spectrumLevels,
+      );
 
   String get currentTimeString {
     final curSec = currentTime.clamp(0.0, 86400.0).floor();

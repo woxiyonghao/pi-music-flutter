@@ -364,54 +364,24 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
 .dac-hw-name { font-size: 14px; font-weight: 700; color: var(--text-active); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dac-hw-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
-.dac-chips-grid {
+.dac-devices-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
-  margin-bottom: 16px;
 }
-.dac-chip-card {
-  padding: 10px;
+.dac-device-card {
+  padding: 12px;
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.07);
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: center;
 }
-.dac-chip-card:hover { border-color: rgba(16, 185, 129, 0.4); }
-.dac-chip-card.active {
+.dac-device-card.active {
   background: rgba(16, 185, 129, 0.15);
   border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: 0 2px 12px var(--accent-glow);
 }
-.dac-chip-name { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
-.dac-chip-brand { font-size: 10px; color: var(--text-muted); }
-.dac-chip-card.active .dac-chip-brand { color: var(--accent); opacity: 0.85; }
-
-.dac-opts-group { display: flex; flex-direction: column; gap: 12px; }
-.dac-opt-row { display: flex; flex-direction: column; gap: 6px; }
-.dac-opt-lbl { font-size: 12px; font-weight: 600; color: var(--text-active); }
-.dac-opt-btns { display: flex; flex-wrap: wrap; gap: 6px; }
-.dac-opt-btn {
-  padding: 6px 12px;
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--text-normal);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.dac-opt-btn:hover { border-color: rgba(16, 185, 129, 0.3); }
-.dac-opt-btn.active {
-  background: var(--accent);
-  color: #0c1017;
-  font-weight: 700;
-  border-color: var(--accent);
-  box-shadow: 0 2px 8px var(--accent-glow);
-}
+.dac-device-name { font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.dac-device-details { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+.dac-device-card.active .dac-device-name { color: var(--accent); }
 
 /* ================== Tab 6: 视觉与系统设定 ================== */
 .section-title { font-size: 13px; font-weight: 700; color: var(--text-active); margin-bottom: 10px; }
@@ -604,13 +574,13 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
           <div class="eq-switch-wrap">
             <span>魔棒调音</span>
             <label class="switch">
-              <input type="checkbox" id="msebToggle" checked>
+              <input type="checkbox" id="msebToggle">
               <span class="slider-toggle"></span>
             </label>
           </div>
           <button class="btn-sm" id="btnResetMseb">全部归零</button>
         </div>
-        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">心理声学主观听感微调 · 实时映射高精度双二阶滤波器</div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">10 段 DSP 音色映射 · 与图形均衡器叠加</div>
         <div class="mseb-grid" id="msebGrid">
           <!-- 由 JS 动态渲染 10 个听感滑块 -->
         </div>
@@ -622,45 +592,18 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
   <div class="tab-pane" id="tabDAC">
     <div class="card">
       <!-- 物理硬件连接状态卡片 -->
+      <!-- 物理硬件连接状态卡片 -->
       <div class="dac-hw-banner">
         <div class="dac-hw-icon" id="dacStatusIcon">&#9889;</div>
         <div class="dac-hw-info">
           <div class="dac-hw-name" id="dacDeviceName">物理 DAC 检测中...</div>
-          <div class="dac-hw-desc" id="dacDeviceDesc">当前输出设备: 默认音频输出</div>
+          <div class="dac-hw-desc" id="dacDeviceDesc">正在读取实际音频设备…</div>
         </div>
       </div>
 
-      <div class="section-title">6 大名片解码芯片架构选择</div>
-      <div class="dac-chips-grid" id="dacChipsGrid">
-        <div class="dac-chip-card active" data-chip="0">
-          <div class="dac-chip-name">Apple Direct</div>
-          <div class="dac-chip-brand">Mac/iOS 硬件直通</div>
-        </div>
-        <div class="dac-chip-card" data-chip="1">
-          <div class="dac-chip-name">ESS Sabre</div>
-          <div class="dac-chip-brand">ES9038PRO 8-Ch并联</div>
-        </div>
-        <div class="dac-chip-card" data-chip="2">
-          <div class="dac-chip-name">AKM 旭化成</div>
-          <div class="dac-chip-brand">AK4499EX Velvet</div>
-        </div>
-        <div class="dac-chip-card" data-chip="3">
-          <div class="dac-chip-name">Cirrus Logic</div>
-          <div class="dac-chip-brand">CS43198 MasterHIFI</div>
-        </div>
-        <div class="dac-chip-card" data-chip="4">
-          <div class="dac-chip-name">R-2R 梯形电阻</div>
-          <div class="dac-chip-brand">纯分立 NOS/OS</div>
-        </div>
-        <div class="dac-chip-card" data-chip="5">
-          <div class="dac-chip-name">ROHM 罗姆</div>
-          <div class="dac-chip-brand">MUS-IC BD34301</div>
-        </div>
-      </div>
-
-      <div class="section-title">芯片专属发烧硬件参数配置</div>
-      <div class="dac-opts-group" id="dacOptionsContainer">
-        <!-- 由 JS 动态根据当前选中的芯片渲染参数行 -->
+      <div id="dacDevicesSection" hidden>
+        <div class="section-title">已连接的音频设备</div>
+        <div class="dac-devices-grid" id="dacDevicesGrid"></div>
       </div>
     </div>
   </div>
@@ -668,7 +611,7 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
   <!-- ==================== Tab 6: 视觉主题与系统设定 ==================== -->
   <div class="tab-pane" id="tabSettings">
     <div class="card">
-      <div class="section-title">机身名机皇主题配色 (8 款经典)</div>
+      <div class="section-title">机身名机皇主题配色 (9 款经典)</div>
       <div class="grid-2col" id="themesGrid">
         <div class="theme-card active" data-theme="0"><div class="theme-dot" style="background:#FA2D48;"></div><div class="theme-name">现代深空玫红</div></div>
         <div class="theme-card" data-theme="1"><div class="theme-dot" style="background:#00B4D8;"></div><div class="theme-name">麦景图湖蓝</div></div>
@@ -678,9 +621,10 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
         <div class="theme-card" data-theme="6"><div class="theme-dot" style="background:#94A3B8;"></div><div class="theme-name">柏林之声冷银</div></div>
         <div class="theme-card" data-theme="7"><div class="theme-dot" style="background:#22C55E;"></div><div class="theme-name">英国名暗夜翠</div></div>
         <div class="theme-card" data-theme="8"><div class="theme-dot" style="background:#EF4444;"></div><div class="theme-name">马克莱文森赤晶</div></div>
+        <div class="theme-card" data-theme="9"><div class="theme-dot" style="background:#00E5FF;"></div><div class="theme-name">iPhone 硬件大师</div></div>
       </div>
 
-      <div class="section-title">数播大屏全景动效模式 (11 种)</div>
+      <div class="section-title">数播大屏全景动效模式 (12 种)</div>
       <div class="grid-2col" id="visualsGrid">
         <div class="theme-card active" data-vmode="2"><div class="theme-name">金嗓子精密大表头</div></div>
         <div class="theme-card" data-vmode="1"><div class="theme-name">麦景图动圈双表头</div></div>
@@ -693,6 +637,7 @@ input:checked + .slider-toggle:before { transform: translateX(20px); }
         <div class="theme-card" data-vmode="9"><div class="theme-name">赛博3D粒子网格</div></div>
         <div class="theme-card" data-vmode="10"><div class="theme-name">液态StandBy时钟</div></div>
         <div class="theme-card" data-vmode="7"><div class="theme-name">纯净暗黑省电模式</div></div>
+        <div class="theme-card" data-vmode="11"><div class="theme-name">iPhone 硬件大师大屏</div></div>
       </div>
 
       <div class="section-title">发烧级输出与睡眠定时</div>
@@ -765,9 +710,9 @@ const msebDefs = [
   { name: "人声位置", left: "舞台后缩", right: "贴耳靠前" },
   { name: "女声甜度", left: "自然平直", right: "润泽甜美" },
   { name: "齿音消除", left: "柔化去刺", right: "原生锋芒" },
-  { name: "冲激响应", left: "柔和松弛", right: "硬朗凌厉" },
+  { name: "瞬态存在感", left: "柔和松弛", right: "硬朗凌厉" },
   { name: "空气感",   left: "凝聚内敛", right: "空灵弥漫" },
-  { name: "声场重塑", left: "紧凑聚焦", right: "宏大宽广" }
+  { name: "声场明亮度", left: "紧凑聚焦", right: "宏大宽广" }
 ];
 
 // 10 频段 EQ 定义
@@ -780,45 +725,6 @@ const eqPresets = {
   classic: [3.5, 2.5, 1.5, 0.5, 0, 0, 1.0, 2.0, 3.0, 3.5],
   bass:    [6.0, 5.0, 3.5, 2.0, 1.0, 0, 0, 0, 0, 0],
   treble:  [-1.0, -0.5, 0, 0, 0.5, 1.0, 2.5, 4.0, 5.5, 6.0]
-};
-
-// DAC 参数项定义表
-const dacChipOptions = {
-  0: [ // Apple Direct
-    { key: "apple_exclusive", label: "输出模式", opts: ["Bit-Perfect 独占流", "系统混音共享"] },
-    { key: "apple_sample_rate", label: "采样率模式", opts: ["原生跟随母带", "固定 96kHz", "固定 192kHz"] },
-    { key: "apple_drive", label: "耳放输出电平", opts: ["智能阻抗自适应", "强制高输出 3.0Vrms", "标准输出 1.25Vrms"] },
-    { key: "apple_bit_depth", label: "定点/浮点精度", opts: ["32-bit Float 直通", "24-bit 整数定点"] }
-  ],
-  1: [ // ESS Sabre
-    { key: "pcm_filter", label: "PCM 数字滤波", opts: ["快速最小", "慢速最小", "快速线性", "慢速线性", "变迹滤波", "砖墙滤波", "混合滤波"] },
-    { key: "dsd_bypass", label: "DSD 直通通道", opts: ["Direct 1-Bit 直通", "FIR 模拟滤波"] },
-    { key: "pcm_dpll", label: "DPLL 抖动抑制带宽", opts: ["极窄带 (发烧低抖)", "标准平衡", "宽带 (兼容)"] },
-    { key: "mono_mode", label: "芯片输出架构", opts: ["双芯片 8-Ch 并联", "双芯片立体声"] },
-    { key: "output_mode", label: "模拟输出级", opts: ["固定后级 (Line-Out 4.2V)", "可调前级 (Pre-Out)"] },
-    { key: "phase", label: "绝对极性", opts: ["绝对正相 (0°)", "极性反转 (180°)"] }
-  ],
-  2: [ // AKM Velvet
-    { key: "akm_filter", label: "Velvet 数字滤波器", opts: ["短延时锐滚降", "短延时慢滚降", "锐滚降", "慢滚降", "超低群延迟", "低色散"] },
-    { key: "akm_color", label: "声音色彩调节", opts: ["自然温润", "细腻通透", "动感宽厚", "极简监听"] },
-    { key: "akm_dsd", label: "DSD 解码模式", opts: ["Direct 旁路调制", "Normal 滤波模式"] }
-  ],
-  3: [ // Cirrus Logic
-    { key: "cs_filter", label: "MasterHIFI 滤波", opts: ["快速最小", "慢速最小", "快速线性", "慢速线性", "NOS 无过采样"] },
-    { key: "cs_dsd", label: "DSD 处理通道", opts: ["Direct DSD 直通", "DoP 硬件解调"] },
-    { key: "cs_drive", label: "驱动推力电平", opts: ["高推力差分 (2Vrms)", "标准单端 (1Vrms)"] }
-  ],
-  4: [ // R-2R
-    { key: "r2r_mode", label: "超采样架构", opts: ["NOS 纯无过采样", "OS 线性相位", "OS 最小相位"] },
-    { key: "r2r_dsd", label: "DSD 解码方式", opts: ["独立 1-Bit 电阻网络", "转为 24-bit 阶梯解码"] },
-    { key: "r2r_clock", label: "飞秒 FIFO 重整", opts: ["本地 FIFO 重整", "跟随输入时钟"] },
-    { key: "r2r_phase", label: "相位输出", opts: ["绝对正相 (0°)", "极性反转 (180°)"] }
-  ],
-  5: [ // ROHM
-    { key: "rohm_filter", label: "MUS-IC 滤波器", opts: ["Sharp Roll-Off (高解析)", "Slow Roll-Off (自然松弛)"] },
-    { key: "rohm_clock", label: "调制器主时钟", opts: ["智能倍频匹配", "锁定 64x fs", "锁定 128x fs"] },
-    { key: "rohm_dsd", label: "模拟音频通道", opts: ["Direct Path 纯模拟", "标准多级滤波"] }
-  ]
 };
 
 // 格式化秒数为 mm:ss
@@ -1191,51 +1097,37 @@ function updateMseb(m) {
   }
 }
 
-// ==================== DAC 硬件与参数配置渲染 ====================
-function updateDac(d) {
-  dacConfigData = d;
-  activeDacChip = d.selected_chip || 0;
-
-  document.getElementById('dacDeviceName').textContent = d.dac_name || '系统默认声卡';
-  document.getElementById('dacDeviceDesc').textContent = '活跃输出: ' + (d.active_output || '默认音频输出');
-  document.getElementById('dacStatusIcon').style.color = d.has_external_dac ? 'var(--accent)' : 'var(--text-muted)';
-
-  // 芯片卡片高亮
-  document.querySelectorAll('#dacChipsGrid .dac-chip-card').forEach(c => {
-    c.classList.toggle('active', parseInt(c.dataset.chip) === activeDacChip);
-  });
-
-  renderDacOptions(activeDacChip, d.params || {});
+// ==================== 实际音频输出状态（只读） ====================
+function dacDeviceDetails(device) {
+  const details = [];
+  if (device.transport) details.push(device.transport);
+  const rate = Number(device.sample_rate);
+  if (Number.isFinite(rate) && rate > 0) details.push((rate / 1000) + ' kHz');
+  return details.join(' · ');
 }
 
-function renderDacOptions(chipIdx, params) {
-  const container = document.getElementById('dacOptionsContainer');
-  const rows = dacChipOptions[chipIdx] || [];
-  let html = '';
+function updateDac(d) {
+  const devices = Array.isArray(d.devices) ? d.devices : [];
+  document.getElementById('dacDeviceName').textContent = d.dac_name || '未获取到当前音频设备';
+  const details = dacDeviceDetails(d);
+  const policy = d.follows_system_output ? '音频输出由 iOS 系统管理' : '';
+  document.getElementById('dacDeviceDesc').textContent = [details, policy].filter(Boolean).join(' · ');
+  document.getElementById('dacStatusIcon').style.color = d.dac_name ? 'var(--accent)' : 'var(--text-muted)';
 
-  rows.forEach(r => {
-    const curVal = params[r.key] !== undefined ? params[r.key] : 0;
-    html += `
-      <div class="dac-opt-row">
-        <div class="dac-opt-lbl">${r.label}</div>
-        <div class="dac-opt-btns">`;
-    r.opts.forEach((optName, oIdx) => {
-      const isAct = (oIdx === curVal);
-      html += `<button class="dac-opt-btn ${isAct ? 'active' : ''}" data-key="${r.key}" data-val="${oIdx}">${optName}</button>`;
-    });
-    html += `</div></div>`;
-  });
-
-  container.innerHTML = html;
-
-  container.querySelectorAll('.dac-opt-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.key;
-      const val = parseInt(btn.dataset.val);
-      btn.parentElement.querySelectorAll('.dac-opt-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      sendAction({ action: 'set_dac_param', key: key, val: val });
-    });
+  const grid = document.getElementById('dacDevicesGrid');
+  grid.replaceChildren();
+  document.getElementById('dacDevicesSection').hidden = devices.length === 0;
+  devices.forEach(device => {
+    const card = document.createElement('div');
+    card.className = 'dac-device-card' + (device.is_active ? ' active' : '');
+    const name = document.createElement('div');
+    name.className = 'dac-device-name';
+    name.textContent = device.name || '未命名音频设备';
+    const detail = document.createElement('div');
+    detail.className = 'dac-device-details';
+    detail.textContent = [device.is_active ? '当前输出' : '', dacDeviceDetails(device)].filter(Boolean).join(' · ');
+    card.append(name, detail);
+    grid.append(card);
   });
 }
 
@@ -1335,18 +1227,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('btnResetMseb').addEventListener('click', () => {
     sendAction({ action: 'reset_mseb' });
-  });
-
-  // DAC 芯片切换点击
-  document.querySelectorAll('#dacChipsGrid .dac-chip-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const chip = parseInt(card.dataset.chip);
-      activeDacChip = chip;
-      document.querySelectorAll('#dacChipsGrid .dac-chip-card').forEach(c => c.classList.remove('active'));
-      card.classList.add('active');
-      sendAction({ action: 'set_dac_chip', chip: chip });
-      renderDacOptions(chip, dacConfigData ? (dacConfigData.params || {}) : {});
-    });
   });
 
   // 清空队列

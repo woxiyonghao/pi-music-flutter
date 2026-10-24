@@ -20,11 +20,8 @@ import 'widgets/iphone_top_sidebar_widget.dart';
 /// - 歌曲播放信息卡片 (黑胶封面 + 采样率规格 + BIT-PERFECT + 微型动态电平)
 /// - 最底部 iPad/Mac 风格播放控制胶囊栏
 class IphonePortraitView extends StatefulWidget {
-  final VoidCallback onSwitchToLandscape;
-
   const IphonePortraitView({
     super.key,
-    required this.onSwitchToLandscape,
   });
 
   @override
@@ -37,15 +34,19 @@ class _IphonePortraitViewState extends State<IphonePortraitView> {
   @override
   void initState() {
     super.initState();
-    final savedTabIdx = int.tryParse(MusicDatabaseService.instance.getSetting('active_sidebar_tab', '0'));
-    if (savedTabIdx != null && savedTabIdx >= 0 && savedTabIdx < SidebarTab.values.length) {
+    final savedTabIdx = int.tryParse(
+        MusicDatabaseService.instance.getSetting('active_sidebar_tab', '0'));
+    if (savedTabIdx != null &&
+        savedTabIdx >= 0 &&
+        savedTabIdx < SidebarTab.values.length) {
       _currentTab = SidebarTab.values[savedTabIdx];
     }
   }
 
   void _onTabSelected(SidebarTab tab) {
     setState(() => _currentTab = tab);
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', tab.index.toString());
+    MusicDatabaseService.instance
+        .setSetting('active_sidebar_tab', tab.index.toString());
   }
 
   @override
@@ -61,7 +62,6 @@ class _IphonePortraitViewState extends State<IphonePortraitView> {
               IphoneTopSidebarWidget(
                 currentTab: _currentTab,
                 onTabSelected: _onTabSelected,
-                onSwitchOrientation: widget.onSwitchToLandscape,
               ),
               const SizedBox(height: 8.0),
 
@@ -121,7 +121,7 @@ class _IphonePortraitViewState extends State<IphonePortraitView> {
         return const MacMagicTuningView();
       case SidebarTab.systemSettings:
       case SidebarTab.terminal:
-        return IphoneSystemSettingsView(onSwitchOrientation: widget.onSwitchToLandscape);
+        return const IphoneSystemSettingsView();
       case SidebarTab.webService:
         return const MacWebServiceView(isWifiTransfer: false);
       case SidebarTab.wifiTransfer:

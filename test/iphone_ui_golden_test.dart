@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
 import 'package:hide_player_flutter/models/sidebar_tab.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
+import 'package:hide_player_flutter/services/theme_service.dart';
 import 'package:hide_player_flutter/theme/hifi_theme.dart';
 import 'package:hide_player_flutter/ui/iphone/iphone_landscape_view.dart';
 import 'package:hide_player_flutter/ui/iphone/iphone_portrait_view.dart';
@@ -10,6 +11,10 @@ import 'package:hide_player_flutter/ui/iphone/widgets/iphone_orientation_dialog.
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    ThemeService.instance.resetToDefault();
+  });
 
   setUpAll(() {
     HifiAudioService.instance.stopTicker();
@@ -50,14 +55,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.dacSettings.index.toString());
+    MusicDatabaseService.instance.setSetting(
+        'active_sidebar_tab', SidebarTab.dacSettings.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphonePortraitView(
-          onSwitchToLandscape: () {},
-        ),
+        home: const IphonePortraitView(),
       ),
     );
     await tester.pump();
@@ -75,14 +79,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.equalizer.index.toString());
+    MusicDatabaseService.instance.setSetting(
+        'active_sidebar_tab', SidebarTab.equalizer.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphonePortraitView(
-          onSwitchToLandscape: () {},
-        ),
+        home: const IphonePortraitView(),
       ),
     );
     await tester.pump();
@@ -100,14 +103,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.allMusic.index.toString());
+    MusicDatabaseService.instance
+        .setSetting('active_sidebar_tab', SidebarTab.allMusic.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphonePortraitView(
-          onSwitchToLandscape: () {},
-        ),
+        home: const IphonePortraitView(),
       ),
     );
     await tester.pump();
@@ -125,14 +127,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.themeSettings.index.toString());
+    MusicDatabaseService.instance.setSetting(
+        'active_sidebar_tab', SidebarTab.themeSettings.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphonePortraitView(
-          onSwitchToLandscape: () {},
-        ),
+        home: const IphonePortraitView(),
       ),
     );
     await tester.pump();
@@ -150,14 +151,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.allMusic.index.toString());
+    MusicDatabaseService.instance
+        .setSetting('active_sidebar_tab', SidebarTab.allMusic.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphoneLandscapeView(
-          onSwitchToPortrait: () {},
-        ),
+        home: const IphoneLandscapeView(),
       ),
     );
     await tester.pump();
@@ -175,14 +175,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.dacSettings.index.toString());
+    MusicDatabaseService.instance.setSetting(
+        'active_sidebar_tab', SidebarTab.dacSettings.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphoneLandscapeView(
-          onSwitchToPortrait: () {},
-        ),
+        home: const IphoneLandscapeView(),
       ),
     );
     await tester.pump();
@@ -200,14 +199,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.themeSettings.index.toString());
+    MusicDatabaseService.instance.setSetting(
+        'active_sidebar_tab', SidebarTab.themeSettings.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphoneLandscapeView(
-          onSwitchToPortrait: () {},
-        ),
+        home: const IphoneLandscapeView(),
       ),
     );
     await tester.pump();
@@ -225,14 +223,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.systemSettings.index.toString());
+    MusicDatabaseService.instance.setSetting(
+        'active_sidebar_tab', SidebarTab.systemSettings.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphoneLandscapeView(
-          onSwitchToPortrait: () {},
-        ),
+        home: const IphoneLandscapeView(),
       ),
     );
     await tester.pump();
@@ -250,14 +247,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.equalizer.index.toString());
+    MusicDatabaseService.instance.setSetting(
+        'active_sidebar_tab', SidebarTab.equalizer.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphoneLandscapeView(
-          onSwitchToPortrait: () {},
-        ),
+        home: const IphoneLandscapeView(),
       ),
     );
     await tester.pump();
@@ -275,14 +271,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.scanMusic.index.toString());
+    MusicDatabaseService.instance.setSetting(
+        'active_sidebar_tab', SidebarTab.scanMusic.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphoneLandscapeView(
-          onSwitchToPortrait: () {},
-        ),
+        home: const IphoneLandscapeView(),
       ),
     );
     await tester.pump();
@@ -300,14 +295,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.webService.index.toString());
+    MusicDatabaseService.instance.setSetting(
+        'active_sidebar_tab', SidebarTab.webService.index.toString());
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: IphoneLandscapeView(
-          onSwitchToPortrait: () {},
-        ),
+        home: const IphoneLandscapeView(),
       ),
     );
     await tester.pump();
@@ -317,5 +311,23 @@ void main() {
       find.byType(IphoneLandscapeView),
       matchesGoldenFile('goldens/iphone_landscape_web.png'),
     );
+  });
+  testWidgets('Golden: iPhone Hardware Master Fullscreen', (tester) async {
+    tester.view.physicalSize = const Size(844, 390);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    ThemeService.instance.setTheme(9);
+    MusicDatabaseService.instance.setSetting('active_sidebar_tab', '0');
+    await tester.pumpWidget(MaterialApp(
+        theme: HifiTheme.darkTheme, home: const IphoneLandscapeView()));
+    await tester.pump();
+    await tester.tap(find.byTooltip('全屏沉浸表头'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(tester.takeException(), isNull);
+    await expectLater(find.byType(IphoneLandscapeView),
+        matchesGoldenFile('goldens/iphone_landscape_hardware_master.png'));
+    await tester.pumpWidget(const SizedBox());
   });
 }

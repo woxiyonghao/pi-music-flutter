@@ -16,21 +16,25 @@ class IphoneNowPlayingCard extends StatelessWidget {
         final state = service.state;
 
         // 计算微型双声道电平
-        final leftLevel = state.spectrumLevels.isNotEmpty
-            ? state.spectrumLevels[1].clamp(0.05, 1.0)
-            : (state.isPlaying ? 0.72 : 0.0);
-        final rightLevel = state.spectrumLevels.length > 2
-            ? state.spectrumLevels[2].clamp(0.05, 1.0)
-            : (state.isPlaying ? 0.65 : 0.0);
+        final leftLevel = state.isPlaying && state.spectrumLevels.length > 1
+            ? state.spectrumLevels[1].clamp(0.0, 1.0)
+            : 0.0;
+        final rightLevel = state.isPlaying && state.spectrumLevels.length > 2
+            ? state.spectrumLevels[2].clamp(0.0, 1.0)
+            : 0.0;
 
         final title = track?.title ?? '暂无播放音频';
         final artistAlbum = track != null
             ? '${track.artist} · ${track.album}'
             : '请在「所有音乐」中选择曲目播放';
 
-        final specText = track != null
-            ? '${track.format.name.toUpperCase()} ${(track.sampleRate / 1000).toStringAsFixed(0)}k/${track.bitDepth}b'
-            : 'BIT-PERFECT';
+        final specText = track?.formatBadge ?? '';
+        final outputStatus =
+            track == null || (!state.isPlaying && !state.isPaused)
+                ? '未播放'
+                : service.isDspEnabled
+                    ? 'DSP'
+                    : 'iOS PCM';
 
         return Container(
           height: 70.0,
@@ -143,7 +147,8 @@ class IphoneNowPlayingCard extends StatelessWidget {
                         children: [
                           // 母带格式徽标
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.0),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4.5, vertical: 1.0),
                             decoration: BoxDecoration(
                               color: const Color(0x2EFFB703),
                               borderRadius: BorderRadius.circular(3.5),
@@ -164,9 +169,10 @@ class IphoneNowPlayingCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 5.0),
 
-                          // BIT-PERFECT 直通徽标
+                          // 当前播放处理状态
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.0),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4.5, vertical: 1.0),
                             decoration: BoxDecoration(
                               color: const Color(0x2606D6A0),
                               borderRadius: BorderRadius.circular(3.5),
@@ -193,9 +199,9 @@ class IphoneNowPlayingCard extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(width: 3.5),
-                                const Text(
-                                  'BIT-PERFECT',
-                                  style: TextStyle(
+                                Text(
+                                  outputStatus,
+                                  style: const TextStyle(
                                     fontSize: 8.5,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF06D6A0),

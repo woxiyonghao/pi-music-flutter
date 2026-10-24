@@ -74,15 +74,41 @@ class CueSheet {
 /// CUE 分轨表高精度解析器 (支持 GBK / GB18030 / UTF-8 自适应编码与母带大文件关联)
 class CueSheetParser {
   static const Set<String> supportedAudioExtensions = {
-    '.flac', '.wav', '.mp3', '.dsf', '.dff', '.alac', '.m4a', '.aac', '.aiff', '.aif', '.caf', '.ape'
+    '.flac',
+    '.wav',
+    '.mp3',
+    '.dsf',
+    '.dff',
+    '.alac',
+    '.m4a',
+    '.aac',
+    '.aiff',
+    '.aif',
+    '.caf',
+    '.ape'
   };
 
   /// 自动解码 GBK / GB18030 / UTF-8
   static String decodeBytes(Uint8List bytes) {
     if (bytes.isEmpty) return '';
 
+    // Some Windows authoring tools save CUE as UTF-16 with a BOM.
+    if (bytes.length >= 2 &&
+        ((bytes[0] == 0xFF && bytes[1] == 0xFE) ||
+            (bytes[0] == 0xFE && bytes[1] == 0xFF))) {
+      final littleEndian = bytes[0] == 0xFF;
+      final data = ByteData.sublistView(bytes);
+      return String.fromCharCodes([
+        for (var i = 2; i + 1 < bytes.length; i += 2)
+          data.getUint16(i, littleEndian ? Endian.little : Endian.big),
+      ]);
+    }
+
     // 1. 检查 UTF-8 BOM
-    if (bytes.length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF) {
+    if (bytes.length >= 3 &&
+        bytes[0] == 0xEF &&
+        bytes[1] == 0xBB &&
+        bytes[2] == 0xBF) {
       try {
         return utf8.decode(bytes.sublist(3));
       } catch (_) {}
@@ -123,7 +149,14 @@ class CueSheetParser {
   static String cleanAudioFilename(String raw) {
     var s = cleanQuotedValue(raw);
     final upper = s.toUpperCase();
-    const keywords = [' WAVE', ' BINARY', ' FLAC', ' MP3', ' AIFF', ' MOTOROLA'];
+    const keywords = [
+      ' WAVE',
+      ' BINARY',
+      ' FLAC',
+      ' MP3',
+      ' AIFF',
+      ' MOTOROLA'
+    ];
     for (final kw in keywords) {
       if (upper.endsWith(kw)) {
         s = s.substring(0, s.length - kw.length).trim();
@@ -132,10 +165,11 @@ class CueSheetParser {
       }
     }
 
-    // 剥离 Windows 盘符与路径 (如 C:\Music\CDImage.wav -> CDImage.wav)
-    final lastSlash = s.lastIndexOf(RegExp(r'[/\\]'));
-    if (lastSlash != -1) {
-      s = s.substring(lastSlash + 1);
+    s = s.replaceAll(r'\', '/');
+    // Absolute paths from the machine that authored the CUE are not portable.
+    // Relative album paths must survive folder uploads (Disc 1/CDImage.wav).
+    if (p.isAbsolute(s) || RegExp(r'^[A-Za-z]:/').hasMatch(s)) {
+      s = p.basename(s);
     }
     return s.trim();
   }
@@ -157,7 +191,9 @@ class CueSheetParser {
   }
 
   /// 关联同目录下的真实物理音频文件
-  static String resolveAudioFile(Directory cueDir, String filename, String cueStem) {
+  static String resolveAudioFile(
+      Directory cueDir, String filename, String cueStem,
+      {bool allowAlbumFallback = true}) {
     final cleanName = cleanAudioFilename(filename);
 
     if (cleanName.isNotEmpty) {
@@ -165,8 +201,36 @@ class CueSheetParser {
       final direct = File(p.join(cueDir.path, cleanName));
       if (direct.existsSync()) return direct.path;
 
+      // Resolve one path segment at a time for Windows CUEs on a case-sensitive
+      // filesystem, including nested disc folders.
+      var candidate = cueDir.path;
+      var matched = true;
+      for (final segment in p.split(p.normalize(cleanName))) {
+        if (segment == '.') continue;
+        if (segment == '..') {
+          candidate = p.dirname(candidate);
+          continue;
+        }
+        try {
+          final matches = Directory(candidate)
+              .listSync(followLinks: false)
+              .where((entry) =>
+                  p.basename(entry.path).toLowerCase() ==
+                  segment.toLowerCase());
+          if (matches.isEmpty) {
+            matched = false;
+            break;
+          }
+          candidate = matches.first.path;
+        } catch (_) {
+          matched = false;
+          break;
+        }
+      }
+      if (matched && File(candidate).existsSync()) return candidate;
+
       // 2. 大小写不敏感匹配
-      final cleanLower = cleanName.toLowerCase();
+      final cleanLower = p.basename(cleanName).toLowerCase();
       try {
         final list = cueDir.listSync(followLinks: false);
         for (final item in list) {
@@ -187,7 +251,8 @@ class CueSheetParser {
           if (item is File) {
             final ext = p.extension(item.path).toLowerCase();
             if (supportedAudioExtensions.contains(ext)) {
-              final stemLower = p.basenameWithoutExtension(item.path).toLowerCase();
+              final stemLower =
+                  p.basenameWithoutExtension(item.path).toLowerCase();
               if (stemLower == targetStem) {
                 return item.path;
               }
@@ -197,12 +262,18 @@ class CueSheetParser {
       } catch (_) {}
 
       // 3.5 前缀模糊匹配 (兼容 wifi 传输平铺文件名如: prefix_CDImage.wav)
-      final cuePrefix = cueStem.contains('_') ? cueStem.substring(0, cueStem.lastIndexOf('_') + 1) : '';
+      final cuePrefix = cueStem.contains('_')
+          ? cueStem.substring(0, cueStem.lastIndexOf('_') + 1)
+          : '';
       if (cuePrefix.isNotEmpty) {
         final prefixed = File(p.join(cueDir.path, '$cuePrefix$cleanName'));
         if (prefixed.existsSync()) return prefixed.path;
       }
     }
+
+    // For a multi-file CUE, a missing disc/song must remain missing rather than
+    // silently reusing the remaining recording as a different track.
+    if (!allowAlbumFallback) return '';
 
     // 4. 目录内同名 CUE 关联匹配 (如 CDImage.cue 关联同目录 CDImage.wav)
     final cueStemTarget = cueStem.isEmpty ? p.basename(cueDir.path) : cueStem;
@@ -213,7 +284,8 @@ class CueSheetParser {
         if (item is File) {
           final ext = p.extension(item.path).toLowerCase();
           if (supportedAudioExtensions.contains(ext)) {
-            final stemLower = p.basenameWithoutExtension(item.path).toLowerCase();
+            final stemLower =
+                p.basenameWithoutExtension(item.path).toLowerCase();
             if (stemLower == cueStemLower) {
               return item.path;
             }
@@ -273,7 +345,8 @@ class CueSheetParser {
       if (trimmed.isEmpty) continue;
 
       final spIdx = trimmed.indexOf(RegExp(r'\s'));
-      final cmd = (spIdx == -1 ? trimmed : trimmed.substring(0, spIdx)).toUpperCase();
+      final cmd =
+          (spIdx == -1 ? trimmed : trimmed.substring(0, spIdx)).toUpperCase();
       final rest = spIdx == -1 ? '' : trimmed.substring(spIdx).trim();
 
       if (cmd == 'REM') {
@@ -300,7 +373,8 @@ class CueSheetParser {
           parsedTracks.add(currentTrack);
         }
         final trackParts = rest.split(RegExp(r'\s+'));
-        final trackNum = int.tryParse(trackParts.first) ?? (parsedTracks.length + 1);
+        final trackNum =
+            int.tryParse(trackParts.first) ?? (parsedTracks.length + 1);
         currentTrack = CueTrackInfo(
           trackNumber: trackNum,
           title: '',
@@ -344,9 +418,16 @@ class CueSheetParser {
     final resolvedTracks = <CueTrackInfo>[];
     for (final trk in parsedTracks) {
       final ref = trk.fileReference.isEmpty ? currentFile : trk.fileReference;
-      final resolvedPath = resolveAudioFile(cueDir, ref, cueStem);
-      final trkTitle = trk.title.isNotEmpty ? trk.title : 'Track ${trk.trackNumber}';
-      final trkPerformer = trk.performer.isNotEmpty ? trk.performer : albumPerformer;
+      final resolvedPath = resolveAudioFile(cueDir, ref, cueStem,
+          allowAlbumFallback: referencedFiles
+                  .map((name) => name.toLowerCase())
+                  .toSet()
+                  .length <=
+              1);
+      final trkTitle =
+          trk.title.isNotEmpty ? trk.title : 'Track ${trk.trackNumber}';
+      final trkPerformer =
+          trk.performer.isNotEmpty ? trk.performer : albumPerformer;
       resolvedTracks.add(trk.copyWith(
         title: trkTitle,
         performer: trkPerformer,

@@ -40,12 +40,13 @@ class MacSidebarWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final actualPadding = padding ?? const EdgeInsets.only(
-      left: UIConfig.containerMarginX,
-      right: UIConfig.containerMarginX,
-      top: UIConfig.containerMarginY,
-      bottom: UIConfig.containerMarginY,
-    );
+    final actualPadding = padding ??
+        const EdgeInsets.only(
+          left: UIConfig.containerMarginX,
+          right: UIConfig.containerMarginX,
+          top: UIConfig.containerMarginY,
+          bottom: UIConfig.containerMarginY,
+        );
     final actualWidth = width ?? UIConfig.sidebarWidth;
     final actualGap = gap ?? UIConfig.containerGap;
     final shouldShowWeb = showWebService ?? true;
@@ -59,7 +60,8 @@ class MacSidebarWidget extends StatelessWidget {
           Expanded(
             child: GlassCard(
               borderRadius: UIConfig.containerRounding,
-              padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 6.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Column(
@@ -161,7 +163,7 @@ class MacSidebarWidget extends StatelessWidget {
           GlassCard(
             height: UIConfig.dacCardHeight,
             borderRadius: UIConfig.containerRounding,
-            padding: const EdgeInsets.symmetric(horizontal: 10.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
             onTap: onDacClicked,
             child: Row(
               children: [
@@ -177,7 +179,8 @@ class MacSidebarWidget extends StatelessWidget {
                     boxShadow: isDacConnected
                         ? [
                             BoxShadow(
-                              color: UIConfig.dacConnected.withValues(alpha: 0.55),
+                              color:
+                                  UIConfig.dacConnected.withValues(alpha: 0.55),
                               blurRadius: 5.5,
                               spreadRadius: 2.0,
                             ),
@@ -185,13 +188,13 @@ class MacSidebarWidget extends StatelessWidget {
                         : null,
                   ),
                 ),
-                const SizedBox(width: 6.0),
+                const SizedBox(width: 10.0),
                 Expanded(
                   child: Text(
                     isDacConnected ? dacName : 'DAC: 未连接',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 11.5,
+                      fontSize: UIConfig.fontRegular,
                       color: isDacConnected
                           ? UIConfig.textNormal
                           : UIConfig.textMuted,
@@ -210,11 +213,11 @@ class MacSidebarWidget extends StatelessWidget {
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 8.0, top: 4.0, bottom: 2.0),
+      padding: const EdgeInsets.only(left: 10.0, top: 6.0, bottom: 4.0),
       child: Text(
         title,
         style: const TextStyle(
-          fontSize: 11.0,
+          fontSize: UIConfig.fontSmall,
           color: UIConfig.textMuted,
           fontWeight: FontWeight.w500,
         ),
@@ -239,7 +242,7 @@ class MacSidebarWidget extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             height: UIConfig.navItemHeight,
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
               color: isSelected
@@ -247,14 +250,16 @@ class MacSidebarWidget extends StatelessWidget {
                   : Colors.transparent,
               border: isSelected
                   ? Border.all(
-                      color: ThemeService.instance.accentColor.withValues(alpha: 0.65),
+                      color: ThemeService.instance.accentColor
+                          .withValues(alpha: 0.65),
                       width: 1.0,
                     )
                   : null,
               boxShadow: isSelected
                   ? [
                       BoxShadow(
-                        color: ThemeService.instance.accentColor.withValues(alpha: 0.28),
+                        color: ThemeService.instance.accentColor
+                            .withValues(alpha: 0.28),
                         blurRadius: 8.0,
                         spreadRadius: 1.0,
                       ),
@@ -265,18 +270,18 @@ class MacSidebarWidget extends StatelessWidget {
               children: [
                 Icon(
                   iconData,
-                  size: 14.5,
+                  size: 16.0,
                   color: isSelected
                       ? ThemeService.instance.accentColor
                       : UIConfig.iconNormal,
                 ),
-                const SizedBox(width: 6.0),
+                const SizedBox(width: 10.0),
                 Expanded(
                   child: Text(
                     label,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 11.5,
+                      fontSize: UIConfig.fontRegular,
                       color: isSelected
                           ? UIConfig.textActive
                           : UIConfig.textNormal,

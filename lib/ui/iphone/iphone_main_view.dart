@@ -4,92 +4,109 @@ import 'iphone_landscape_view.dart';
 import 'iphone_portrait_view.dart';
 import 'widgets/iphone_orientation_dialog.dart';
 
-/// iPhone 移动端发烧纯音主视窗
-/// 具备：
-/// 1. 每次冷启动弹出横竖屏操作模式选择对话框 (不持久化记住，每次自由选择)
-/// 2. 竖屏模式：1:1 严格对齐四大层级设计手稿 (顶部Sidebar、内容视窗、歌曲信息卡片、iPad/Mac播放底栏)
-/// 3. 横屏模式：1:1 严格对齐 Mac 经典固定 4 块架构 (左上功能歌单、左下DAC卡片、右上主舞台、右下播放胶囊栏)
-/// 4. 无息屏屏保，无全屏打扰，所有板块常驻单手触控
+/// Orientation belongs to this app session. Backgrounding keeps the choice;
+/// terminating the process discards it and requires a new choice on next launch.
 class IphoneMainView extends StatefulWidget {
-  const IphoneMainView({super.key});
+  const IphoneMainView({super.key, this.initialize, this.onReady});
+
+  final Future<void> Function()? initialize;
+  final VoidCallback? onReady;
 
   @override
   State<IphoneMainView> createState() => _IphoneMainViewState();
 }
 
 class _IphoneMainViewState extends State<IphoneMainView> {
-  // 启动模式选择状态 (内存变量：每次 App 启动均访问用户，不记住偏好)
-  bool _hasSelectedOrientation = false;
-  bool _isLandscape = false;
+  bool? _landscape;
+  late bool _ready;
+  bool _locking = false;
+  Object? _startupError;
 
   @override
   void initState() {
     super.initState();
-    // 默认允许自由旋转以配合启动检测
-    SystemChrome.setPreferredOrientations([
+    _ready = widget.initialize == null;
+    SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-  }
-
-  void _onOrientationConfirmed(bool isLandscape) {
-    setState(() {
-      _isLandscape = isLandscape;
-      _hasSelectedOrientation = true;
-    });
-
-    if (isLandscape) {
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeRight,
-        DeviceOrientation.landscapeLeft,
-      ]);
-    } else {
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-      ]);
+    if (!_ready) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
     }
   }
 
-  void _switchToLandscape() {
-    setState(() {
-      _isLandscape = true;
-    });
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeRight,
-      DeviceOrientation.landscapeLeft,
-    ]);
+  Future<void> _initialize() async {
+    setState(() => _startupError = null);
+    try {
+      await widget.initialize!();
+      if (!mounted) return;
+      setState(() => _ready = true);
+      widget.onReady?.call();
+    } catch (error) {
+      if (mounted) setState(() => _startupError = error);
+    }
   }
 
-  void _switchToPortrait() {
-    setState(() {
-      _isLandscape = false;
-    });
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-    ]);
+  Future<void> _confirmOrientation(bool landscape) async {
+    if (_landscape != null || _locking) return;
+    _locking = true;
+    try {
+      await SystemChrome.setPreferredOrientations(landscape
+          ? const [
+              DeviceOrientation.landscapeLeft,
+              DeviceOrientation.landscapeRight
+            ]
+          : const [DeviceOrientation.portraitUp]);
+      if (mounted) setState(() => _landscape = landscape);
+    } finally {
+      _locking = false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // 主工作台界面 (横屏或竖屏)
-        Positioned.fill(
-          child: _isLandscape
-              ? IphoneLandscapeView(onSwitchToPortrait: _switchToPortrait)
-              : IphonePortraitView(onSwitchToLandscape: _switchToLandscape),
+    if (_landscape == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF080C12),
+        body: SafeArea(
+          child: IphoneOrientationDialog(
+            initialIsLandscape: true,
+            onConfirmed: _confirmOrientation,
+          ),
         ),
-
-        // 每次启动冷启动弹窗：横竖屏选择模态框 (覆盖在主视窗上)
-        if (!_hasSelectedOrientation)
-          Positioned.fill(
-            child: IphoneOrientationDialog(
-              initialIsLandscape: _isLandscape,
-              onConfirmed: _onOrientationConfirmed,
+      );
+    }
+    if (!_ready) {
+      return Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_startupError == null) ...[
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    const Text('正在启动播放器'),
+                  ] else ...[
+                    const Text('播放器启动失败'),
+                    const SizedBox(height: 12),
+                    Text('$_startupError', textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                        onPressed: _initialize, child: const Text('重试')),
+                  ],
+                ],
+              ),
             ),
           ),
-      ],
-    );
+        ),
+      );
+    }
+    return _landscape!
+        ? const IphoneLandscapeView()
+        : const IphonePortraitView();
   }
 }

@@ -102,7 +102,7 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
     final accent = ThemeService.instance.accentColor;
     final isPlaying = _isCurrentlyPlaying;
     const cardW = 150.0;
-    const cardH = 216.0;
+    const cardH = 220.0;
 
     return MouseRegion(
       onEnter: (_) => _onHoverChanged(true),
@@ -258,7 +258,7 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
                   ],
                 ),
               ),
-              const SizedBox(height: 6.0),
+              const SizedBox(height: 8.0),
 
               // 2. 文字排版区域
               // 分类小标签 (如 "DSD Direct", "Studio Master")
@@ -271,7 +271,7 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
                   color: UIConfig.textMuted,
                 ),
               ),
-              const SizedBox(height: 3.0),
+              const SizedBox(height: 2.0),
 
               // 曲目标题
               Text(
@@ -285,7 +285,7 @@ class _MacMusicItemWidgetState extends State<MacMusicItemWidget>
                 ),
               ),
 
-              const SizedBox(height: 3.0),
+              const SizedBox(height: 1.0),
 
               // 艺术家
               Text(

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/track.dart';
 import '../models/playback_state.dart';
 import '../services/music_database_service.dart';
+import '../services/mseb_service.dart';
 import 'hifi_audio_bindings.dart';
 import '../platform/platform_audio_runtime.dart';
 import 'playback_completion_tracker.dart';
@@ -17,6 +18,8 @@ class HifiAudioService extends ChangeNotifier {
   final Future<void> Function(String)? _prepareFileOverride;
   final bool Function(String, double, double)? _openFileOverride;
   final bool _ownsBindings;
+  final void Function(bool, List<double>)? _applyDspOverride;
+  final MsebService _mseb = MsebService.instance;
   int _loadGeneration = 0;
   bool _isPreparingTrack = false;
   bool get isPreparingTrack => _isPreparingTrack;
@@ -36,7 +39,12 @@ class HifiAudioService extends ChangeNotifier {
   PlayMode get playMode => _playMode;
 
   PlaybackState _state = const PlaybackState();
-  PlaybackState get state => _state;
+  // iOS exposes the negotiated PCM format, not exclusive ownership of its
+  // mixer. Do not turn a clean software signal into a hardware bit-perfect claim.
+  PlaybackState get state => _state.isBitPerfect &&
+          (PlatformAudioRuntime.instance.isIOS || isDspEnabled)
+      ? _state.withBitPerfect(false)
+      : _state;
 
   Timer? _ticker;
   final _completion = PlaybackCompletionTracker();
@@ -63,9 +71,11 @@ class HifiAudioService extends ChangeNotifier {
   HifiAudioService._()
       : _prepareFileOverride = null,
         _openFileOverride = null,
-        _ownsBindings = true {
+        _ownsBindings = true,
+        _applyDspOverride = null {
     _bindings.init();
     _loadEqSettings();
+    _mseb.addListener(_onMsebChanged);
     final runtime = PlatformAudioRuntime.instance;
     runtime.isPlaying = () => _state.isPlaying;
     runtime.pauseForSystem = () => pause(fromSystem: true);
@@ -81,9 +91,13 @@ class HifiAudioService extends ChangeNotifier {
   HifiAudioService.forTesting({
     required Future<void> Function(String) prepareFile,
     required bool Function(String, double, double) openFile,
+    void Function(bool, List<double>)? applyDsp,
   })  : _prepareFileOverride = prepareFile,
         _openFileOverride = openFile,
-        _ownsBindings = false;
+        _ownsBindings = false,
+        _applyDspOverride = applyDsp {
+    _mseb.addListener(_onMsebChanged);
+  }
 
   static Future<void> _prepareFile(String path) async {
     // macOS can wait here for Downloads / Desktop access permission. Dart's
@@ -100,14 +114,13 @@ class HifiAudioService extends ChangeNotifier {
         final valStr = db.getSetting('eq_band_$i', '0.0');
         _eqBands[i] = double.tryParse(valStr)?.clamp(-12.0, 12.0) ?? 0.0;
       }
-      _bindings.setEqEnabled(_eqEnabled);
-      _bindings.setEqBands(_eqBands);
+      _applyDsp();
     } catch (_) {}
   }
 
   void setEqEnabled(bool enabled) {
     _eqEnabled = enabled;
-    _bindings.setEqEnabled(enabled);
+    _applyDsp();
     MusicDatabaseService.instance.setSetting('eq_enabled', enabled ? '1' : '0');
     eqSettingsRevision.value++;
     notifyListeners();
@@ -115,11 +128,10 @@ class HifiAudioService extends ChangeNotifier {
 
   void setEqAndBands(bool enabled, List<double> bands, {int? selectedPreset}) {
     _eqEnabled = enabled;
-    _bindings.setEqEnabled(enabled);
     if (bands.length == 10) {
       _eqBands = List.from(bands);
-      _bindings.setEqBands(_eqBands);
     }
+    _applyDsp();
     final db = MusicDatabaseService.instance;
     db.setSetting('eq_enabled', enabled ? '1' : '0');
     if (selectedPreset != null) {
@@ -135,7 +147,7 @@ class HifiAudioService extends ChangeNotifier {
   void setEqBands(List<double> bands) {
     if (bands.length != 10) return;
     _eqBands = List.from(bands);
-    _bindings.setEqBands(_eqBands);
+    _applyDsp();
     final db = MusicDatabaseService.instance;
     for (int i = 0; i < 10; i++) {
       db.setSetting('eq_band_$i', _eqBands[i].toStringAsFixed(1));
@@ -147,7 +159,7 @@ class HifiAudioService extends ChangeNotifier {
   void setEqBand(int index, double gain) {
     if (index < 0 || index >= 10) return;
     _eqBands[index] = gain.clamp(-12.0, 12.0);
-    _bindings.setEqBands(_eqBands);
+    _applyDsp();
     MusicDatabaseService.instance
         .setSetting('eq_band_$index', _eqBands[index].toStringAsFixed(1));
     eqSettingsRevision.value++;
@@ -157,8 +169,7 @@ class HifiAudioService extends ChangeNotifier {
   void resetEq() {
     _eqBands = List.filled(10, 0.0);
     _eqEnabled = false;
-    _bindings.setEqEnabled(false);
-    _bindings.setEqBands(_eqBands);
+    _applyDsp();
     final db = MusicDatabaseService.instance;
     db.setSetting('eq_enabled', '0');
     db.setSetting('eq_selected_preset', '0');
@@ -167,6 +178,32 @@ class HifiAudioService extends ChangeNotifier {
     }
     eqSettingsRevision.value++;
     notifyListeners();
+  }
+
+  bool get isDspEnabled => _eqEnabled || _mseb.isEnabled;
+
+  List<double> get effectiveEqBands {
+    final tone = _mseb.bandOffsets;
+    return List<double>.generate(10, (index) {
+      final eq = _eqEnabled ? _eqBands[index] : 0.0;
+      final offset = _mseb.isEnabled ? tone[index] : 0.0;
+      return (eq + offset).clamp(-12.0, 12.0);
+    });
+  }
+
+  void _onMsebChanged() {
+    _applyDsp();
+    notifyListeners();
+  }
+
+  void _applyDsp() {
+    final bands = effectiveEqBands;
+    if (_applyDspOverride != null) {
+      _applyDspOverride!(isDspEnabled, bands);
+      return;
+    }
+    _bindings.setEqBands(bands);
+    _bindings.setEqEnabled(isDspEnabled);
   }
 
   void stopTicker() {
@@ -187,7 +224,7 @@ class HifiAudioService extends ChangeNotifier {
       final progress = _bindings.getProgress();
       final volume = _bindings.getVolume();
       final isMuted = _bindings.isMuted();
-      final isBitPerfect = _bindings.isBitPerfect();
+      final isBitPerfect = _bindings.isBitPerfect() && !isDspEnabled;
       final spectrum = _bindings.getSpectrumLevels();
       if (_hardwarePollTicks++ % 10 == 0) {
         _hardwareDeviceName = _bindings.getDeviceName();
@@ -313,7 +350,8 @@ class HifiAudioService extends ChangeNotifier {
     try {
       await (_prepareFileOverride ?? _prepareFile)(resolvedPath);
       if (generation != _loadGeneration) return;
-      if (!await PlatformAudioRuntime.instance.activate()) {
+      if (!await PlatformAudioRuntime.instance
+          .activate(sourceSampleRate: track.sampleRate)) {
         throw StateError('Audio session activation was denied');
       }
     } catch (error) {
@@ -391,7 +429,7 @@ class HifiAudioService extends ChangeNotifier {
     _state = PlaybackState(
       isPlaying: _playWhenPrepared,
       isPaused: !_playWhenPrepared,
-      isBitPerfect: _bindings.isBitPerfect(),
+      isBitPerfect: _bindings.isBitPerfect() && !isDspEnabled,
       currentTime: position,
       duration: track.durationSec.toDouble(),
       progress: track.durationSec > 0
@@ -422,7 +460,10 @@ class HifiAudioService extends ChangeNotifier {
     if (_isPreparingTrack) return;
     final generation = _loadGeneration;
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      if (!await PlatformAudioRuntime.instance.activate()) return;
+      if (!await PlatformAudioRuntime.instance
+          .activate(sourceSampleRate: _currentTrack?.sampleRate)) {
+        return;
+      }
       if (generation != _loadGeneration || !_playWhenPrepared) return;
       // A selection paused during preparation has no native decoder yet.
       if (_bindings.isIdle() && _currentTrack != null) {
@@ -687,6 +728,7 @@ class HifiAudioService extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    _mseb.removeListener(_onMsebChanged);
     if (_ownsBindings) _bindings.dispose();
     super.dispose();
   }
