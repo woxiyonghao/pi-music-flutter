@@ -23,14 +23,14 @@ class IphoneNowPlayingCard extends StatelessWidget {
             ? state.spectrumLevels[2].clamp(0.05, 1.0)
             : (state.isPlaying ? 0.65 : 0.0);
 
-        final title = track?.title ?? '加州旅馆 Hotel California';
+        final title = track?.title ?? '暂无播放音频';
         final artistAlbum = track != null
             ? '${track.artist} · ${track.album}'
-            : 'Eagles · Hell Freezes Over (Master)';
+            : '请在「所有音乐」中选择曲目播放';
 
         final specText = track != null
             ? '${track.format.name.toUpperCase()} ${(track.sampleRate / 1000).toStringAsFixed(0)}k/${track.bitDepth}b'
-            : 'FLAC 192k/24b';
+            : 'BIT-PERFECT';
 
         return Container(
           height: 70.0,

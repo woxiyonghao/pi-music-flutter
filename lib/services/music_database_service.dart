@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqlite3/sqlite3.dart';
 import '../models/track.dart';
 import '../core/app_paths.dart';
@@ -23,6 +24,7 @@ class MusicDatabaseService extends ChangeNotifier {
 
   MusicDatabaseService._() {
     loadLibrary();
+    syncPublicMusicFolder();
   }
 
   /// 获取 C++ SQLite 数据库默认绝对路径
@@ -171,124 +173,108 @@ class MusicDatabaseService extends ChangeNotifier {
       }
     }
 
-    // 兜底模拟发烧曲库 (与 C++ 数据库结构 100% 吻合)
-    _loadFallbackDemoTracks();
-    notifyListeners();
+    // 本地没有数据库或数据库为空时，扫描真实公共音乐目录
+    final musicDir = Directory(AppPaths.musicDirectory);
+    if (musicDir.existsSync()) {
+      _scanLocalMusicDirectory(musicDir);
+    } else {
+      _tracks = [];
+      notifyListeners();
+    }
   }
 
-  void _loadFallbackDemoTracks() {
-    _tracks = [
-      const Track(
-        id: 1,
-        title: '此情可待',
-        artist: '阿强',
-        album: '此情可待 DSD',
-        filepath: '/Music/此情可待.dsf',
-        format: AudioFormat.dsdDsf,
-        sampleRate: 2822400,
-        bitDepth: 1,
-        durationSec: 241,
-      ),
-      const Track(
-        id: 2,
-        title: '草帽歌',
-        artist: '阿强',
-        album: '此情可待 DSD',
-        filepath: '/Music/草帽歌.dsf',
-        format: AudioFormat.dsdDsf,
-        sampleRate: 2822400,
-        bitDepth: 1,
-        durationSec: 274,
-      ),
-      const Track(
-        id: 3,
-        title: '女人花',
-        artist: '阿强',
-        album: '此情可待 DSD',
-        filepath: '/Music/女人花.dsf',
-        format: AudioFormat.dsdDsf,
-        sampleRate: 2822400,
-        bitDepth: 1,
-        durationSec: 239,
-      ),
-      const Track(
-        id: 4,
-        title: '不值得',
-        artist: '阿强',
-        album: '此情可待 DSD',
-        filepath: '/Music/不值得.dsf',
-        format: AudioFormat.dsdDsf,
-        sampleRate: 2822400,
-        bitDepth: 1,
-        durationSec: 294,
-      ),
-      const Track(
-        id: 5,
-        title: '新不了情',
-        artist: '阿强',
-        album: '此情可待 DSD',
-        filepath: '/Music/新不了情.dsf',
-        format: AudioFormat.dsdDsf,
-        sampleRate: 2822400,
-        bitDepth: 1,
-        durationSec: 307,
-      ),
-      const Track(
-        id: 6,
-        title: '加州旅馆 (Hotel California)',
-        artist: 'Eagles',
-        album: 'Hell Freezes Over (Live)',
-        filepath: '/Music/Hotel_California.flac',
-        format: AudioFormat.flac,
-        sampleRate: 192000,
-        bitDepth: 24,
-        durationSec: 432,
-      ),
-      const Track(
-        id: 7,
-        title: '渡口',
-        artist: '蔡琴',
-        album: '民歌蔡琴',
-        filepath: '/Music/渡口.flac',
-        format: AudioFormat.flac,
-        sampleRate: 192000,
-        bitDepth: 24,
-        durationSec: 228,
-      ),
-      const Track(
-        id: 8,
-        title: '被遗忘的时光',
-        artist: '蔡琴',
-        album: '民歌蔡琴',
-        filepath: '/Music/被遗忘的时光.flac',
-        format: AudioFormat.flac,
-        sampleRate: 96000,
-        bitDepth: 24,
-        durationSec: 168,
-      ),
-      const Track(
-        id: 9,
-        title: '月光奏鸣曲 (Moonlight Sonata)',
-        artist: 'Beethoven',
-        album: 'Classical Masters 192k',
-        filepath: '/Music/Moonlight_Sonata.flac',
-        format: AudioFormat.flac,
-        sampleRate: 192000,
-        bitDepth: 24,
-        durationSec: 355,
-      ),
-      const Track(
-        id: 10,
-        title: '达坂城的姑娘',
-        artist: '黑鸭子',
-        album: '发烧人声示范碟',
-        filepath: '/Music/达坂城的姑娘.flac',
-        format: AudioFormat.flac,
-        sampleRate: 192000,
-        bitDepth: 24,
-        durationSec: 215,
-      ),
-    ];
+  /// 同步预置歌曲到公共文件夹并扫描真实曲库
+  Future<void> syncPublicMusicFolder() async {
+    try {
+      final musicDir = Directory(AppPaths.musicDirectory);
+      if (!musicDir.existsSync()) {
+        musicDir.createSync(recursive: true);
+      }
+
+      // 将预置发烧单曲 03 - 石頭記.mp3 释放至 iPhone 共享 Documents 目录
+      final targetFile = File('${musicDir.path}/03 - 石頭記.mp3');
+      if (!targetFile.existsSync()) {
+        try {
+          final byteData = await rootBundle.load('assets/03 - 石頭記.mp3');
+          final bytes = byteData.buffer.asUint8List();
+          await targetFile.writeAsBytes(bytes, flush: true);
+          debugPrint('[MusicDatabaseService] 已同步歌曲到公共文件夹: ${targetFile.path}');
+        } catch (e) {
+          debugPrint('[MusicDatabaseService] 复制内置音频失败: $e');
+        }
+      }
+
+      // 实时扫描 Documents 目录中真实音频文件
+      _scanLocalMusicDirectory(musicDir);
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] syncPublicMusicFolder error: $e');
+    }
+  }
+
+  void _scanLocalMusicDirectory(Directory dir) {
+    if (!dir.existsSync()) return;
+    final List<Track> realTracks = [];
+    int nextId = 1;
+
+    try {
+      final entities = dir.listSync(recursive: true);
+      for (final entity in entities) {
+        if (entity is File) {
+          final path = entity.path;
+          final dotIdx = path.lastIndexOf('.');
+          if (dotIdx < 0) continue;
+          final ext = path.substring(dotIdx + 1).toLowerCase();
+          AudioFormat format = AudioFormat.unknown;
+          if (ext == 'mp3') {
+            format = AudioFormat.mp3;
+          } else if (ext == 'flac') {
+            format = AudioFormat.flac;
+          } else if (ext == 'wav') {
+            format = AudioFormat.wav;
+          } else if (ext == 'dsf') {
+            format = AudioFormat.dsdDsf;
+          } else if (ext == 'dff') {
+            format = AudioFormat.dsdDff;
+          } else if (ext == 'm4a' || ext == 'alac') {
+            format = AudioFormat.alac;
+          }
+
+          if (format != AudioFormat.unknown) {
+            final filename = entity.uri.pathSegments.last;
+            final baseName = filename.substring(0, filename.lastIndexOf('.'));
+            String title = baseName;
+            String artist = '达明一派';
+            String album = '经典发烧数播曲库';
+
+            if (baseName.contains(' - ')) {
+              final parts = baseName.split(' - ');
+              if (parts.length >= 2) {
+                title = parts.sublist(1).join(' - ').trim();
+              }
+            }
+
+            realTracks.add(Track(
+              id: nextId++,
+              title: title,
+              artist: artist,
+              album: album,
+              filepath: path,
+              format: format,
+              sampleRate: format == AudioFormat.dsdDsf ? 2822400 : 44100,
+              bitDepth: format == AudioFormat.dsdDsf ? 1 : 16,
+              durationSec: 285,
+            ));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[MusicDatabaseService] 扫描本地音乐失败: $e');
+    }
+
+    if (realTracks.isNotEmpty) {
+      _tracks = realTracks;
+      notifyListeners();
+    }
   }
 
   void createPlaylist(String name) {

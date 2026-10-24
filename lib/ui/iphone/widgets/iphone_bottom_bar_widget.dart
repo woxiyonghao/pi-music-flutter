@@ -1,18 +1,28 @@
 import 'package:flutter/material.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../models/playback_state.dart';
+import '../../../services/theme_service.dart';
 
 /// iPhone 专用 iPad/Mac 风格液态玻璃胶囊播放控制底栏 (1:1 对齐设计手稿)
 class IphoneBottomBarWidget extends StatelessWidget {
-  const IphoneBottomBarWidget({super.key});
+  final VoidCallback? onSwitchOrientation;
+
+  const IphoneBottomBarWidget({
+    super.key,
+    this.onSwitchOrientation,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: HifiAudioService.instance,
+      listenable: Listenable.merge([
+        HifiAudioService.instance,
+        ThemeService.instance,
+      ]),
       builder: (context, _) {
         final service = HifiAudioService.instance;
         final state = service.state;
+        final accent = ThemeService.instance.accentColor;
 
         return Container(
           height: 52.0,
@@ -35,19 +45,42 @@ class IphoneBottomBarWidget extends StatelessWidget {
           child: Row(
             children: [
               // 1. 左侧核心播放控制区
-              _buildLeftControls(service, state),
+              _buildLeftControls(service, state, accent),
 
               const SizedBox(width: 6.0),
 
               // 2. 中间时间轴与发烧进度滑块
               Expanded(
-                child: _buildProgressBar(service, state),
+                child: _buildProgressBar(service, state, accent),
               ),
 
               const SizedBox(width: 6.0),
 
               // 3. 右侧音量微型调节组件
-              _buildVolumeWidget(service, state),
+              _buildVolumeWidget(service, state, accent),
+
+              // 4. 横/竖屏快捷旋转按钮
+              if (onSwitchOrientation != null) ...[
+                const SizedBox(width: 4.0),
+                Container(
+                  width: 1.0,
+                  height: 14.0,
+                  color: const Color(0x26FFFFFF),
+                ),
+                const SizedBox(width: 4.0),
+                GestureDetector(
+                  onTap: onSwitchOrientation,
+                  behavior: HitTestBehavior.opaque,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4.0, vertical: 6.0),
+                    child: Icon(
+                      Icons.screen_rotation_rounded,
+                      size: 15.0,
+                      color: Color(0xFFC8D2E1),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         );
@@ -55,7 +88,7 @@ class IphoneBottomBarWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildLeftControls(HifiAudioService service, PlaybackState state) {
+  Widget _buildLeftControls(HifiAudioService service, PlaybackState state, Color accent) {
     IconData modeIcon;
     switch (state.playMode) {
       case PlayMode.loopSingle:
@@ -102,12 +135,12 @@ class IphoneBottomBarWidget extends StatelessWidget {
             width: 30.0,
             height: 30.0,
             margin: const EdgeInsets.symmetric(horizontal: 2.0),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Color(0xFF0084FF),
+              color: accent,
               boxShadow: [
                 BoxShadow(
-                  color: Color(0x660084FF),
+                  color: accent.withValues(alpha: 0.4),
                   blurRadius: 10.0,
                 ),
               ],
@@ -133,7 +166,7 @@ class IphoneBottomBarWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildProgressBar(HifiAudioService service, PlaybackState state) {
+  Widget _buildProgressBar(HifiAudioService service, PlaybackState state, Color accent) {
     final curTimeStr = state.currentTimeString;
     final durTimeStr = state.durationString;
     final progress = state.progress.clamp(0.0, 1.0);
@@ -151,17 +184,17 @@ class IphoneBottomBarWidget extends StatelessWidget {
         const SizedBox(width: 2.0),
         Expanded(
           child: SliderTheme(
-            data: const SliderThemeData(
+            data: SliderThemeData(
               trackHeight: 3.0,
-              activeTrackColor: Color(0xFF0084FF),
-              inactiveTrackColor: Color(0x26FFFFFF),
+              activeTrackColor: accent,
+              inactiveTrackColor: const Color(0x26FFFFFF),
               thumbColor: Colors.white,
-              thumbShape: RoundSliderThumbShape(
+              thumbShape: const RoundSliderThumbShape(
                 enabledThumbRadius: 4.5,
                 elevation: 2.0,
               ),
-              overlayShape: RoundSliderOverlayShape(overlayRadius: 6.0),
-              overlayColor: Color(0x400084FF),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 6.0),
+              overlayColor: accent.withValues(alpha: 0.25),
             ),
             child: Slider(
               value: progress,
@@ -186,7 +219,7 @@ class IphoneBottomBarWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildVolumeWidget(HifiAudioService service, PlaybackState state) {
+  Widget _buildVolumeWidget(HifiAudioService service, PlaybackState state, Color accent) {
     IconData volIcon;
     if (state.isMuted || state.volume <= 0.001) {
       volIcon = Icons.volume_off_rounded;
@@ -214,15 +247,15 @@ class IphoneBottomBarWidget extends StatelessWidget {
         SizedBox(
           width: 40.0,
           child: SliderTheme(
-            data: const SliderThemeData(
+            data: SliderThemeData(
               trackHeight: 2.5,
-              activeTrackColor: Color(0xFF0084FF),
-              inactiveTrackColor: Color(0x26FFFFFF),
+              activeTrackColor: accent,
+              inactiveTrackColor: const Color(0x26FFFFFF),
               thumbColor: Colors.white,
-              thumbShape: RoundSliderThumbShape(
+              thumbShape: const RoundSliderThumbShape(
                 enabledThumbRadius: 3.5,
               ),
-              overlayShape: RoundSliderOverlayShape(overlayRadius: 5.0),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 5.0),
             ),
             child: Slider(
               value: state.isMuted ? 0.0 : state.volume.clamp(0.0, 1.0),

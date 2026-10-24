@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../models/sidebar_tab.dart';
 import '../../models/track.dart';
@@ -16,6 +17,10 @@ class MacSidebarWidget extends StatelessWidget {
   final ValueChanged<int> onPlaylistSelected;
   final VoidCallback onCreatePlaylist;
   final VoidCallback onDacClicked;
+  final EdgeInsetsGeometry? padding;
+  final double? width;
+  final double? gap;
+  final bool? showWebService;
 
   const MacSidebarWidget({
     super.key,
@@ -28,25 +33,34 @@ class MacSidebarWidget extends StatelessWidget {
     required this.onPlaylistSelected,
     required this.onCreatePlaylist,
     required this.onDacClicked,
+    this.padding,
+    this.width,
+    this.gap,
+    this.showWebService,
   });
 
   @override
   Widget build(BuildContext context) {
+    final actualPadding = padding ?? const EdgeInsets.only(
+      left: UIConfig.containerMarginX,
+      right: UIConfig.containerMarginX,
+      top: UIConfig.containerMarginY,
+      bottom: UIConfig.containerMarginY,
+    );
+    final actualWidth = width ?? UIConfig.sidebarWidth;
+    final actualGap = gap ?? UIConfig.containerGap;
+    final shouldShowWeb = showWebService ?? (!Platform.isIOS);
+
     return Container(
-      width: UIConfig.sidebarWidth,
-      padding: const EdgeInsets.only(
-        left: UIConfig.containerMarginX,
-        right: UIConfig.containerMarginX,
-        top: UIConfig.containerMarginY,
-        bottom: UIConfig.containerMarginY,
-      ),
+      width: actualWidth,
+      padding: actualPadding,
       child: Column(
         children: [
           // 1. 上半部分：功能项与歌单列表容器 (Xcode 风格液态玻璃卡片)
           Expanded(
             child: GlassCard(
               borderRadius: UIConfig.containerRounding,
-              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
+              padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 6.0),
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Column(
@@ -96,15 +110,16 @@ class MacSidebarWidget extends StatelessWidget {
                       isSelected: currentTab == SidebarTab.systemSettings,
                       onTap: () => onTabSelected(SidebarTab.systemSettings),
                     ),
-                    _buildNavItem(
-                      tab: SidebarTab.webService,
-                      label: 'Web服务',
-                      iconData: Icons.desktop_windows_rounded,
-                      isSelected: currentTab == SidebarTab.webService,
-                      onTap: () => onTabSelected(SidebarTab.webService),
-                    ),
+                    if (shouldShowWeb)
+                      _buildNavItem(
+                        tab: SidebarTab.webService,
+                        label: 'Web服务',
+                        iconData: Icons.desktop_windows_rounded,
+                        isSelected: currentTab == SidebarTab.webService,
+                        onTap: () => onTabSelected(SidebarTab.webService),
+                      ),
 
-                    const SizedBox(height: 8.0),
+                    const SizedBox(height: 6.0),
 
                     // [板块二：播放列表]
                     _buildSectionHeader('播放列表'),
@@ -141,13 +156,13 @@ class MacSidebarWidget extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: UIConfig.containerGap),
+          SizedBox(height: actualGap),
 
           // 2. 下半部分：固定 DAC 状态指示卡片 (点击直达 DAC 设置)
           GlassCard(
             height: UIConfig.dacCardHeight,
             borderRadius: UIConfig.containerRounding,
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 10.0),
             onTap: onDacClicked,
             child: Row(
               children: [
@@ -171,13 +186,13 @@ class MacSidebarWidget extends StatelessWidget {
                         : null,
                   ),
                 ),
-                const SizedBox(width: 10.0),
+                const SizedBox(width: 6.0),
                 Expanded(
                   child: Text(
                     isDacConnected ? dacName : 'DAC: 未连接',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: UIConfig.fontRegular,
+                      fontSize: 11.5,
                       color: isDacConnected
                           ? UIConfig.textNormal
                           : UIConfig.textMuted,
@@ -196,11 +211,11 @@ class MacSidebarWidget extends StatelessWidget {
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(left: 10.0, top: 6.0, bottom: 4.0),
+      padding: const EdgeInsets.only(left: 8.0, top: 4.0, bottom: 2.0),
       child: Text(
         title,
         style: const TextStyle(
-          fontSize: UIConfig.fontSmall,
+          fontSize: 11.0,
           color: UIConfig.textMuted,
           fontWeight: FontWeight.w500,
         ),
@@ -225,7 +240,7 @@ class MacSidebarWidget extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             height: UIConfig.navItemHeight,
-            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
               color: isSelected
@@ -251,18 +266,18 @@ class MacSidebarWidget extends StatelessWidget {
               children: [
                 Icon(
                   iconData,
-                  size: 16.0,
+                  size: 14.5,
                   color: isSelected
                       ? ThemeService.instance.accentColor
                       : UIConfig.iconNormal,
                 ),
-                const SizedBox(width: 12.0),
+                const SizedBox(width: 6.0),
                 Expanded(
                   child: Text(
                     label,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: UIConfig.fontRegular,
+                      fontSize: 11.5,
                       color: isSelected
                           ? UIConfig.textActive
                           : UIConfig.textNormal,

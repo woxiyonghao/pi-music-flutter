@@ -212,6 +212,23 @@ class ThemeService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setAccentColor(Color color) {
+    _accentColor = color;
+    _currentThemeId = 4;
+    final hsv = HSVColor.fromColor(color);
+    _customHue = hsv.hue;
+    _customSat = hsv.saturation;
+    _customVal = hsv.value;
+
+    final db = MusicDatabaseService.instance;
+    db.setSetting('theme_id', '4');
+    db.setSetting('theme_custom_r', _accentColor.r.toStringAsFixed(4));
+    db.setSetting('theme_custom_g', _accentColor.g.toStringAsFixed(4));
+    db.setSetting('theme_custom_b', _accentColor.b.toStringAsFixed(4));
+
+    notifyListeners();
+  }
+
   void setBackgroundVisualMode(int mode) {
     if (mode >= 0 && mode < visualModeLabels.length) {
       _backgroundVisualMode = mode;

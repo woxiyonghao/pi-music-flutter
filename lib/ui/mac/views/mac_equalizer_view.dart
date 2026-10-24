@@ -30,9 +30,9 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
     {'name': '自定义',   'gains': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]},
   ];
 
-  int _selectedPreset = 6; // 通透高音 (对齐截图 1_eq)
-  late List<double> _bandGains = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.5, 4.5, 6.0, 6.0];
-  bool _isEnabled = true;
+  int _selectedPreset = 0; // 原音直通
+  late List<double> _bandGains = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+  bool _isEnabled = false;
 
   @override
   void initState() {
@@ -42,8 +42,8 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
 
   void _loadSettings() {
     final db = MusicDatabaseService.instance;
-    _isEnabled = db.getSetting('eq_enabled', '1') == '1';
-    _selectedPreset = int.tryParse(db.getSetting('eq_selected_preset', '6'))?.clamp(0, presets.length - 1) ?? 6;
+    _isEnabled = db.getSetting('eq_enabled', '0') == '1';
+    _selectedPreset = int.tryParse(db.getSetting('eq_selected_preset', '0'))?.clamp(0, presets.length - 1) ?? 0;
 
     final defaultGains = presets[_selectedPreset]['gains'] as List<double>;
     _bandGains = List<double>.generate(10, (i) {

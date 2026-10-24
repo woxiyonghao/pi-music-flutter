@@ -18,6 +18,10 @@ class _IphoneDacSettingViewState extends State<IphoneDacSettingView> {
     _FilterOption('Linear Phase Fast Roll-off', '高频细节纤毫毕现，交响声场开阔'),
     _FilterOption('Minimum Phase Fast Roll-off', '低频紧实澎湃，瞬态响应迅猛'),
     _FilterOption('Linear Phase Slow Roll-off', '平滑音乐感，黑胶模拟温润味'),
+    _FilterOption('Apodizing Fast Roll-off', '消除前置振铃，自然录音棚声底'),
+    _FilterOption('Brickwall Filter', '砖墙滤波，高衰减陡峭阻带截止'),
+    _FilterOption('Minimum Phase Fast 88.2k', '高码率瞬态优化，声像凝聚'),
+    _FilterOption('Hybrid Filter', '混合滤波，平衡人声与乐器定位'),
   ];
 
   @override
@@ -62,202 +66,330 @@ class _IphoneDacSettingViewState extends State<IphoneDacSettingView> {
           ),
           const SizedBox(height: 10.0),
 
-          // 2. DX1 II 核心硬件全景名片
-          Container(
-            padding: const EdgeInsets.all(12.0),
-            decoration: BoxDecoration(
-              color: const Color(0xB8161C28),
-              borderRadius: BorderRadius.circular(12.0),
-              border: Border.all(color: const Color(0x1FFFFFFF)),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 10.0,
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // 2. 根据选中的设备展现对应发烧硬件视窗
+          if (_selectedDevice == 0) ...[
+            _buildAppleAudioCard(),
+          ] else ...[
+            _buildDx1Card(),
+            const SizedBox(height: 10.0),
+            _buildDx1FilterCard(),
+            const SizedBox(height: 10.0),
+            _buildDx1SwitchNoticeCard(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppleAudioCard() {
+    return Container(
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: const Color(0xB8161C28),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: const Color(0x1FFFFFFF)),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 10.0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Row(
                   children: [
-                    const Expanded(
-                      child: Row(
-                        children: [
-                          Text('🎛️', style: TextStyle(fontSize: 16.0)),
-                          SizedBox(width: 6.0),
-                          Flexible(
-                            child: Text(
-                              'TOPPING DX1 II',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 6.0),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
-                      decoration: BoxDecoration(
-                        color: const Color(0x2606D6A0),
-                        borderRadius: BorderRadius.circular(4.0),
-                        border: Border.all(color: const Color(0x6606D6A0)),
-                      ),
-                      child: const Text(
-                        'BIT-PERFECT DIRECT',
+                    Text('🍎', style: TextStyle(fontSize: 16.0)),
+                    SizedBox(width: 6.0),
+                    Flexible(
+                      child: Text(
+                        'iPhone 硬件本机直通',
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 9.0,
+                          fontSize: 13.5,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF06D6A0),
+                          color: Colors.white,
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 3.0),
-                const Text(
-                  '桌面发烧级高解析平衡解码耳放一体机',
-                  style: TextStyle(fontSize: 10.5, color: Color(0xFF828C9B)),
+              ),
+              const SizedBox(width: 6.0),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                decoration: BoxDecoration(
+                  color: const Color(0x2606D6A0),
+                  borderRadius: BorderRadius.circular(4.0),
+                  border: Border.all(color: const Color(0x6606D6A0)),
                 ),
-                const SizedBox(height: 10.0),
-
-                // 2x2 参数网格
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildSpecCell('解码核心', 'ES9039Q2M SABRE', const Color(0xFF00B4D8)),
-                    ),
-                    const SizedBox(width: 6.0),
-                    Expanded(
-                      child: _buildSpecCell('最大推流规格', '384kHz / 32-Bit', const Color(0xFFFFB703)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6.0),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildSpecCell('DSD 原生推流', 'DSD256 Native', const Color(0xFF06D6A0)),
-                    ),
-                    const SizedBox(width: 6.0),
-                    Expanded(
-                      child: _buildSpecCell('USB 握手档位', 'UAC 2.0 (全速)', Colors.white),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10.0),
-
-          // 3. PCM 硬件滤波特性卡片
-          Container(
-            padding: const EdgeInsets.all(12.0),
-            decoration: BoxDecoration(
-              color: const Color(0xB8161C28),
-              borderRadius: BorderRadius.circular(12.0),
-              border: Border.all(color: const Color(0x1FFFFFFF)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Expanded(
-                      child: Row(
-                        children: [
-                          Text('⚡', style: TextStyle(fontSize: 15.0)),
-                          SizedBox(width: 6.0),
-                          Flexible(
-                            child: Text(
-                              'PCM 滤波特性 (ES9039Q2M)',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12.0,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 6.0),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 1.5),
-                      decoration: BoxDecoration(
-                        color: const Color(0x1F00B4D8),
-                        borderRadius: BorderRadius.circular(4.0),
-                      ),
-                      child: const Text(
-                        '8种硬件滤波',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          color: Color(0xFF00B4D8),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8.0),
-
-                // 滤波模式单选列表
-                for (int i = 0; i < _filters.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 6.0),
-                  _buildFilterRow(
-                    filter: _filters[i],
-                    isSelected: _selectedFilter == i,
-                    onTap: () => _onFilterTap(i),
+                child: const Text(
+                  'BIT-PERFECT DIRECT',
+                  style: TextStyle(
+                    fontSize: 9.0,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF06D6A0),
                   ),
-                ],
-              ],
-            ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3.0),
+          const Text(
+            'Apple A15 Bionic 仿生音频架构 · CoreAudio 原生跟随母带直通推流',
+            style: TextStyle(fontSize: 10.5, color: Color(0xFF828C9B)),
           ),
           const SizedBox(height: 10.0),
 
-          // 4. 拓品 DX1 II 物理硬件拨片开关专属提示
+          // 2x2 参数网格
+          Row(
+            children: [
+              Expanded(
+                child: _buildSpecCell('芯片核心', 'A15 Bionic Audio', const Color(0xFF00B4D8)),
+              ),
+              const SizedBox(width: 6.0),
+              Expanded(
+                child: _buildSpecCell('最高推流规格', '192kHz / 24-Bit', const Color(0xFFFFB703)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6.0),
+          Row(
+            children: [
+              Expanded(
+                child: _buildSpecCell('推流协议', 'CoreAudio Direct', const Color(0xFF06D6A0)),
+              ),
+              const SizedBox(width: 6.0),
+              Expanded(
+                child: _buildSpecCell('输出路由', '内置扬声器 / 数字耳机', Colors.white),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10.0),
+
           Container(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.all(10.0),
             decoration: BoxDecoration(
-              color: const Color(0x1AFB8500),
-              borderRadius: BorderRadius.circular(12.0),
-              border: Border.all(color: const Color(0x59FB8500)),
+              color: const Color(0x1A00B4D8),
+              borderRadius: BorderRadius.circular(8.0),
+              border: Border.all(color: const Color(0x3300B4D8)),
             ),
             child: const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('⚠️', style: TextStyle(fontSize: 16.0)),
+                Icon(Icons.check_circle_outline_rounded, size: 15.0, color: Color(0xFF00B4D8)),
                 SizedBox(width: 8.0),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '拓品 DX1 II · 硬件物理拨片提示',
+                  child: Text(
+                    '当前使用 iPhone 本机发烧纯音直通架构。若插入拓品 DX1 II，请在上方点击切换为「TOPPING DX1 II」专属硬件滤波与 384k 超高解析模式。',
+                    style: TextStyle(fontSize: 10.0, color: Color(0xFFC8D2E1), height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDx1Card() {
+    return Container(
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: const Color(0xB8161C28),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: const Color(0x1FFFFFFF)),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 10.0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Row(
+                  children: [
+                    Text('🎛️', style: TextStyle(fontSize: 16.0)),
+                    SizedBox(width: 6.0),
+                    Flexible(
+                      child: Text(
+                        'TOPPING DX1 II',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6.0),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                decoration: BoxDecoration(
+                  color: const Color(0x2606D6A0),
+                  borderRadius: BorderRadius.circular(4.0),
+                  border: Border.all(color: const Color(0x6606D6A0)),
+                ),
+                child: const Text(
+                  'BIT-PERFECT DIRECT',
+                  style: TextStyle(
+                    fontSize: 9.0,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF06D6A0),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3.0),
+          const Text(
+            '桌面发烧级高解析平衡解码耳放一体机',
+            style: TextStyle(fontSize: 10.5, color: Color(0xFF828C9B)),
+          ),
+          const SizedBox(height: 10.0),
+
+          // 2x2 参数网格
+          Row(
+            children: [
+              Expanded(
+                child: _buildSpecCell('解码核心', 'ES9039Q2M SABRE', const Color(0xFF00B4D8)),
+              ),
+              const SizedBox(width: 6.0),
+              Expanded(
+                child: _buildSpecCell('最大推流规格', '384kHz / 32-Bit', const Color(0xFFFFB703)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6.0),
+          Row(
+            children: [
+              Expanded(
+                child: _buildSpecCell('DSD 原生推流', 'DSD256 Native', const Color(0xFF06D6A0)),
+              ),
+              const SizedBox(width: 6.0),
+              Expanded(
+                child: _buildSpecCell('USB 握手档位', 'UAC 2.0 (全速)', Colors.white),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDx1FilterCard() {
+    return Container(
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: const Color(0xB8161C28),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: const Color(0x1FFFFFFF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Row(
+                  children: [
+                    Text('⚡', style: TextStyle(fontSize: 15.0)),
+                    SizedBox(width: 6.0),
+                    Flexible(
+                      child: Text(
+                        'PCM 滤波特性 (ES9039Q2M)',
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12.0,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFFFB8500),
+                          color: Colors.white,
                         ),
                       ),
-                      SizedBox(height: 3.0),
-                      Text(
-                        'TOPPING DX1 II 的 UAC 模式是由机身背部物理硬件拨片直接控制。若需切换 UAC 1.0/2.0，请拨动机身背部开关后重新插拔 USB。',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          color: Color(0xFFCBD5E1),
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6.0),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: const Color(0x1F00B4D8),
+                  borderRadius: BorderRadius.circular(4.0),
+                ),
+                child: const Text(
+                  '8种硬件滤波',
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    color: Color(0xFF00B4D8),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8.0),
+
+          // 滤波模式单选列表
+          for (int i = 0; i < _filters.length; i++) ...[
+            if (i > 0) const SizedBox(height: 6.0),
+            _buildFilterRow(
+              filter: _filters[i],
+              isSelected: _selectedFilter == i,
+              onTap: () => _onFilterTap(i),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDx1SwitchNoticeCard() {
+    return Container(
+      padding: const EdgeInsets.all(12.0),
+      decoration: BoxDecoration(
+        color: const Color(0x1AFB8500),
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(color: const Color(0x59FB8500)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('⚠️', style: TextStyle(fontSize: 16.0)),
+          SizedBox(width: 8.0),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '拓品 DX1 II · 硬件物理拨片提示',
+                  style: TextStyle(
+                    fontSize: 12.0,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFB8500),
+                  ),
+                ),
+                SizedBox(height: 3.0),
+                Text(
+                  'TOPPING DX1 II 的 UAC 模式是由机身背部物理硬件拨片直接控制。若需切换 UAC 1.0/2.0，请拨动机身背部开关后重新插拔 USB。',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: Color(0xFFCBD5E1),
+                    height: 1.4,
                   ),
                 ),
               ],

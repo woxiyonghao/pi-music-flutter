@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/hifi_audio_service.dart';
+import '../../../services/music_database_service.dart';
 
 /// iPhone 竖屏 10 段发烧图形均衡器视窗 (1:1 对齐设计手稿)
 class IphoneEqualizerView extends StatefulWidget {
@@ -10,18 +11,18 @@ class IphoneEqualizerView extends StatefulWidget {
 }
 
 class _IphoneEqualizerViewState extends State<IphoneEqualizerView> {
-  int _selectedPreset = 0; // 0: 发烧人声, 1: 纯净直通, 2: 动感重低音, 3: 古典交响
+  int _selectedPreset = 0; // 0: 原音直通, 1: 发烧人声, 2: 动感重低音, 3: 古典交响
 
   static const List<String> _presets = [
+    '原音直通',
     '发烧人声',
-    '纯净直通',
     '动感重低音',
     '古典交响',
   ];
 
   static const List<List<double>> _presetBands = [
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],   // 原音直通
     [1.5, 1.0, 0.5, -1.0, 0.5, 2.0, 3.5, 2.5, 1.0, 0.0], // 发烧人声
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],   // 纯净直通
     [4.5, 3.8, 2.5, 1.0, 0.0, 0.0, 0.5, 1.5, 2.0, 1.5],   // 动感重低音
     [2.0, 1.5, 0.5, 0.0, 0.0, 1.0, 1.5, 2.5, 3.0, 2.5],   // 古典交响
   ];
@@ -34,7 +35,8 @@ class _IphoneEqualizerViewState extends State<IphoneEqualizerView> {
     setState(() => _selectedPreset = index);
     final service = HifiAudioService.instance;
     final bands = _presetBands[index];
-    service.setEqAndBands(index != 1, bands, selectedPreset: index);
+    service.setEqAndBands(index != 0, bands, selectedPreset: index);
+    MusicDatabaseService.instance.setSetting('eq_selected_preset', index.toString());
   }
 
   void _updateBand(int index, double gain) {

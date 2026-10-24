@@ -9,13 +9,13 @@ import '../visualizers/visualizer_type.dart';
 import '../mac/mac_background_widget.dart';
 import '../mac/mac_sidebar_widget.dart';
 import 'widgets/iphone_bottom_bar_widget.dart';
-import '../mac/views/mac_all_music_view.dart';
-import '../mac/views/mac_equalizer_view.dart';
-import '../mac/views/mac_dac_setting_view.dart';
-import '../mac/views/mac_theme_setting_view.dart';
+import 'views/iphone_all_music_view.dart';
+import 'views/iphone_dac_setting_view.dart';
+import 'views/iphone_equalizer_view.dart';
+import 'views/iphone_theme_setting_view.dart';
+import 'views/iphone_system_settings_view.dart';
 import '../mac/views/mac_magic_tuning_view.dart';
 import '../mac/views/mac_scan_music_view.dart';
-import '../mac/views/mac_system_settings_view.dart';
 import '../mac/views/mac_web_service_view.dart';
 
 /// iPhone 横屏发烧纯音工作台 (1:1 严格对齐 Mac 经典固定 4 块架构)
@@ -109,78 +109,58 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView> {
                 ),
               ),
 
-              // 2. 避让 iPhone 横屏安全区 (灵动岛/刘海与 Home 条)
-              SafeArea(
-                left: true,
-                right: true,
-                top: true,
-                bottom: true,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8.0, 6.0, 8.0, 4.0),
-                  child: Row(
-                    children: [
-                      // 左侧列 (包含块 1 与块 2)
-                      SizedBox(
-                        width: 175.0,
-                        child: MacSidebarWidget(
-                          currentTab: _currentTab,
-                          selectedPlaylistId: _selectedPlaylistId,
-                          playlists: playlists,
-                          dacName: 'TOPPING DX1 II',
-                          isDacConnected: true,
-                          onTabSelected: _onTabSelected,
-                          onPlaylistSelected: (plId) {
-                            setState(() {
-                              _currentTab = SidebarTab.customPlaylist;
-                              _selectedPlaylistId = plId;
-                            });
-                          },
-                          onCreatePlaylist: _openCreatePlaylistModal,
-                          onDacClicked: () => _onTabSelected(SidebarTab.dacSettings),
-                        ),
+              // 2. 统一纯音横屏边距 (不依赖 SafeArea 造成的大幅不对称切角，保持紧凑发烧间距)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+                child: Row(
+                  children: [
+                    // 左侧列 (包含块 1 与块 2，严格填满高并与右侧顶底对齐)
+                    SizedBox(
+                      width: 170.0,
+                      child: MacSidebarWidget(
+                        width: 170.0,
+                        padding: EdgeInsets.zero,
+                        gap: 6.0,
+                        currentTab: _currentTab,
+                        selectedPlaylistId: _selectedPlaylistId,
+                        playlists: playlists,
+                        dacName: 'TOPPING DX1 II',
+                        isDacConnected: true,
+                        onTabSelected: _onTabSelected,
+                        onPlaylistSelected: (plId) {
+                          setState(() {
+                            _currentTab = SidebarTab.customPlaylist;
+                            _selectedPlaylistId = plId;
+                          });
+                        },
+                        onCreatePlaylist: _openCreatePlaylistModal,
+                        onDacClicked: () => _onTabSelected(SidebarTab.dacSettings),
                       ),
-                      const SizedBox(width: 8.0),
+                    ),
+                    const SizedBox(width: 8.0),
 
-                      // 右侧列 (包含块 3 主舞台与块 4 底部播放胶囊条)
-                      Expanded(
-                        child: Column(
-                          children: [
-                            // 块 3: 中央主舞台视图
-                            Expanded(
-                              child: _buildMainStage(tracks, activeVisualizer),
-                            ),
-                            const SizedBox(height: 6.0),
+                    // 右侧列 (包含块 3 主舞台与块 4 底部播放胶囊条)
+                    Expanded(
+                      child: Column(
+                        children: [
+                          // 块 3: 中央主舞台视图
+                          Expanded(
+                            child: _buildMainStage(tracks, activeVisualizer),
+                          ),
+                          const SizedBox(height: 6.0),
 
-                            // 块 4: 底部液态玻璃播放胶囊栏
-                            const IphoneBottomBarWidget(),
-                          ],
-                        ),
+                          // 块 4: 底部液态玻璃播放胶囊栏 (内置横竖屏旋转按键，彻底避免右上方浮动图标遮挡卡片)
+                          IphoneBottomBarWidget(
+                            onSwitchOrientation: widget.onSwitchToPortrait,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
 
-              // 3. 快捷切回竖屏浮动按钮 (右上角)
-              Positioned(
-                top: 8.0,
-                right: 14.0,
-                child: IconButton(
-                  onPressed: widget.onSwitchToPortrait,
-                  tooltip: '切换至竖屏模式',
-                  icon: const Icon(
-                    Icons.screen_rotation_rounded,
-                    size: 16.0,
-                    color: Color(0xFF94A3B8),
-                  ),
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0x660E121A),
-                    padding: const EdgeInsets.all(6.0),
-                  ),
-                ),
-              ),
-
-              // 4. 新建播放列表模态框
+              // 3. 新建播放列表模态框
               if (_showCreatePlaylistModal) _buildCreatePlaylistModal(),
             ],
           ),
@@ -194,31 +174,20 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView> {
     return IndexedStack(
       index: idx,
       children: [
-        MacAllMusicView(
-          tracks: tracks.cast(),
-          onNavigateToScan: () => setState(() => _currentTab = SidebarTab.scanMusic),
-        ),
-        MacAllMusicView(
-          tracks: tracks.cast(),
-          onNavigateToScan: () => setState(() => _currentTab = SidebarTab.scanMusic),
-        ),
+        const IphoneAllMusicView(),
+        const IphoneAllMusicView(),
         MacScanMusicView(
           scannedCount: tracks.length,
           onScanComplete: () => MusicDatabaseService.instance.loadLibrary(),
         ),
-        const MacEqualizerView(),
+        const IphoneEqualizerView(),
         const MacMagicTuningView(),
-        const MacDACSettingView(),
-        MacThemeSettingView(
-          currentVisualizer: activeVisualizer,
-          onVisualizerChanged: (type) {
-            ThemeService.instance.setBackgroundVisualMode(type.index);
-          },
-        ),
-        const MacSystemSettingsView(),
+        const IphoneDacSettingView(),
+        const IphoneThemeSettingView(),
+        IphoneSystemSettingsView(onSwitchOrientation: widget.onSwitchToPortrait),
         const MacWebServiceView(isWifiTransfer: false),
         const MacWebServiceView(isWifiTransfer: true),
-        const MacSystemSettingsView(),
+        IphoneSystemSettingsView(onSwitchOrientation: widget.onSwitchToPortrait),
       ],
     );
   }

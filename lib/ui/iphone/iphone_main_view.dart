@@ -41,8 +41,8 @@ class _IphoneMainViewState extends State<IphoneMainView> {
 
     if (isLandscape) {
       SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
         DeviceOrientation.landscapeRight,
+        DeviceOrientation.landscapeLeft,
       ]);
     } else {
       SystemChrome.setPreferredOrientations([
@@ -56,8 +56,8 @@ class _IphoneMainViewState extends State<IphoneMainView> {
       _isLandscape = true;
     });
     SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
+      DeviceOrientation.landscapeLeft,
     ]);
   }
 

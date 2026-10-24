@@ -168,4 +168,79 @@ void main() {
       matchesGoldenFile('goldens/iphone_landscape_showcase.png'),
     );
   });
+
+  testWidgets('Golden: iPhone Landscape DAC View', (tester) async {
+    tester.view.physicalSize = const Size(844, 390);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.dacSettings.index.toString());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: HifiTheme.darkTheme,
+        home: IphoneLandscapeView(
+          onSwitchToPortrait: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await expectLater(
+      find.byType(IphoneLandscapeView),
+      matchesGoldenFile('goldens/iphone_landscape_dac.png'),
+    );
+  });
+
+  testWidgets('Golden: iPhone Landscape Theme View', (tester) async {
+    tester.view.physicalSize = const Size(844, 390);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.themeSettings.index.toString());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: HifiTheme.darkTheme,
+        home: IphoneLandscapeView(
+          onSwitchToPortrait: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await expectLater(
+      find.byType(IphoneLandscapeView),
+      matchesGoldenFile('goldens/iphone_landscape_theme.png'),
+    );
+  });
+
+  testWidgets('Golden: iPhone Landscape System Settings View', (tester) async {
+    tester.view.physicalSize = const Size(844, 390);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    MusicDatabaseService.instance.setSetting('active_sidebar_tab', SidebarTab.systemSettings.index.toString());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: HifiTheme.darkTheme,
+        home: IphoneLandscapeView(
+          onSwitchToPortrait: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await expectLater(
+      find.byType(IphoneLandscapeView),
+      matchesGoldenFile('goldens/iphone_landscape_settings.png'),
+    );
+  });
 }

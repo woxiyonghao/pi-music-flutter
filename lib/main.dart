@@ -17,6 +17,7 @@ void main() async {
     throw StateError(
         'audio_engine initialization failed: ${HifiAudioBindings.instance.loadError}');
   }
+  await MusicDatabaseService.instance.syncPublicMusicFolder();
   MusicDatabaseService.instance.loadLibrary();
   runApp(const HiFiPlayerApp());
   if (!Platform.environment.containsKey('FLUTTER_TEST')) {

@@ -4,12 +4,12 @@ import '../../services/music_database_service.dart';
 import '../../theme/hifi_theme.dart';
 import '../mac/views/mac_magic_tuning_view.dart';
 import '../mac/views/mac_scan_music_view.dart';
-import '../mac/views/mac_system_settings_view.dart';
 import '../mac/views/mac_web_service_view.dart';
 import 'views/iphone_all_music_view.dart';
 import 'views/iphone_dac_setting_view.dart';
 import 'views/iphone_equalizer_view.dart';
 import 'views/iphone_theme_setting_view.dart';
+import 'views/iphone_system_settings_view.dart';
 import 'widgets/iphone_bottom_bar_widget.dart';
 import 'widgets/iphone_now_playing_card.dart';
 import 'widgets/iphone_top_sidebar_widget.dart';
@@ -121,7 +121,7 @@ class _IphonePortraitViewState extends State<IphonePortraitView> {
         return const MacMagicTuningView();
       case SidebarTab.systemSettings:
       case SidebarTab.terminal:
-        return const MacSystemSettingsView();
+        return IphoneSystemSettingsView(onSwitchOrientation: widget.onSwitchToLandscape);
       case SidebarTab.webService:
         return const MacWebServiceView(isWifiTransfer: false);
       case SidebarTab.wifiTransfer:

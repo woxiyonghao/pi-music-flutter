@@ -109,9 +109,9 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
   void initState() {
     super.initState();
     final db = MusicDatabaseService.instance;
-    _isEnabled = db.getSetting('mseb_enabled', '1') == '1';
+    _isEnabled = db.getSetting('mseb_enabled', '0') == '1';
 
-    const defaultVals = [1.3, 2.4, 1.9, 1.7, 1.7, 0.6, 0.0, 0.0, 0.0, 0.0];
+    const defaultVals = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
     for (int i = 0; i < 10; i++) {
       final savedStr = db.getSetting('mseb_val_$i', defaultVals[i].toString());
       _values[i] = double.tryParse(savedStr)?.clamp(-10.0, 10.0) ?? defaultVals[i];
