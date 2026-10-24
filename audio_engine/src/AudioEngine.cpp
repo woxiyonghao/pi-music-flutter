@@ -643,6 +643,9 @@ void AudioEngine::unregisterDeviceListener() {
 
 void AudioEngine::notifyOutputDeviceChanged() {
     device_change_pending_.store(true);
+#if !defined(__APPLE__)
+    handleDefaultDeviceChanged();
+#endif
 }
 
 void AudioEngine::handleDefaultDeviceChanged() {
