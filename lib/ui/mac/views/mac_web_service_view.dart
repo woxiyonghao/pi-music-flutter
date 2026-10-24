@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/platform_helper.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../services/ota_update_service.dart';
@@ -34,6 +35,16 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
     _activeSubModule = widget.isWifiTransfer ? 1 : 0;
     _ipInputController =
         TextEditingController(text: WebRemoteService.instance.localIp);
+    _refreshIps();
+  }
+
+  void _refreshIps() async {
+    final ip = await WebRemoteService.instance.refreshIp();
+    await WifiTransferService.instance.refreshIp();
+    if (mounted) {
+      _ipInputController.text = ip;
+      setState(() {});
+    }
   }
 
   @override
@@ -60,14 +71,40 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
     if (!WebRemoteService.instance.isRunning) {
       await WebRemoteService.instance.start();
     }
-    _openUrl(url);
+    if (Platform.isIOS) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已复制 Web 遥控网址至剪贴板: $url\n请在同一局域网电脑/手机浏览器打开即可远程控制'),
+            backgroundColor: const Color(0xFF3B82F6),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } else {
+      _openUrl(url);
+    }
   }
 
   void _openWifiUrl(String url) async {
     if (!WifiTransferService.instance.isRunning) {
       await WifiTransferService.instance.start();
     }
-    _openUrl(url);
+    if (Platform.isIOS) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已复制传歌网址至剪贴板: $url\n请在同一局域网电脑浏览器访问此地址，直接拖拽上传歌曲'),
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } else {
+      _openUrl(url);
+    }
   }
 
   @override
@@ -111,7 +148,9 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                         Expanded(
                           child: Text(
                             _activeSubModule == 0
-                                ? '当前设备: macOS Desktop · 支持旧手机/平板当数播主机 · 双向毫秒级遥控'
+                                ? (Platform.isIOS
+                                    ? '当前设备: iPhone 移动端 · 支持电脑/平板远程遥控 · 双向毫秒级遥控'
+                                    : '当前设备: macOS Desktop · 支持旧手机/平板当数播主机 · 双向毫秒级遥控')
                                 : '同一局域网下电脑或手机免线拖拽传输 · 即传即播 · 自动扫描入库',
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
@@ -254,14 +293,17 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                         ),
                       ),
                       const SizedBox(width: 8.0),
-                      Text(
-                        isRunning
-                            ? '【本机数播服务运行中】 ${clientCount > 0 ? clientCount : 1} 线程 $port 端口在线'
-                            : '【本机数播服务已停止】 0 线程 0 端口开销',
-                        style: const TextStyle(
-                          fontSize: UIConfig.fontRegular,
-                          fontWeight: FontWeight.w600,
-                          color: UIConfig.textActive,
+                      Expanded(
+                        child: Text(
+                          isRunning
+                              ? '【本机数播服务运行中】 ${clientCount > 0 ? clientCount : 1} 线程 $port 端口在线'
+                              : '【本机数播服务已停止】 0 线程 0 端口开销',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: UIConfig.fontRegular,
+                            fontWeight: FontWeight.w600,
+                            color: UIConfig.textActive,
+                          ),
                         ),
                       ),
                     ],
@@ -277,14 +319,17 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            '遥控访问网址: $webUrl',
-                            style: const TextStyle(
-                              fontSize: UIConfig.fontSmall,
-                              color: Color(0xFF64B5F6),
-                              fontFamily: 'monospace',
-                              decoration: TextDecoration.underline,
-                              decorationColor: Color(0xFF64B5F6),
+                          Flexible(
+                            child: Text(
+                              '遥控访问网址: $webUrl',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: UIConfig.fontSmall,
+                                color: Color(0xFF64B5F6),
+                                fontFamily: 'monospace',
+                                decoration: TextDecoration.underline,
+                                decorationColor: Color(0xFF64B5F6),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6.0),
@@ -301,6 +346,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                   const SizedBox(height: 4.0),
                   Text(
                     'WebSocket 通道: $wsUrl · 网络: 局域网在线',
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 11.5,
                       color: UIConfig.textMuted,
@@ -937,14 +983,17 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                         ),
                       ),
                       const SizedBox(width: 8.0),
-                      Text(
-                        isRunning
-                            ? '无线传歌服务正在运行中 (端口: $port)'
-                            : '无线传歌服务已停止',
-                        style: const TextStyle(
-                          fontSize: UIConfig.fontRegular,
-                          fontWeight: FontWeight.w600,
-                          color: UIConfig.textActive,
+                      Expanded(
+                        child: Text(
+                          isRunning
+                              ? '无线传歌服务正在运行中 (端口: $port)'
+                              : '无线传歌服务已停止',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: UIConfig.fontRegular,
+                            fontWeight: FontWeight.w600,
+                            color: UIConfig.textActive,
+                          ),
                         ),
                       ),
                     ],
@@ -960,14 +1009,17 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            '传歌网址: $wifiUrl',
-                            style: const TextStyle(
-                              fontSize: UIConfig.fontSmall,
-                              color: Color(0xFF64B5F6),
-                              fontFamily: 'monospace',
-                              decoration: TextDecoration.underline,
-                              decorationColor: Color(0xFF64B5F6),
+                          Flexible(
+                            child: Text(
+                              '传歌网址: $wifiUrl',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: UIConfig.fontSmall,
+                                color: Color(0xFF64B5F6),
+                                fontFamily: 'monospace',
+                                decoration: TextDecoration.underline,
+                                decorationColor: Color(0xFF64B5F6),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6.0),
@@ -984,6 +1036,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                   const SizedBox(height: 4.0),
                   Text(
                     '局域网在线 · 存储路径: $targetDir',
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 11.5,
                       color: UIConfig.textMuted,

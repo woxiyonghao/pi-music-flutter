@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import '../../../services/music_database_service.dart';
+import '../../../services/mseb_service.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/web_remote_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
 
@@ -102,32 +104,61 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
     ),
   ];
 
-  late bool _isEnabled;
+  late bool _isEnabled = false;
   late final List<double> _values = List.filled(10, 0.0);
 
   @override
   void initState() {
     super.initState();
-    final db = MusicDatabaseService.instance;
-    _isEnabled = db.getSetting('mseb_enabled', '0') == '1';
+    _loadSettings();
+    MsebService.instance.addListener(_onMsebChanged);
+  }
 
-    const defaultVals = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+  @override
+  void dispose() {
+    MsebService.instance.removeListener(_onMsebChanged);
+    super.dispose();
+  }
+
+  void _onMsebChanged() {
+    if (!mounted) return;
+    final mseb = MsebService.instance;
+    if (_isEnabled != mseb.isEnabled || !listEquals(_values, mseb.values)) {
+      setState(() {
+        _isEnabled = mseb.isEnabled;
+        for (int i = 0; i < 10; i++) {
+          _values[i] = mseb.values[i];
+        }
+      });
+    }
+  }
+
+  void _loadSettings() {
+    final mseb = MsebService.instance;
+    _isEnabled = mseb.isEnabled;
     for (int i = 0; i < 10; i++) {
-      final savedStr = db.getSetting('mseb_val_$i', defaultVals[i].toString());
-      _values[i] = double.tryParse(savedStr)?.clamp(-10.0, 10.0) ?? defaultVals[i];
+      _values[i] = mseb.values[i];
     }
   }
 
   void _saveVal(int i, double v) {
-    MusicDatabaseService.instance.setSetting('mseb_val_$i', v.toStringAsFixed(1));
+    setState(() {
+      _values[i] = v;
+      MsebService.instance.setParam(i, v);
+      _isEnabled = MsebService.instance.isEnabled;
+      WebRemoteService.instance.broadcastMseb();
+      WebRemoteService.instance.broadcastState();
+    });
   }
 
   void _resetAll() {
     setState(() {
+      MsebService.instance.resetAll();
       for (int i = 0; i < _values.length; i++) {
         _values[i] = 0.0;
-        _saveVal(i, 0.0);
       }
+      WebRemoteService.instance.broadcastMseb();
+      WebRemoteService.instance.broadcastState();
     });
   }
 
@@ -163,7 +194,9 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
                     onTap: () {
                       setState(() {
                         _isEnabled = !_isEnabled;
-                        MusicDatabaseService.instance.setSetting('mseb_enabled', _isEnabled ? '1' : '0');
+                        MsebService.instance.setEnabled(_isEnabled);
+                        WebRemoteService.instance.broadcastMseb();
+                        WebRemoteService.instance.broadcastState();
                       });
                     },
                     borderRadius: BorderRadius.circular(6.0),

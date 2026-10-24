@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../models/sidebar_tab.dart';
 import '../../models/track.dart';
@@ -49,7 +48,7 @@ class MacSidebarWidget extends StatelessWidget {
     );
     final actualWidth = width ?? UIConfig.sidebarWidth;
     final actualGap = gap ?? UIConfig.containerGap;
-    final shouldShowWeb = showWebService ?? (!Platform.isIOS);
+    final shouldShowWeb = showWebService ?? true;
 
     return Container(
       width: actualWidth,

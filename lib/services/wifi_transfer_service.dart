@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import '../core/app_paths.dart';
 import 'music_database_service.dart';
 import 'web_remote_service.dart';
 import 'wifi_transfer_html.dart';
@@ -71,23 +72,13 @@ class WifiTransferService extends ChangeNotifier {
 
   /// 智能探测默认音乐存储目录
   static String _resolveDefaultMusicDir() {
-    final home = Platform.environment['HOME'] ?? '';
-    if (home.isNotEmpty) {
-      final downloadsMusic = '$home/Downloads/music';
-      if (Directory(downloadsMusic).existsSync()) return downloadsMusic;
+    return AppPaths.musicDirectory;
+  }
 
-      final macMusic = '$home/Music';
-      if (Directory(macMusic).existsSync()) return macMusic;
-
-      final downloads = '$home/Downloads';
-      if (Directory(downloads).existsSync()) return downloads;
-
-      return macMusic;
-    }
-    if (Platform.isLinux) {
-      return '/home/pi/Music';
-    }
-    return '/tmp/music';
+  Future<String> refreshIp() async {
+    _localIp = await WebRemoteService.findLocalIp();
+    notifyListeners();
+    return _localIp;
   }
 
   /// 启动 WiFi 传歌 HTTP 服务 (默认端口 8080)
@@ -171,9 +162,11 @@ class WifiTransferService extends ChangeNotifier {
     // 1. GET / 或 /index.html: 返回 H5 拖拽传歌网页 (同时兼容 HEAD 请求)
     if ((request.method == 'GET' || request.method == 'HEAD') &&
         (path == '/' || path == '/index.html')) {
-      final platformLabel = Platform.isMacOS
-          ? 'Mac'
-          : (Platform.isLinux ? '树莓派' : 'HiFi主机');
+      final platformLabel = Platform.isIOS
+          ? 'iPhone'
+          : (Platform.isMacOS
+              ? 'Mac'
+              : (Platform.isLinux ? '树莓派' : 'HiFi主机'));
       final html = wifiTransferHtml.replaceAll('{{PLATFORM}}', platformLabel);
 
       request.response.headers.contentType = ContentType.html;
@@ -283,8 +276,8 @@ class WifiTransferService extends ChangeNotifier {
       _uploadedFiles.insert(0, record);
       notifyListeners();
 
-      // 核心发烧特性：即传即入库！自动触发 MusicDatabaseService 重新加载曲库
-      MusicDatabaseService.instance.loadLibrary();
+      // 核心发烧特性：即传即入库！自动触发 MusicDatabaseService 真正扫描落盘文件入库
+      await MusicDatabaseService.instance.scanLibrary();
 
       debugPrint('[WifiTransferService] 文件上传成功: $filename ($totalBytes bytes) -> ${finalFile.path}');
 
