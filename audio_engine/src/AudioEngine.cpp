@@ -331,16 +331,12 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
 #endif
 
     // 2. 打开硬件输出设备 (根据用户设置的目标采样率与母带采样率协商)
-    uint32_t target_rate = runtimeContext().hostOutput().sample_rate;
-    uint32_t expected_sink_rate = (target_rate > 0) ? target_rate : current_spec_.sample_rate;
-    if (!sink_->isOpen() || sink_->getActualSpec().sample_rate != expected_sink_rate || sink_->getActualSpec().channels != current_spec_.channels) {
-        sink_->close();
-        if (!sink_->open(current_spec_, [this](float* output, size_t frame_count) {
-                onSinkDataNeeded(output, frame_count);
-            })) {
-            std::cerr << "[AudioEngine] 无法打开硬件输出设备" << std::endl;
-            return false;
-        }
+    sink_->close();
+    if (!sink_->open(current_spec_, [this](float* output, size_t frame_count) {
+            onSinkDataNeeded(output, frame_count);
+        })) {
+        std::cerr << "[AudioEngine] 无法打开硬件输出设备" << std::endl;
+        return false;
     }
 
     is_playing_.store(true, std::memory_order_release);
@@ -708,13 +704,15 @@ void AudioEngine::handleDefaultDeviceChanged() {
         if (!playing) pause();
     }
 #else
-    std::lock_guard lock(device_mutex_);
     const auto host = runtimeContext().hostOutput();
     uint32_t target_rate = host.sample_rate;
-    if (sink_ && sink_->isOpen()) {
-        if (target_rate > 0 && sink_->getActualSpec().sample_rate == target_rate) {
+    uint32_t expected_rate = (target_rate > 0) ? target_rate : (current_spec_.sample_rate > 0 ? current_spec_.sample_rate : 44100);
+
+    if (sink_) {
+        if (sink_->isOpen() && target_rate > 0 && sink_->getActualSpec().sample_rate == target_rate) {
             return;
         }
+
         if (decoder_) {
             bool was_playing = is_playing_.load(std::memory_order_acquire);
             const auto file = current_filepath_;
@@ -726,10 +724,18 @@ void AudioEngine::handleDefaultDeviceChanged() {
             if (openAndPlaySection(file, section_start, section_end)) {
                 seek(position);
                 if (!was_playing) pause();
-                std::cout << "[AudioEngine] Linux SDL 推流管道已热切换至新采样率: " << target_rate << " Hz" << std::endl;
+                std::cout << "[AudioEngine] Linux SDL 推流管道已热切换至新采样率: " << expected_rate << " Hz" << std::endl;
             }
         } else {
+            // 空闲状态下实时同步硬件指示灯
             sink_->close();
+            AudioFormatSpec idle_spec{expected_rate, 2, 32, SampleFormat::Float32};
+            if (sink_->open(idle_spec, [](float* out, size_t n) {
+                std::memset(out, 0, n * 2 * sizeof(float));
+            })) {
+                sink_->start();
+                std::cout << "[AudioEngine] Linux SDL 空闲硬件已锁定采样率: " << expected_rate << " Hz" << std::endl;
+            }
         }
     }
 #endif
