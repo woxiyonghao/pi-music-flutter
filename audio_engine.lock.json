@@ -1,7 +1,7 @@
 {
   "repository": "git@github.com:woxiyonghao/pi-music-flutter.git",
   "branch": "dev/audio_engine",
-  "revision": "aab524dafe737dff900653d1a804f36a11b5f4a3",
+  "revision": "1f0a71fb9fc3d48276fc2dbbca2157274e8f7dba",
   "abiVersion": 2,
   "platform": "pi"
 }
