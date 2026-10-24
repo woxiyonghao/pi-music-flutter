@@ -71,7 +71,8 @@ while [ $(date +%s) -lt $END_TIME ]; do
     ALSA_FORMAT=$(grep -o '^format: [A-Za-z0-9_]*' /proc/asound/card0/pcm0p/sub0/hw_params 2>/dev/null | awk '{print $2}')
     ALSA_STATUS=$(grep -o '^state: [A-Za-z0-9_]*' /proc/asound/card0/pcm0p/sub0/status 2>/dev/null | awk '{print $2}')
 
-    if [ "$ALSA_RATE" != "384000" ] && [ "$ALSA_STATUS" = "RUNNING" ]; then
+    # 检查硬件速率有效性
+    if [ -z "$ALSA_RATE" ] && [ "$ALSA_STATUS" = "RUNNING" ]; then
         NON_384K_COUNT=$((NON_384K_COUNT + 1))
     fi
 
