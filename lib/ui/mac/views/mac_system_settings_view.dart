@@ -17,7 +17,6 @@ class MacSystemSettingsView extends StatefulWidget {
 
 class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
   // 板块一：音频重放与时钟引擎
-  int _sampleRateMode = 0;       // 0: Bit-Perfect 源码直出, 1: 超采样 192k/24b, 2: 极频 384k/32b
   int _dsdMode = 0;             // 0: DoP (DSD over PCM), 1: Native 原生直通, 2: DSD 软解 PCM
   int _bufferSizeMode = 1;      // 0: 64帧, 1: 256帧 (标准发烧), 2: 512帧
   int _fadeDurationMode = 2;    // 0: 关闭, 1: 0.3s, 2: 0.5s (发烧标准), 3: 1.0s
@@ -36,14 +35,6 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
 
   void _loadSettings() {
     final db = MusicDatabaseService.instance;
-    final dacMode = DacSettingService.instance.sampleRateMode;
-    if (dacMode == 5) {
-      _sampleRateMode = 2;
-    } else if (dacMode == 4) {
-      _sampleRateMode = 1;
-    } else {
-      _sampleRateMode = int.tryParse(db.getSetting('setting_sample_rate', '0'))?.clamp(0, 2) ?? 0;
-    }
     _dsdMode = int.tryParse(db.getSetting('setting_dsd_mode', '0'))?.clamp(0, 2) ?? 0;
     _bufferSizeMode = int.tryParse(db.getSetting('setting_buffer_size', '1'))?.clamp(0, 2) ?? 1;
     _fadeDurationMode = int.tryParse(db.getSetting('setting_fade_duration_mode', '2'))?.clamp(0, 3) ?? 2;
@@ -88,18 +79,18 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                       label: '输出采样率',
                       options: const [
                         'Bit-Perfect 源码直出',
-                        '超采样 192kHz/24Bit',
-                        '极频 384kHz/32Bit',
+                        '标准 44.1kHz',
+                        '超采样 192kHz',
+                        '极频 384kHz',
                       ],
                       selectedIndex: () {
                         final dacMode = DacSettingService.instance.sampleRateMode;
-                        return dacMode == 5 ? 2 : (dacMode == 4 ? 1 : (dacMode == 0 ? 0 : _sampleRateMode));
+                        return dacMode == 5 ? 3 : (dacMode == 4 ? 2 : (dacMode == 1 ? 1 : 0));
                       }(),
                       onSelected: (idx) {
-                        setState(() => _sampleRateMode = idx);
-                        MusicDatabaseService.instance.setSetting('setting_sample_rate', idx.toString());
-                        final targetDacMode = idx == 2 ? 5 : (idx == 1 ? 4 : 0);
+                        final targetDacMode = idx == 3 ? 5 : (idx == 2 ? 4 : (idx == 1 ? 1 : 0));
                         DacSettingService.instance.setSampleRateMode(targetDacMode);
+                        setState(() {});
                       },
                     ),
                     const SizedBox(height: 10.0),

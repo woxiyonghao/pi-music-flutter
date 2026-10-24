@@ -601,8 +601,8 @@ class DacSettingService extends ChangeNotifier {
     final clamped = modeIndex.clamp(0, 5);
     setParam('topping_sample_rate_mode', clamped);
 
-    // 联动系统全局设置 setting_sample_rate (0: 源码直出, 1: 192k, 2: 384k)
-    final sysRateIndex = clamped == 5 ? 2 : (clamped == 4 ? 1 : 0);
+    // 联动系统全局设置 setting_sample_rate (0: 源码直出, 1: 44.1k, 2: 192k, 3: 384k)
+    final sysRateIndex = clamped == 5 ? 3 : (clamped == 4 ? 2 : (clamped == 1 ? 1 : 0));
     MusicDatabaseService.instance.setSetting('setting_sample_rate', sysRateIndex.toString());
 
     final targetRate = clamped == 0
