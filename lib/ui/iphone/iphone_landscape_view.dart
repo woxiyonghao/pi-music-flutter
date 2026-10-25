@@ -245,13 +245,40 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView>
                             ],
                             if (progress > 0.05)
                               Positioned(
-                                top: 10,
-                                right: 10,
-                                child: IconButton.filledTonal(
-                                  tooltip: '退出全屏',
-                                  onPressed: () => _setFullscreen(false),
-                                  icon:
-                                      const Icon(Icons.fullscreen_exit_rounded),
+                                top: 16,
+                                right: 16,
+                                child: Opacity(
+                                  opacity: progress.clamp(0.0, 1.0),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: const Color.fromRGBO(
+                                          14, 18, 26, 0.82),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: const Color.fromRGBO(
+                                            255, 255, 255, 0.12),
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black
+                                              .withValues(alpha: 0.4),
+                                          blurRadius: 10,
+                                        ),
+                                      ],
+                                    ),
+                                    child: IconButton(
+                                      tooltip: '退出全屏',
+                                      onPressed: () => _setFullscreen(false),
+                                      icon: const Icon(
+                                          Icons.fullscreen_exit_rounded,
+                                          size: 20,
+                                          color: UIConfig.iconNormal),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 8),
+                                      constraints: const BoxConstraints(
+                                          minWidth: 36, minHeight: 36),
+                                    ),
+                                  ),
                                 ),
                               ),
                             if (_showCreatePlaylistModal)
