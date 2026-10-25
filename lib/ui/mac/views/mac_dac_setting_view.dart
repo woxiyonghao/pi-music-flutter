@@ -10,6 +10,7 @@ import '../../../services/dac_setting_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
+import '../../common/module_scroll_view.dart';
 
 /// 动态发烧 DAC 解码设置视图 (Master-Detail 架构)
 /// 严格根据实际连接的物理硬件 (如【本机解码器】与【外接解码器: 拓品 TOPPING DX12】) 动态呈现，
@@ -26,6 +27,8 @@ class MacDACSettingView extends StatefulWidget {
 
 class _MacDACSettingViewState extends State<MacDACSettingView> {
   Timer? _devicePoll;
+  bool _probingOutputs = false;
+  bool _refreshingOutputs = false;
   DacSettingService get _dac => widget.service ?? DacSettingService.instance;
   HifiPlatformType get _currentPlatform =>
       widget.platform ?? PlatformHelper.currentPlatform;
@@ -37,16 +40,23 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
   String get _iosSystemName =>
       _currentPlatform == HifiPlatformType.iphone ? 'iOS' : 'iPadOS';
   bool get _isPi => _currentPlatform == HifiPlatformType.pi;
+  bool get _usesIphoneSession =>
+      _currentPlatform == HifiPlatformType.iphone && _dac.audioRuntime.isIOS;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _dac.refreshDevices();
-    });
-    if (HifiAudioBindings.instance.isLoaded) {
-      _devicePoll = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted) return;
+      if (_usesIphoneSession) {
+        _probeOutputs(showFeedback: false);
+      } else {
         _dac.refreshDevices();
+      }
+    });
+    if (_usesIphoneSession || HifiAudioBindings.instance.isLoaded) {
+      _devicePoll = Timer.periodic(const Duration(seconds: 2), (_) {
+        _refreshSystemOutput();
       });
     }
   }
@@ -55,6 +65,62 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
   void dispose() {
     _devicePoll?.cancel();
     super.dispose();
+  }
+
+  Future<void> _refreshSystemOutput() async {
+    if (_refreshingOutputs || _probingOutputs) return;
+    _refreshingOutputs = true;
+    try {
+      if (_usesIphoneSession) {
+        await _dac.audioRuntime.refreshOutput();
+      } else {
+        _dac.refreshDevices();
+      }
+    } catch (error) {
+      debugPrint('[DAC] 系统输出查询失败：$error');
+    } finally {
+      _refreshingOutputs = false;
+    }
+  }
+
+  Future<void> _probeOutputs({bool showFeedback = true}) async {
+    if (!_usesIphoneSession) {
+      _dac.refreshDevices();
+      if (showFeedback) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('已重新扫描硬件音频总线与 USB 外接设备'),
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+      return;
+    }
+    if (_probingOutputs) return;
+    setState(() => _probingOutputs = true);
+    try {
+      await _dac.probeOutputs();
+      if (!mounted) return;
+      if (!showFeedback) return;
+      final usbDevices = _dac.connectedDevices
+          .where((device) => device.transport.toLowerCase().contains('usb'))
+          .map((device) => device.name)
+          .toList();
+      final message = usbDevices.isNotEmpty
+          ? '系统当前 USB 音频输出：${usbDevices.join('、')}'
+          : '系统当前未提供 USB 音频输出。当前输出：${_dac.currentDevice?.name ?? '未检测到输出'}';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('读取系统音频输出失败：$error'),
+        backgroundColor: const Color(0xFFEF4444),
+      ));
+    } finally {
+      if (mounted) setState(() => _probingOutputs = false);
+    }
   }
 
   @override
@@ -76,9 +142,10 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
           height: double.infinity,
           borderRadius: UIConfig.containerRounding,
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: ModuleScrollView(
+            storageId: 'dac-module-scroll',
+            platform: _currentPlatform,
+            header: [
               // 1. 顶栏：标题与动态状态指示
               _buildHeader(theme, accent, dac),
               const SizedBox(height: 12),
@@ -95,36 +162,27 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                         const TextStyle(color: Colors.white54, fontSize: 11)),
               ],
               const SizedBox(height: 14),
-
-              // 3. 下方详情设置区：根据当前选中的解码器动态呈现其专属支持项
-              Expanded(
-                child: currentDev == null
-                    ? _buildEmptyState()
-                    : SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // 硬件能力全景名片
-                            _buildHardwareBadgeCard(currentDev, accent),
-                            const SizedBox(height: 14),
-
-                            // 专有设置选项
-                            if (_isIpad)
-                              _buildIpadOutputSettings(currentDev, dac, accent)
-                            else if (currentDev.isSystemManagedOutput)
-                              _buildSystemOutputSettings(currentDev, accent)
-                            else if (currentDev.isBuiltIn)
-                              _buildBuiltinSettings(currentDev, dac, accent)
-                            else
-                              _buildExternalDacSettings(
-                                  currentDev, dac, accent),
-
-                            const SizedBox(height: 32),
-                          ],
-                        ),
-                      ),
-              ),
+            ],
+            children: [
+              // 标题、设备卡与详情共享同一个纵向滚动位置。
+              if (currentDev == null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  child: _buildEmptyState(),
+                )
+              else ...[
+                _buildHardwareBadgeCard(currentDev, accent),
+                const SizedBox(height: 14),
+                if (_isIpad)
+                  _buildIpadOutputSettings(currentDev, dac, accent)
+                else if (currentDev.isSystemManagedOutput)
+                  _buildSystemOutputSettings(currentDev, accent)
+                else if (currentDev.isBuiltIn)
+                  _buildBuiltinSettings(currentDev, dac, accent)
+                else
+                  _buildExternalDacSettings(currentDev, dac, accent),
+              ],
+              const SizedBox(height: 32),
             ],
           ),
         );
@@ -243,18 +301,14 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
         const SizedBox(width: 8),
         IconButton(
           tooltip: '重新探测已连接的音频设备',
-          icon: const Icon(Icons.refresh_rounded,
-              color: Colors.white70, size: 20),
-          onPressed: () {
-            dac.refreshDevices();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('已重新扫描硬件音频总线与 USB 外接设备'),
-                duration: Duration(seconds: 1),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          },
+          icon: _probingOutputs
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.refresh_rounded,
+                  color: Colors.white70, size: 20),
+          onPressed: _probingOutputs ? null : () => _probeOutputs(),
         ),
       ],
     );

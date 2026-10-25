@@ -84,4 +84,76 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('entering iPhone DAC probes once and polls the live OS route',
+      (tester) async {
+    const liveChannel = MethodChannel('test/iphone-dac-view-live-probe');
+    var active = false;
+    var activationCalls = 0;
+    var routeReads = 0;
+    var plugged = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(liveChannel, (call) async {
+      if (call.method != 'getOutputFormat') return null;
+      routeReads++;
+      return {
+        'id': active && plugged ? 'live-usb' : 'speaker',
+        'name': active && plugged ? 'TOPPING DX1 II' : 'iPhone 扬声器',
+        'transport': active && plugged ? 'USB' : 'BuiltIn',
+        'sampleRate': 48000,
+      };
+    });
+    final liveRuntime = PlatformAudioRuntime.forTesting(
+      channel: liveChannel,
+      reportOutput: (_) {},
+      activateSession: () async {
+        activationCalls++;
+        active = true;
+        return true;
+      },
+    );
+    final liveDac = DacSettingService.forTesting(
+      runtime: liveRuntime,
+      readDevices: () => '[]',
+      selectOutput: (_) => false,
+      followsSystemOutput: true,
+    );
+    addTearDown(() {
+      liveDac.dispose();
+      liveRuntime.dispose();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(liveChannel, null);
+    });
+    await liveRuntime.refreshOutput();
+    expect(liveDac.currentDevice!.transport, 'BuiltIn');
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: MacDACSettingView(
+                platform: HifiPlatformType.iphone, service: liveDac))));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(activationCalls, 1);
+    expect(liveDac.currentDevice!.name, 'TOPPING DX1 II');
+    expect(find.text('TOPPING DX1 II'), findsOneWidget);
+
+    final readsAfterEntry = routeReads;
+    plugged = false;
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+    expect(routeReads, greaterThan(readsAfterEntry));
+    expect(liveDac.currentDevice!.name, 'iPhone 扬声器');
+    expect(activationCalls, 1,
+        reason: 'Periodic OS queries must not reactivate the audio session');
+
+    plugged = true;
+    await tester.tap(find.byTooltip('重新探测已连接的音频设备'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(liveDac.currentDevice!.name, 'TOPPING DX1 II');
+    expect(activationCalls, 1,
+        reason: 'A manual retry reuses the already active session');
+    expect(find.text('系统当前 USB 音频输出：TOPPING DX1 II'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

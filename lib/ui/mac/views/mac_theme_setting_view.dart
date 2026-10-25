@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
+import '../../common/module_scroll_view.dart';
 import '../../visualizers/visualizer_type.dart';
 
 /// 主题与背景动效设置视图 (1:1 严格对齐 C++ ThemeSettingView.cpp)
@@ -32,9 +33,9 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
         return GlassCard(
           borderRadius: UIConfig.containerRounding,
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: ModuleScrollView(
+            storageId: 'theme-module-scroll',
+            header: [
               // 1. 顶部 Header 栏：主标题「主题」，右侧「恢复名机预设」按钮
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -76,36 +77,29 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                 ],
               ),
               const SizedBox(height: 14.0),
-
-              // 2. 独立滚动区域
-              Expanded(
-                child: ListView(
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    // 板块一：预设 (8款名机经典主题)
-                    _buildSectionContainer(
-                      title: '预设',
-                      child: _buildPresetsGrid(theme),
-                    ),
-                    const SizedBox(height: 12.0),
-
-                    // 板块二：背景律动 (11款律动模式)
-                    _buildSectionContainer(
-                      title: '背景律动',
-                      child: _buildVisualizerModesGrid(theme),
-                    ),
-                    const SizedBox(height: 12.0),
-
-                    // 板块三：自由调色 (macOS HSV 色轮与调色台)
-                    _buildSectionContainer(
-                      title: '自由调色',
-                      headerTrailing: _buildHexPill(accent),
-                      child: _buildColorWheelSection(theme),
-                    ),
-                    const SizedBox(height: 16.0),
-                  ],
-                ),
+            ],
+            children: [
+              // 板块一：预设 (8款名机经典主题)
+              _buildSectionContainer(
+                title: '预设',
+                child: _buildPresetsGrid(theme),
               ),
+              const SizedBox(height: 12.0),
+
+              // 板块二：背景律动 (11款律动模式)
+              _buildSectionContainer(
+                title: '背景律动',
+                child: _buildVisualizerModesGrid(theme),
+              ),
+              const SizedBox(height: 12.0),
+
+              // 板块三：自由调色 (macOS HSV 色轮与调色台)
+              _buildSectionContainer(
+                title: '自由调色',
+                headerTrailing: _buildHexPill(accent),
+                child: _buildColorWheelSection(theme),
+              ),
+              const SizedBox(height: 16.0),
             ],
           ),
         );
@@ -188,6 +182,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
     return LayoutBuilder(builder: (context, constraints) {
       final cols = constraints.maxWidth < 560 ? 1 : 2;
       return GridView.builder(
+        primary: false,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -404,6 +399,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
     return LayoutBuilder(builder: (context, constraints) {
       final cols = constraints.maxWidth < 620 ? 3 : 4;
       return GridView.builder(
+        primary: false,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

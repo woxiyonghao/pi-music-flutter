@@ -42,10 +42,8 @@ void main() {
     await tester.tap(find.text('进入纯音系统'));
     await tester.pump();
     expect(find.text('正在启动播放器'), findsOneWidget);
-    expect(orientationCalls.last, [
-      'DeviceOrientation.landscapeLeft',
-      'DeviceOrientation.landscapeRight'
-    ]);
+    expect(orientationCalls.first, ['DeviceOrientation.portraitUp']);
+    expect(orientationCalls.last, ['DeviceOrientation.landscapeRight']);
     // Disposing while initialization is pending must not enter the main UI.
     await tester.pumpWidget(const SizedBox.shrink());
     startup.complete();
@@ -79,16 +77,48 @@ void main() {
     await tester.pumpWidget(
         MaterialApp(home: IphoneMainView(initialize: () => newStartup.future)));
     expect(find.text('请选择显示操作模式'), findsOneWidget);
-    expect(
-        orientationCalls.last,
-        containsAll([
-          'DeviceOrientation.portraitUp',
-          'DeviceOrientation.landscapeLeft',
-          'DeviceOrientation.landscapeRight'
-        ]));
+    expect(orientationCalls.last, ['DeviceOrientation.portraitUp']);
     await tester.pumpWidget(const SizedBox.shrink());
     newStartup.complete();
     await tester.pump();
+  });
+
+  testWidgets(
+      'landscape locks to the requested reverse direction for the session',
+      (tester) async {
+    setSize(tester, const Size(844, 390));
+    final startup = Completer<void>();
+    await tester.pumpWidget(
+        MaterialApp(home: IphoneMainView(initialize: () => startup.future)));
+    expect(orientationCalls.single, ['DeviceOrientation.portraitUp']);
+    await tester.tap(find.text('进入纯音系统'));
+    await tester.pump();
+    expect(orientationCalls.last, ['DeviceOrientation.landscapeRight']);
+    final lockedCalls = orientationCalls.length;
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(orientationCalls.length, lockedCalls);
+    expect(find.text('请选择显示操作模式'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    startup.complete();
+    await tester.pump();
+  });
+
+  testWidgets('main workspace waits for the native landscape viewport',
+      (tester) async {
+    setSize(tester, const Size(390, 844));
+    await tester.pumpWidget(const MaterialApp(home: IphoneMainView()));
+    await tester.tap(find.text('进入纯音系统'));
+    await tester.pump();
+    expect(find.text('正在切换横屏'), findsOneWidget);
+    expect(find.byType(IphoneLandscapeView), findsNothing);
+    tester.view.physicalSize = const Size(844, 390);
+    await tester.pump();
+    expect(find.byType(IphoneLandscapeView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('startup orientation dialog fits landscape and small phones',

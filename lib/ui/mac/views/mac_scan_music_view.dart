@@ -7,6 +7,7 @@ import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
+import '../../common/module_scroll_view.dart';
 import '../widgets/mac_music_item_widget.dart';
 
 enum ScanUIState {
@@ -435,8 +436,9 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
       formatBuckets.putIfAbsent(t.format, () => []).add(t);
     }
 
-    return Column(
-      children: [
+    return ModuleScrollView(
+      storageId: 'scan-module-scroll',
+      header: [
         // 顶部操作栏：「全选」+「选择」多选模式切换 +「删除」/「重新扫描」
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -573,26 +575,19 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
           ],
         ),
         const SizedBox(height: 8.0),
-
-        // 纵向滚动列表 (每个格式一行横向卡片)
-        Expanded(
-          child: ListView(
-            physics: const BouncingScrollPhysics(),
-            children: [
-              for (final fmt in formatOrder)
-                if (formatBuckets.containsKey(fmt) &&
-                    formatBuckets[fmt]!.isNotEmpty)
-                  _buildFormatSection(
-                    fmt: fmt,
-                    tracks: formatBuckets[fmt]!,
-                    currentPlaying: currentPlayingTrack,
-                    isEnginePlaying: isEnginePlaying,
-                    accent: accent,
-                  ),
-              const SizedBox(height: 20.0),
-            ],
-          ),
-        ),
+      ],
+      children: [
+        // 操作栏与格式分组共同纵向滚动，分组内保留横向曲目浏览。
+        for (final fmt in formatOrder)
+          if (formatBuckets.containsKey(fmt) && formatBuckets[fmt]!.isNotEmpty)
+            _buildFormatSection(
+              fmt: fmt,
+              tracks: formatBuckets[fmt]!,
+              currentPlaying: currentPlayingTrack,
+              isEnginePlaying: isEnginePlaying,
+              accent: accent,
+            ),
+        const SizedBox(height: 20.0),
       ],
     );
   }

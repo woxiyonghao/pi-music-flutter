@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
 import 'package:hide_player_flutter/models/sidebar_tab.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
+import 'package:hide_player_flutter/services/mobile_system_service.dart';
 import 'package:hide_player_flutter/services/theme_service.dart';
 import 'package:hide_player_flutter/theme/hifi_theme.dart';
 import 'package:hide_player_flutter/ui/iphone/iphone_landscape_view.dart';
@@ -18,6 +20,15 @@ void main() {
 
   setUpAll(() {
     HifiAudioService.instance.stopTicker();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(MobileSystemService.channel, (_) async {
+      throw MissingPluginException('golden_no_native_bridge');
+    });
+  });
+
+  tearDownAll(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(MobileSystemService.channel, null);
   });
 
   testWidgets('Golden: iPhone Startup Orientation Dialog', (tester) async {

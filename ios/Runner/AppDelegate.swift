@@ -2,11 +2,14 @@ import Flutter
 import UIKit
 import AVFoundation
 import Darwin
+import os
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
     private var audioChannel: FlutterMethodChannel?
     private var routeObserver: NSObjectProtocol?
+    private var foregroundObserver: NSObjectProtocol?
+    private var lastRouteChangeReason: UInt = 0
     private var systemChannel: FlutterMethodChannel?
 
     func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
@@ -27,17 +30,7 @@ import Darwin
             let session = AVAudioSession.sharedInstance()
             switch call.method {
             case "getOutputFormat":
-                let output = session.currentRoute.outputs.first
-                let port = output?.portType
-                let transport: String
-                if port == .bluetoothA2DP || port == .bluetoothHFP || port == .bluetoothLE {
-                    transport = "Bluetooth"
-                } else if port == .usbAudio { transport = "USB" }
-                else if port == .builtInSpeaker || port == .builtInReceiver || port == .headphones { transport = "BuiltIn" }
-                else { transport = port?.rawValue ?? "System" }
-                result(["sampleRate": Int(session.sampleRate.rounded()),
-                        "channels": session.outputNumberOfChannels, "bufferDuration": session.ioBufferDuration,
-                        "id": output?.uid ?? "", "name": output?.portName ?? "", "transport": transport])
+                result(self?.outputFormat(session) ?? [:])
             case "setPreferredSampleRate":
                 let arguments = call.arguments as? [String: Any]
                 guard let rate = arguments?["sampleRate"] as? NSNumber,
@@ -80,21 +73,70 @@ import Darwin
         routeObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification,
             object: nil, queue: .main) { [weak self] notification in
                 let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+                self?.lastRouteChangeReason = reason
                 self?.audioChannel?.invokeMethod("routeChanged", arguments: ["reason": reason])
             }
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.audioChannel?.invokeMethod("routeChanged", arguments: ["reason": 0])
+        }
     }
 
-    /// Only values exposed by public iOS APIs. Sensor values such as CPU
-    /// frequency and die temperature are deliberately absent.
+    private func outputFormat(_ session: AVAudioSession) -> [String: Any] {
+        func portInfo(_ port: AVAudioSessionPortDescription) -> [String: Any] {
+            let transport: String
+            switch port.portType {
+            case .usbAudio: transport = "USB"
+            case .bluetoothA2DP, .bluetoothHFP, .bluetoothLE: transport = "Bluetooth"
+            case .builtInSpeaker, .builtInReceiver, .headphones: transport = "BuiltIn"
+            case .airPlay: transport = "AirPlay"
+            default: transport = port.portType.rawValue
+            }
+            return ["id": port.uid, "name": port.portName, "transport": transport,
+                    "portType": port.portType.rawValue,
+                    "channelCount": port.channels?.count ?? 0]
+        }
+        let route = session.currentRoute
+        let outputs = route.outputs.map(portInfo)
+        var format = outputs.first ?? ["id": "", "name": "", "transport": "System"]
+        format["sampleRate"] = Int(session.sampleRate.rounded())
+        format["channels"] = session.outputNumberOfChannels
+        format["bufferDuration"] = session.ioBufferDuration
+        format["outputLatency"] = session.outputLatency
+        format["outputs"] = outputs
+        format["inputs"] = route.inputs.map(portInfo)
+        format["category"] = session.category.rawValue
+        format["mode"] = session.mode.rawValue
+        format["lastRouteChangeReason"] = lastRouteChangeReason
+        return format
+    }
+
+    private var telemetryPreviousCPUSeconds: Double?
+    private var telemetryPreviousSampleTime: TimeInterval?
+
+    /// Every metric is independent: a denied Mach query or unavailable battery
+    /// must not suppress device identity, storage or the actual audio session.
     private func systemInfo() -> [String: Any] {
         let process = ProcessInfo.processInfo
         let device = UIDevice.current
         device.isBatteryMonitoringEnabled = true
+        var errors: [String: String] = [
+            "cpuFrequencyHz": "not_public", "cpuTemperatureCelsius": "not_public"
+        ]
+        #if targetEnvironment(simulator)
+        let isSimulator = true
+        #else
+        let isSimulator = false
+        #endif
         var hardware = utsname()
-        uname(&hardware)
-        let model = withUnsafeBytes(of: &hardware.machine) { bytes in
+        let unameStatus = uname(&hardware)
+        let architecture = withUnsafeBytes(of: &hardware.machine) { bytes in
             String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
         }
+        let model = isSimulator
+            ? (process.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? architecture)
+            : architecture
         let thermal: String
         switch process.thermalState {
         case .nominal: thermal = "nominal"
@@ -111,14 +153,51 @@ import Darwin
         default: battery = "unknown"
         }
         var values: [String: Any] = [
-            "model": model,
+            "bridgeVersion": 2,
+            "sampledAtUnixMs": Int64(Date().timeIntervalSince1970 * 1000),
+            "isSimulator": isSimulator,
+            "metricScope": isSimulator ? "simulator_host" : "ios_device",
+            "deviceName": isSimulator ? (process.environment["SIMULATOR_DEVICE_NAME"] ?? device.name) : device.name,
+            "modelName": device.localizedModel,
+            "systemName": device.systemName,
             "systemVersion": device.systemVersion,
             "processorCount": process.processorCount,
+            "activeProcessorCount": process.activeProcessorCount,
             "physicalMemoryBytes": process.physicalMemory,
             "thermalState": thermal,
-            "batteryState": battery,
-            "batteryLevel": device.batteryLevel >= 0 ? Double(device.batteryLevel) as Any : NSNull()
+            "lowPowerMode": process.isLowPowerModeEnabled
         ]
+        if unameStatus == 0 {
+            values["model"] = model
+            values["architecture"] = architecture
+        } else { errors["model"] = "uname_\(errno)" }
+        if !isSimulator {
+            if device.batteryLevel >= 0 { values["batteryLevel"] = Double(device.batteryLevel) }
+            else { errors["batteryLevel"] = "battery_not_ready" }
+            if battery != "unknown" { values["batteryState"] = battery }
+            else { errors["batteryState"] = "battery_not_ready" }
+        } else {
+            errors["batteryLevel"] = "simulator_unavailable"
+            errors["batteryState"] = "simulator_unavailable"
+        }
+
+        // Process CPU time divided by elapsed sampling time. 100% means one
+        // fully occupied core, so a multi-threaded process can exceed 100%.
+        var usage = rusage()
+        if getrusage(RUSAGE_SELF, &usage) == 0 {
+            let cpuSeconds = Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec)
+                + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
+            let now = process.systemUptime
+            if let previousCPU = telemetryPreviousCPUSeconds,
+               let previousTime = telemetryPreviousSampleTime,
+               now > previousTime, cpuSeconds >= previousCPU {
+                let percent = (cpuSeconds - previousCPU) / (now - previousTime) * 100
+                values["appCpuPercent"] = percent
+            } else { errors["appCpuPercent"] = "sampling" }
+            telemetryPreviousCPUSeconds = cpuSeconds
+            telemetryPreviousSampleTime = now
+        } else { errors["appCpuPercent"] = "getrusage_\(errno)" }
+
         var info = mach_task_basic_info()
         var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
         let status = withUnsafeMutablePointer(to: &info) { pointer in
@@ -127,11 +206,60 @@ import Darwin
             }
         }
         if status == KERN_SUCCESS { values["appMemoryBytes"] = info.resident_size }
-        if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
-           let attributes = try? FileManager.default.attributesOfFileSystem(forPath: documents.path) {
-            values["storageTotalBytes"] = attributes[.systemSize]
-            values["storageFreeBytes"] = attributes[.systemFreeSize]
+        else { errors["appMemoryBytes"] = "task_info_\(status)" }
+
+        var vm = task_vm_info_data_t()
+        var vmCount = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let vmStatus = withUnsafeMutablePointer(to: &vm) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(vmCount)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &vmCount)
+            }
         }
+        if vmStatus == KERN_SUCCESS { values["appFootprintBytes"] = vm.phys_footprint }
+        else { errors["appFootprintBytes"] = "task_vm_info_\(vmStatus)" }
+
+        let available = os_proc_available_memory()
+        if available > 0 || !isSimulator { values["appAvailableMemoryBytes"] = available }
+        else { errors["appAvailableMemoryBytes"] = isSimulator ? "simulator_unavailable" : "app_budget_unavailable" }
+
+        let host = mach_host_self()
+        defer { mach_port_deallocate(mach_task_self_, host) }
+        var pages = vm_statistics64()
+        var pageCount = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
+        let pagesStatus = withUnsafeMutablePointer(to: &pages) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(pageCount)) {
+                host_statistics64(host, HOST_VM_INFO64, $0, &pageCount)
+            }
+        }
+        var pageSize: vm_size_t = 0
+        let pageSizeStatus = host_page_size(host, &pageSize)
+        if pagesStatus == KERN_SUCCESS && pageSizeStatus == KERN_SUCCESS {
+            // Free physical pages are not the same as this app's memory budget.
+            values["physicalFreeMemoryBytes"] = UInt64(pages.free_count) * UInt64(pageSize)
+        } else { errors["physicalFreeMemoryBytes"] = "host_vm_info_\(pagesStatus)_\(pageSizeStatus)" }
+
+        if let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            do {
+                let attributes = try FileManager.default.attributesOfFileSystem(forPath: documents.path)
+                values["storageTotalBytes"] = attributes[.systemSize]
+                values["storageFreeBytes"] = attributes[.systemFreeSize]
+            } catch { errors["storageFreeBytes"] = "storage_\(error.localizedDescription)" }
+        } else { errors["storageFreeBytes"] = "documents_unavailable" }
+
+        let session = AVAudioSession.sharedInstance()
+        let outputs = session.currentRoute.outputs
+        if !outputs.isEmpty {
+            values["audioOutputName"] = outputs.map { $0.portName }.joined(separator: " + ")
+            values["audioTransport"] = outputs.map { $0.portType.rawValue }.joined(separator: " + ")
+            values["audioChannels"] = session.outputNumberOfChannels
+            if session.sampleRate > 0 {
+                values["audioSampleRate"] = session.sampleRate
+                values["audioBufferFrames"] = Int((session.sampleRate * session.ioBufferDuration).rounded())
+            }
+            values["audioBufferDurationMs"] = session.ioBufferDuration * 1000
+            values["audioOutputLatencyMs"] = session.outputLatency * 1000
+        } else { errors["audioOutputName"] = "audio_route_unavailable" }
+        values["metricErrors"] = errors
         return values
     }
 
@@ -146,5 +274,8 @@ import Darwin
         }
     }
 
-    deinit { if let routeObserver { NotificationCenter.default.removeObserver(routeObserver) } }
+    deinit {
+        if let routeObserver { NotificationCenter.default.removeObserver(routeObserver) }
+        if let foregroundObserver { NotificationCenter.default.removeObserver(foregroundObserver) }
+    }
 }

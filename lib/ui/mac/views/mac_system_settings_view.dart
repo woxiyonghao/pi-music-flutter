@@ -7,6 +7,7 @@ import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
+import '../../common/module_scroll_view.dart';
 
 /// 系统设置视图 (1:1 严格对齐 C++ SystemSettingsView.cpp，纯平铺按钮组，无任何 popup/dropdown，完整 SQLite 持久化)
 class MacSystemSettingsView extends StatefulWidget {
@@ -87,11 +88,12 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
         return GlassCard(
           borderRadius: UIConfig.containerRounding,
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: ModuleScrollView(
+            storageId: 'settings-module-scroll',
+            platform: widget.platform,
+            header: const [
               // 标题「系统设置」 (无 subtitle，无右上角杂项)
-              const Text(
+              Text(
                 '系统设置',
                 style: TextStyle(
                   fontSize: UIConfig.fontMedium,
@@ -99,174 +101,166 @@ class _MacSystemSettingsViewState extends State<MacSystemSettingsView> {
                   color: UIConfig.textActive,
                 ),
               ),
-              const SizedBox(height: 16.0),
-
-              // 滚动内容区
-              Expanded(
-                child: ListView(
-                  physics: const BouncingScrollPhysics(),
-                  children: _isIphone
-                      ? _buildIphoneSettings()
-                      : [
-                          // 板块一：音频重放与时钟引擎
-                          _buildCardContainer(
-                            title: '音频重放与时钟引擎',
-                            children: [
-                              _buildButtonGroupRow(
-                                label: '输出采样率',
-                                options: const [
-                                  'Bit-Perfect 源码直出',
-                                  '超采样 192kHz/24Bit',
-                                  '极频 384kHz/32Bit',
-                                ],
-                                selectedIndex: _sampleRateMode,
-                                onSelected: (idx) {
-                                  setState(() => _sampleRateMode = idx);
-                                  MusicDatabaseService.instance.setSetting(
-                                      'setting_sample_rate', idx.toString());
-                                },
-                              ),
-                              const SizedBox(height: 10.0),
-                              _buildButtonGroupRow(
-                                label: 'DSD 播放模式',
-                                options: const [
-                                  'DoP (DSD over PCM)',
-                                  'Native 原生直通',
-                                  'DSD 软解 PCM',
-                                ],
-                                selectedIndex: _dsdMode,
-                                onSelected: (idx) {
-                                  setState(() => _dsdMode = idx);
-                                  MusicDatabaseService.instance.setSetting(
-                                      'setting_dsd_mode', idx.toString());
-                                },
-                              ),
-                              const SizedBox(height: 10.0),
-                              _buildButtonGroupRow(
-                                label: '硬件缓冲深度',
-                                options: const [
-                                  '64 帧 (极低延迟)',
-                                  '256 帧 (标准发烧)',
-                                  '512 帧 (防爆音深缓冲)',
-                                ],
-                                selectedIndex: _bufferSizeMode,
-                                onSelected: (idx) {
-                                  setState(() => _bufferSizeMode = idx);
-                                  MusicDatabaseService.instance.setSetting(
-                                      'setting_buffer_size', idx.toString());
-                                },
-                              ),
-                              const SizedBox(height: 10.0),
-                              _buildButtonGroupRow(
-                                label: '切歌过渡效果',
-                                options: const [
-                                  '关闭 (直接切歌)',
-                                  '0.3 秒 (极速)',
-                                  '0.5 秒 (发烧标准)',
-                                  '1.0 秒 (悠扬慢淡)',
-                                ],
-                                selectedIndex: _fadeDurationMode,
-                                onSelected: (idx) {
-                                  setState(() => _fadeDurationMode = idx);
-                                  MusicDatabaseService.instance.setSetting(
-                                      'setting_fade_duration_mode',
-                                      idx.toString());
-                                },
-                              ),
+              SizedBox(height: 16.0),
+            ],
+            children: [
+              ...(_isIphone
+                  ? _buildIphoneSettings()
+                  : [
+                      // 板块一：音频重放与时钟引擎
+                      _buildCardContainer(
+                        title: '音频重放与时钟引擎',
+                        children: [
+                          _buildButtonGroupRow(
+                            label: '输出采样率',
+                            options: const [
+                              'Bit-Perfect 源码直出',
+                              '超采样 192kHz/24Bit',
+                              '极频 384kHz/32Bit',
                             ],
+                            selectedIndex: _sampleRateMode,
+                            onSelected: (idx) {
+                              setState(() => _sampleRateMode = idx);
+                              MusicDatabaseService.instance.setSetting(
+                                  'setting_sample_rate', idx.toString());
+                            },
                           ),
-                          const SizedBox(height: 14.0),
-
-                          // 板块二：硬件性能与显示控制
-                          _buildCardContainer(
-                            title: '硬件性能与显示控制',
-                            children: [
-                              _buildButtonGroupRow(
-                                label: 'CPU 调频策略',
-                                options: const [
-                                  'Performance (纯音锁频最高)',
-                                  'Schedutil (动态温控平衡)',
-                                ],
-                                selectedIndex: _cpuGovernor,
-                                onSelected: (idx) {
-                                  setState(() => _cpuGovernor = idx);
-                                  MusicDatabaseService.instance.setSetting(
-                                      'setting_cpu_governor', idx.toString());
-                                },
-                              ),
-                              const SizedBox(height: 10.0),
-                              _buildSliderRow(
-                                label: '屏幕背光亮度',
-                                value: _screenBrightness,
-                                onChanged: (val) {
-                                  setState(() => _screenBrightness = val);
-                                  MusicDatabaseService.instance.setSetting(
-                                      'setting_brightness',
-                                      val.toStringAsFixed(2));
-                                },
-                              ),
-                              const SizedBox(height: 10.0),
-                              _buildButtonGroupRow(
-                                label: '自动息屏待机',
-                                options: const [
-                                  '从不',
-                                  '5 分钟',
-                                  '15 分钟',
-                                  '30 分钟',
-                                ],
-                                selectedIndex: _screenTimeoutMode,
-                                onSelected: (idx) {
-                                  setState(() => _screenTimeoutMode = idx);
-                                  MusicDatabaseService.instance.setSetting(
-                                      'setting_screen_timeout', idx.toString());
-                                },
-                              ),
-                              const SizedBox(height: 10.0),
-                              _buildButtonGroupRow(
-                                label: '空余时间显示全屏',
-                                options: const [
-                                  '15 秒',
-                                  '30 秒',
-                                  '1 分钟',
-                                  '5 分钟',
-                                  '永不',
-                                ],
-                                selectedIndex: _idleFullscreenMode,
-                                onSelected: (idx) {
-                                  setState(() => _idleFullscreenMode = idx);
-                                  MusicDatabaseService.instance.setSetting(
-                                      'setting_idle_fullscreen',
-                                      idx.toString());
-                                },
-                              ),
-                              if (_idleFullscreenMode != 4) ...[
-                                const SizedBox(height: 10.0),
-                                _buildButtonGroupRow(
-                                  label: '全屏屏保主题',
-                                  options: const [
-                                    '跟随当前律动',
-                                    '麦景图大表头',
-                                    '金嗓子大表头',
-                                    '复古磁带机',
-                                    'Siri 流光',
-                                    '微光气泡',
-                                    '玻璃时钟',
-                                  ],
-                                  selectedIndex: _idleScreensaverTheme,
-                                  onSelected: (idx) {
-                                    setState(() => _idleScreensaverTheme = idx);
-                                    MusicDatabaseService.instance.setSetting(
-                                        'setting_idle_screensaver_theme',
-                                        idx.toString());
-                                  },
-                                ),
-                              ],
+                          const SizedBox(height: 10.0),
+                          _buildButtonGroupRow(
+                            label: 'DSD 播放模式',
+                            options: const [
+                              'DoP (DSD over PCM)',
+                              'Native 原生直通',
+                              'DSD 软解 PCM',
                             ],
+                            selectedIndex: _dsdMode,
+                            onSelected: (idx) {
+                              setState(() => _dsdMode = idx);
+                              MusicDatabaseService.instance.setSetting(
+                                  'setting_dsd_mode', idx.toString());
+                            },
                           ),
-                          const SizedBox(height: 16.0),
+                          const SizedBox(height: 10.0),
+                          _buildButtonGroupRow(
+                            label: '硬件缓冲深度',
+                            options: const [
+                              '64 帧 (极低延迟)',
+                              '256 帧 (标准发烧)',
+                              '512 帧 (防爆音深缓冲)',
+                            ],
+                            selectedIndex: _bufferSizeMode,
+                            onSelected: (idx) {
+                              setState(() => _bufferSizeMode = idx);
+                              MusicDatabaseService.instance.setSetting(
+                                  'setting_buffer_size', idx.toString());
+                            },
+                          ),
+                          const SizedBox(height: 10.0),
+                          _buildButtonGroupRow(
+                            label: '切歌过渡效果',
+                            options: const [
+                              '关闭 (直接切歌)',
+                              '0.3 秒 (极速)',
+                              '0.5 秒 (发烧标准)',
+                              '1.0 秒 (悠扬慢淡)',
+                            ],
+                            selectedIndex: _fadeDurationMode,
+                            onSelected: (idx) {
+                              setState(() => _fadeDurationMode = idx);
+                              MusicDatabaseService.instance.setSetting(
+                                  'setting_fade_duration_mode', idx.toString());
+                            },
+                          ),
                         ],
-                ),
-              ),
+                      ),
+                      const SizedBox(height: 14.0),
+
+                      // 板块二：硬件性能与显示控制
+                      _buildCardContainer(
+                        title: '硬件性能与显示控制',
+                        children: [
+                          _buildButtonGroupRow(
+                            label: 'CPU 调频策略',
+                            options: const [
+                              'Performance (纯音锁频最高)',
+                              'Schedutil (动态温控平衡)',
+                            ],
+                            selectedIndex: _cpuGovernor,
+                            onSelected: (idx) {
+                              setState(() => _cpuGovernor = idx);
+                              MusicDatabaseService.instance.setSetting(
+                                  'setting_cpu_governor', idx.toString());
+                            },
+                          ),
+                          const SizedBox(height: 10.0),
+                          _buildSliderRow(
+                            label: '屏幕背光亮度',
+                            value: _screenBrightness,
+                            onChanged: (val) {
+                              setState(() => _screenBrightness = val);
+                              MusicDatabaseService.instance.setSetting(
+                                  'setting_brightness', val.toStringAsFixed(2));
+                            },
+                          ),
+                          const SizedBox(height: 10.0),
+                          _buildButtonGroupRow(
+                            label: '自动息屏待机',
+                            options: const [
+                              '从不',
+                              '5 分钟',
+                              '15 分钟',
+                              '30 分钟',
+                            ],
+                            selectedIndex: _screenTimeoutMode,
+                            onSelected: (idx) {
+                              setState(() => _screenTimeoutMode = idx);
+                              MusicDatabaseService.instance.setSetting(
+                                  'setting_screen_timeout', idx.toString());
+                            },
+                          ),
+                          const SizedBox(height: 10.0),
+                          _buildButtonGroupRow(
+                            label: '空余时间显示全屏',
+                            options: const [
+                              '15 秒',
+                              '30 秒',
+                              '1 分钟',
+                              '5 分钟',
+                              '永不',
+                            ],
+                            selectedIndex: _idleFullscreenMode,
+                            onSelected: (idx) {
+                              setState(() => _idleFullscreenMode = idx);
+                              MusicDatabaseService.instance.setSetting(
+                                  'setting_idle_fullscreen', idx.toString());
+                            },
+                          ),
+                          if (_idleFullscreenMode != 4) ...[
+                            const SizedBox(height: 10.0),
+                            _buildButtonGroupRow(
+                              label: '全屏屏保主题',
+                              options: const [
+                                '跟随当前律动',
+                                '麦景图大表头',
+                                '金嗓子大表头',
+                                '复古磁带机',
+                                'Siri 流光',
+                                '微光气泡',
+                                '玻璃时钟',
+                              ],
+                              selectedIndex: _idleScreensaverTheme,
+                              onSelected: (idx) {
+                                setState(() => _idleScreensaverTheme = idx);
+                                MusicDatabaseService.instance.setSetting(
+                                    'setting_idle_screensaver_theme',
+                                    idx.toString());
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 16.0),
+                    ]),
             ],
           ),
         );

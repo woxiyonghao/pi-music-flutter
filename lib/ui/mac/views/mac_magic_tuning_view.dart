@@ -5,6 +5,7 @@ import '../../../services/theme_service.dart';
 import '../../../services/web_remote_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
+import '../../common/module_scroll_view.dart';
 
 class MSEBParamDef {
   final String title;
@@ -172,9 +173,9 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
         return GlassCard(
           borderRadius: UIConfig.containerRounding,
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: ModuleScrollView(
+            storageId: 'mseb-module-scroll',
+            header: [
               const Text('10 段 DSP 音色映射 · 与图形均衡器叠加',
                   style: TextStyle(fontSize: 11, color: UIConfig.textMuted)),
               const SizedBox(height: 8),
@@ -261,18 +262,12 @@ class _MacMagicTuningViewState extends State<MacMagicTuningView> {
                 ],
               ),
               const SizedBox(height: 14.0),
-
-              // 核心列表区
-              Expanded(
-                child: ListView.separated(
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: params.length,
-                  separatorBuilder: (context, _) => const SizedBox(height: 8.0),
-                  itemBuilder: (context, i) {
-                    return _buildParamCard(i, params[i], _values[i], accent);
-                  },
-                ),
-              ),
+            ],
+            children: [
+              for (var i = 0; i < params.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
+                _buildParamCard(i, params[i], _values[i], accent),
+              ],
             ],
           ),
         );

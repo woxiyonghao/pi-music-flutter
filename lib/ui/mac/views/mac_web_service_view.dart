@@ -9,6 +9,7 @@ import '../../../services/web_remote_service.dart';
 import '../../../services/wifi_transfer_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
+import '../../common/module_scroll_view.dart';
 
 /// Web服务模块 (合并 Web 远程遥控与 WiFi 传歌，1:1 对齐 C++ WebServiceView.cpp 与 WifiTransferView.cpp)
 class MacWebServiceView extends StatefulWidget {
@@ -123,24 +124,16 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
         return GlassCard(
           borderRadius: UIConfig.containerRounding,
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: ModuleScrollView(
+            storageId: 'web-module-scroll',
+            platform: widget.platform,
+            header: [
               _buildHeader(accent),
               const SizedBox(height: 16.0),
-
-              // 核心内容区
-              Expanded(
-                child: ListView(
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    if (_activeSubModule == 0)
-                      ..._buildWebRemoteSection(accent),
-                    if (_activeSubModule == 1)
-                      ..._buildWifiTransferSection(accent),
-                  ],
-                ),
-              ),
+            ],
+            children: [
+              if (_activeSubModule == 0) ..._buildWebRemoteSection(accent),
+              if (_activeSubModule == 1) ..._buildWifiTransferSection(accent),
             ],
           ),
         );
@@ -150,24 +143,37 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
   Widget _buildHeader(Color accent) =>
       LayoutBuilder(builder: (context, constraints) {
-        final title = Row(children: [
-          const Text('Web 服务',
-              style: TextStyle(
-                  fontSize: UIConfig.fontMedium,
-                  fontWeight: FontWeight.bold,
-                  color: UIConfig.textActive)),
-          const SizedBox(width: 12),
-          Expanded(
-              child: Text(
-                  _activeSubModule == 0
-                      ? '电脑 / 平板远程遥控 · 实时同步播放状态'
-                      : '局域网传歌 · 自动扫描入库',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: UIConfig.fontSmall,
-                      color: UIConfig.textMuted))),
-        ]);
+        final isIphone = (widget.platform ?? PlatformHelper.currentPlatform) ==
+            HifiPlatformType.iphone;
+        final subtitle =
+            _activeSubModule == 0 ? '电脑 / 平板远程遥控 · 实时同步播放状态' : '局域网传歌 · 自动扫描入库';
+        const heading = Text('Web 服务',
+            style: TextStyle(
+                fontSize: UIConfig.fontMedium,
+                fontWeight: FontWeight.bold,
+                color: UIConfig.textActive));
+        final title = isIphone
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                heading,
+                const SizedBox(height: 3),
+                Text(subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: UIConfig.fontSmall,
+                        color: UIConfig.textMuted)),
+              ])
+            : Row(children: [
+                heading,
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: UIConfig.fontSmall,
+                            color: UIConfig.textMuted))),
+              ]);
         final modules = Container(
           padding: const EdgeInsets.all(2),
           decoration: BoxDecoration(
@@ -188,7 +194,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                 accent: accent),
           ]),
         );
-        if (constraints.maxWidth < 600) {
+        if (!isIphone && constraints.maxWidth < 600) {
           return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -197,11 +203,14 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                 modules,
               ]);
         }
-        return Row(children: [
-          Expanded(child: title),
-          const SizedBox(width: 16),
-          modules
-        ]);
+        return Row(
+            crossAxisAlignment:
+                isIphone ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+            children: [
+              Expanded(child: title),
+              SizedBox(width: isIphone ? 12 : 16),
+              modules
+            ]);
       });
 
   Widget _buildSubModulePill({

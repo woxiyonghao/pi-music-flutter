@@ -11,19 +11,23 @@ class PlatformAudioRuntime extends ChangeNotifier {
   PlatformAudioRuntime._()
       : _channel = const MethodChannel('hifi/platform_audio'),
         _iosOverride = null,
-        _hostOutputOverride = null;
+        _hostOutputOverride = null,
+        _activateSessionOverride = null;
 
   @visibleForTesting
   PlatformAudioRuntime.forTesting(
       {required MethodChannel channel,
-      void Function(Map<String, dynamic>)? reportOutput})
+      void Function(Map<String, dynamic>)? reportOutput,
+      Future<bool> Function()? activateSession})
       : _channel = channel,
         _iosOverride = true,
-        _hostOutputOverride = reportOutput;
+        _hostOutputOverride = reportOutput,
+        _activateSessionOverride = activateSession;
 
   final MethodChannel _channel;
   final bool? _iosOverride;
   final void Function(Map<String, dynamic>)? _hostOutputOverride;
+  final Future<bool> Function()? _activateSessionOverride;
   Future<void>? _configuration;
   Future<void> _routeOperations = Future<void>.value();
   AudioSession? _session;
@@ -43,6 +47,12 @@ class PlatformAudioRuntime extends ChangeNotifier {
   int _sourceSampleRate = 44100;
   String? _requestedSignature;
   String? _sampleRateError;
+  String? _routeError;
+  DateTime? _lastProbeAt;
+  String? _lastProbeError;
+  DateTime? get lastProbeAt => _lastProbeAt;
+  String? get lastProbeError => _lastProbeError;
+  bool get hasUsbOutput => _output?['transport'] == 'USB';
   static const sampleRates = [0, 44100, 48000, 96000, 192000, 384000];
 
   static bool isDx1iiName(String name) => name
@@ -80,7 +90,12 @@ class PlatformAudioRuntime extends ChangeNotifier {
     await refreshOutput(force: true);
   }
 
-  Future<void> configure() => _configuration ??= _configure();
+  Future<void> configure() => _configuration ??= _configure().catchError(
+        (Object error, StackTrace stack) {
+          _configuration = null;
+          Error.throwWithStackTrace(error, stack);
+        },
+      );
   Future<void> _configure() async {
     if (!_mobileHost || _testing) return;
     final session = _session = await AudioSession.instance;
@@ -130,8 +145,12 @@ class PlatformAudioRuntime extends ChangeNotifier {
     // Request preferences before activation, then read back the actual format.
     if (isIOS && (!_testing || _iosOverride != null)) await refreshOutput();
     if (_testing) {
-      _active = true;
-      return true;
+      if (!_active) {
+        _active =
+            await (_activateSessionOverride?.call() ?? Future.value(true));
+      }
+      if (_active && isIOS) await refreshOutput();
+      return _active;
     }
     if (!_active) {
       _active = await _session!.setActive(true);
@@ -147,6 +166,28 @@ class PlatformAudioRuntime extends ChangeNotifier {
     return true;
   }
 
+  /// Reading an inactive iOS session can return a stale speaker route even
+  /// after the system has enumerated a USB DAC. Activate before reading back;
+  /// this does not open a track or generate an audio signal.
+  Future<void> probeOutputs() async {
+    try {
+      if (!await activate()) {
+        throw StateError('iOS 未允许激活音频会话，请结束其他占用音频的操作后重试');
+      }
+      if (_routeError != null) throw StateError(_routeError!);
+      if (_output == null && isIOS) {
+        throw StateError('iOS 暂未提供音频输出，请重新连接设备后重试');
+      }
+      _lastProbeAt = DateTime.now();
+      _lastProbeError = null;
+    } catch (error) {
+      _lastProbeError = error.toString();
+      rethrow;
+    } finally {
+      notifyListeners();
+    }
+  }
+
   Future<void> refreshOutput({bool force = false}) {
     if (!isIOS) return Future<void>.value();
     final work = _routeOperations.then((_) => _refreshAndApply(force));
@@ -160,6 +201,7 @@ class PlatformAudioRuntime extends ChangeNotifier {
     try {
       final output =
           await _channel.invokeMapMethod<String, dynamic>('getOutputFormat');
+      _routeError = null;
       _publishOutput(output);
       if (!isDx1iiConnected) {
         _requestedSignature = null;
@@ -182,9 +224,11 @@ class PlatformAudioRuntime extends ChangeNotifier {
       _publishOutput(
           await _channel.invokeMapMethod<String, dynamic>('getOutputFormat'));
     } on MissingPluginException {
-      _sampleRateError = 'unavailable';
+      _routeError = 'iOS 音频路由接口不可用，请更新并重新启动 App';
+      _publishOutput(null);
     } on PlatformException catch (error) {
-      _sampleRateError = error.code;
+      _routeError = error.message ?? error.code;
+      _publishOutput(null);
     } finally {
       notifyListeners();
     }

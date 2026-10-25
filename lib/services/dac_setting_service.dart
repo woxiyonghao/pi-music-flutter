@@ -172,6 +172,14 @@ class DacSettingService extends ChangeNotifier {
   }
 
   /// 从底层 C++ 实时刷新所连接的全部音频硬件设备列表 (JSON 反序列化)
+  Future<void> probeOutputs() async {
+    if (_runtime.isIOS) {
+      await _runtime.probeOutputs();
+    } else {
+      refreshDevices();
+    }
+  }
+
   void refreshDevices() {
     final output = _runtime.output;
     if (_runtime.isIOS) {

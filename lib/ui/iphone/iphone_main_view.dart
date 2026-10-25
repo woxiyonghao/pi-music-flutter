@@ -28,8 +28,6 @@ class _IphoneMainViewState extends State<IphoneMainView> {
     _ready = widget.initialize == null;
     SystemChrome.setPreferredOrientations(const [
       DeviceOrientation.portraitUp,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
     ]);
     if (!_ready) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _initialize());
@@ -53,10 +51,7 @@ class _IphoneMainViewState extends State<IphoneMainView> {
     _locking = true;
     try {
       await SystemChrome.setPreferredOrientations(landscape
-          ? const [
-              DeviceOrientation.landscapeLeft,
-              DeviceOrientation.landscapeRight
-            ]
+          ? const [DeviceOrientation.landscapeRight]
           : const [DeviceOrientation.portraitUp]);
       if (mounted) setState(() => _landscape = landscape);
     } finally {
@@ -103,6 +98,13 @@ class _IphoneMainViewState extends State<IphoneMainView> {
             ),
           ),
         ),
+      );
+    }
+    final viewport = MediaQuery.sizeOf(context);
+    if ((_landscape! && viewport.width < viewport.height) ||
+        (!_landscape! && viewport.width > viewport.height)) {
+      return Scaffold(
+        body: Center(child: Text(_landscape! ? '正在切换横屏' : '正在切换竖屏')),
       );
     }
     return _landscape!

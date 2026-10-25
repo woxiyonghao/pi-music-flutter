@@ -7,6 +7,7 @@ import '../core/hifi_audio_bindings.dart';
 import '../core/hifi_audio_service.dart';
 import '../models/playback_state.dart';
 import '../models/track.dart';
+import '../platform/platform_audio_runtime.dart';
 import 'dac_setting_service.dart';
 import 'mseb_service.dart';
 import 'music_database_service.dart';
@@ -250,6 +251,10 @@ class WebRemoteService extends ChangeNotifier {
       final audio = HifiAudioService.instance;
       request.response.headers.contentType = ContentType.json;
       request.response.write(jsonEncode({
+        'audio_route': PlatformAudioRuntime.instance.output,
+        'audio_route_last_checked':
+            PlatformAudioRuntime.instance.lastProbeAt?.toIso8601String(),
+        'audio_route_error': PlatformAudioRuntime.instance.lastProbeError,
         'load_error': HifiAudioBindings.instance.loadError,
         'is_loaded': HifiAudioBindings.instance.isLoaded,
         'last_debug_log': audio.lastDebugLog,

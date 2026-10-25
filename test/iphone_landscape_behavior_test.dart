@@ -57,7 +57,7 @@ void main() {
         expect(tester.takeException(), isNull, reason: '$tab must fit $size');
         expect(find.byIcon(Icons.screen_rotation_rounded), findsNothing);
         final sidebar = tester.getRect(find.byType(MacSidebarWidget));
-        expect(sidebar.left, greaterThanOrEqualTo(44));
+        expect(sidebar.left, 12);
         expect(sidebar.bottom, lessThanOrEqualTo(size.height - 21));
       }
       await tester.pumpWidget(const SizedBox());
@@ -191,6 +191,12 @@ void main() {
   testWidgets(
       'iPhone hardware master retains all panels on a small landscape display',
       (tester) async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(MobileSystemService.channel,
+        (_) async => {'model': 'iPhone test device'});
+    addTearDown(() =>
+        messenger.setMockMethodCallHandler(MobileSystemService.channel, null));
     ThemeService.instance.setTheme(9);
     await mount(tester, const Size(667, 375));
     await tester.tap(find.byTooltip('全屏沉浸表头'));

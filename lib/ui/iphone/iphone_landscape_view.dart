@@ -164,6 +164,12 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView>
         final visualizer = VisualizerType.values[theme.backgroundVisualMode
             .clamp(0, VisualizerType.values.length - 1)];
         final dac = DacSettingService.instance;
+        final systemInsets = MediaQuery.paddingOf(context);
+        // landscapeRight puts the camera cutout on the right. Keep that inset
+        // and the Home Indicator clear, reclaiming the symmetric empty left edge.
+        final contentInsets = systemInsets.copyWith(
+          left: systemInsets.left.clamp(0.0, 8.0),
+        );
         return Scaffold(
           resizeToAvoidBottomInset: false,
           backgroundColor: UIConfig.mainStageBg,
@@ -178,114 +184,126 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView>
                       child: MacBackgroundWidget(
                           visualizerType: visualizer,
                           fullscreenProgress: progress)),
-                  SafeArea(
-                    child: Listener(
-                      behavior: HitTestBehavior.translucent,
-                      onPointerDown: (_) => _onUserActivity(),
-                      onPointerMove: (_) => _onUserActivity(),
-                      child: LayoutBuilder(builder: (context, constraints) {
-                        final sidebarWidth =
-                            constraints.maxWidth < 700 ? 160.0 : 180.0;
-                        const margin = 10.0;
-                        const gap = 8.0;
-                        final mainLeft = sidebarWidth + margin + gap;
-                        return Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (progress < 0.999) ...[
-                              Positioned(
-                                left: margin,
-                                top: margin,
-                                bottom: margin,
-                                width: sidebarWidth,
-                                child: _panel(
-                                    progress,
-                                    Offset(-sidebarWidth - margin, -150),
-                                    MacSidebarWidget(
-                                      width: sidebarWidth,
-                                      padding: EdgeInsets.zero,
-                                      gap: gap,
-                                      currentTab: _currentTab,
-                                      selectedPlaylistId: _selectedPlaylistId,
-                                      playlists: MusicDatabaseService
-                                          .instance.playlists,
-                                      dacName: dac.dacName,
-                                      isDacConnected: dac.currentDevice != null,
-                                      onTabSelected: _onTabSelected,
-                                      onPlaylistSelected: _selectPlaylist,
-                                      onCreatePlaylist:
-                                          _openCreatePlaylistModal,
-                                      onDacClicked: () => _onTabSelected(
-                                          SidebarTab.dacSettings),
-                                    )),
-                              ),
-                              Positioned(
-                                left: mainLeft,
-                                right: margin,
-                                top: margin,
-                                bottom: margin + UIConfig.bottomBarHeight + gap,
-                                child: _panel(
-                                    progress,
-                                    Offset(constraints.maxWidth, -150),
-                                    _buildMainStage(visualizer)),
-                              ),
-                              Positioned(
-                                left: mainLeft,
-                                right: margin,
-                                bottom: margin,
-                                height: UIConfig.bottomBarHeight,
-                                child: _panel(
-                                    progress,
-                                    Offset(constraints.maxWidth,
-                                        constraints.maxHeight / 3),
-                                    IphoneBottomBarWidget(
-                                        onToggleFullscreen: () =>
-                                            _setFullscreen(true))),
-                              ),
-                            ],
-                            if (progress > 0.05)
-                              Positioned(
-                                top: 16,
-                                right: 16,
-                                child: Opacity(
-                                  opacity: progress.clamp(0.0, 1.0),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: const Color.fromRGBO(
-                                          14, 18, 26, 0.82),
-                                      borderRadius: BorderRadius.circular(20),
-                                      border: Border.all(
+                  Padding(
+                    padding: contentInsets,
+                    child: MediaQuery.removePadding(
+                      context: context,
+                      removeLeft: true,
+                      removeTop: true,
+                      removeRight: true,
+                      removeBottom: true,
+                      child: Listener(
+                        behavior: HitTestBehavior.translucent,
+                        onPointerDown: (_) => _onUserActivity(),
+                        onPointerMove: (_) => _onUserActivity(),
+                        child: LayoutBuilder(builder: (context, constraints) {
+                          final sidebarWidth =
+                              constraints.maxWidth < 700 ? 160.0 : 180.0;
+                          const margin = 10.0;
+                          const horizontalMargin = 4.0;
+                          const gap = 8.0;
+                          final mainLeft =
+                              sidebarWidth + horizontalMargin + gap;
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              if (progress < 0.999) ...[
+                                Positioned(
+                                  left: horizontalMargin,
+                                  top: margin,
+                                  bottom: margin,
+                                  width: sidebarWidth,
+                                  child: _panel(
+                                      progress,
+                                      Offset(-sidebarWidth - margin, -150),
+                                      MacSidebarWidget(
+                                        width: sidebarWidth,
+                                        padding: EdgeInsets.zero,
+                                        gap: gap,
+                                        currentTab: _currentTab,
+                                        selectedPlaylistId: _selectedPlaylistId,
+                                        playlists: MusicDatabaseService
+                                            .instance.playlists,
+                                        dacName: dac.dacName,
+                                        isDacConnected:
+                                            dac.currentDevice != null,
+                                        onTabSelected: _onTabSelected,
+                                        onPlaylistSelected: _selectPlaylist,
+                                        onCreatePlaylist:
+                                            _openCreatePlaylistModal,
+                                        onDacClicked: () => _onTabSelected(
+                                            SidebarTab.dacSettings),
+                                      )),
+                                ),
+                                Positioned(
+                                  left: mainLeft,
+                                  right: horizontalMargin,
+                                  top: margin,
+                                  bottom:
+                                      margin + UIConfig.bottomBarHeight + gap,
+                                  child: _panel(
+                                      progress,
+                                      Offset(constraints.maxWidth, -150),
+                                      _buildMainStage(visualizer)),
+                                ),
+                                Positioned(
+                                  left: mainLeft,
+                                  right: horizontalMargin,
+                                  bottom: margin,
+                                  height: UIConfig.bottomBarHeight,
+                                  child: _panel(
+                                      progress,
+                                      Offset(constraints.maxWidth,
+                                          constraints.maxHeight / 3),
+                                      IphoneBottomBarWidget(
+                                          onToggleFullscreen: () =>
+                                              _setFullscreen(true))),
+                                ),
+                              ],
+                              if (progress > 0.05)
+                                Positioned(
+                                  top: 16,
+                                  right: 16,
+                                  child: Opacity(
+                                    opacity: progress.clamp(0.0, 1.0),
+                                    child: Container(
+                                      decoration: BoxDecoration(
                                         color: const Color.fromRGBO(
-                                            255, 255, 255, 0.12),
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black
-                                              .withValues(alpha: 0.4),
-                                          blurRadius: 10,
+                                            14, 18, 26, 0.82),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: const Color.fromRGBO(
+                                              255, 255, 255, 0.12),
                                         ),
-                                      ],
-                                    ),
-                                    child: IconButton(
-                                      tooltip: '退出全屏',
-                                      onPressed: () => _setFullscreen(false),
-                                      icon: const Icon(
-                                          Icons.fullscreen_exit_rounded,
-                                          size: 20,
-                                          color: UIConfig.iconNormal),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 8),
-                                      constraints: const BoxConstraints(
-                                          minWidth: 36, minHeight: 36),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black
+                                                .withValues(alpha: 0.4),
+                                            blurRadius: 10,
+                                          ),
+                                        ],
+                                      ),
+                                      child: IconButton(
+                                        tooltip: '退出全屏',
+                                        onPressed: () => _setFullscreen(false),
+                                        icon: const Icon(
+                                            Icons.fullscreen_exit_rounded,
+                                            size: 20,
+                                            color: UIConfig.iconNormal),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 8),
+                                        constraints: const BoxConstraints(
+                                            minWidth: 36, minHeight: 36),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            if (_showCreatePlaylistModal)
-                              _buildCreatePlaylistModal(),
-                          ],
-                        );
-                      }),
+                              if (_showCreatePlaylistModal)
+                                _buildCreatePlaylistModal(),
+                            ],
+                          );
+                        }),
+                      ),
                     ),
                   ),
                 ],

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../core/hifi_audio_service.dart';
+import '../../../core/platform_helper.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/web_remote_service.dart';
@@ -166,6 +167,26 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
     });
   }
 
+  bool get _isIphone =>
+      PlatformHelper.currentPlatform == HifiPlatformType.iphone;
+
+  Widget _buildHeader(Widget title, Widget actions) {
+    if (_isIphone) {
+      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: title),
+        const SizedBox(width: 12),
+        actions,
+      ]);
+    }
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      runSpacing: 8,
+      spacing: 12,
+      children: [title, actions],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -178,126 +199,125 @@ class _MacEqualizerViewState extends State<MacEqualizerView> {
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
           child: LayoutBuilder(builder: (context, constraints) {
             return SingleChildScrollView(
+              key: const PageStorageKey('eq-module-scroll'),
+              physics: const BouncingScrollPhysics(),
               child: SizedBox(
                 height: math.max(constraints.maxHeight, 440),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // 1. 顶部 Header 栏：标题 + 副标题 + 复原按钮 + EQ 激活胶囊按钮
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      runSpacing: 8,
-                      spacing: 12,
-                      children: [
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '图形均衡器',
-                              style: TextStyle(
-                                fontSize: UIConfig.fontMedium,
-                                fontWeight: FontWeight.bold,
-                                color: UIConfig.textActive,
-                              ),
+                    _buildHeader(
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '图形均衡器',
+                            style: TextStyle(
+                              fontSize: UIConfig.fontMedium,
+                              fontWeight: FontWeight.bold,
+                              color: UIConfig.textActive,
                             ),
-                            SizedBox(height: 3.0),
-                            Text(
-                              '10 段专业频段精调 · 实时 DSP 处理',
-                              style: TextStyle(
-                                fontSize: UIConfig.fontSmall,
-                                color: UIConfig.textMuted,
-                              ),
+                          ),
+                          SizedBox(height: 3.0),
+                          Text(
+                            '10 段专业频段精调 · 实时 DSP 处理',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: UIConfig.fontSmall,
+                              color: UIConfig.textMuted,
                             ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            // 复原按钮
-                            InkWell(
-                              onTap: _resetToFlat,
-                              borderRadius: BorderRadius.circular(6.0),
-                              child: Container(
-                                height: 28.0,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14.0),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: const Color.fromRGBO(40, 48, 64, 0.7),
-                                  borderRadius: BorderRadius.circular(6.0),
-                                  border: Border.all(
-                                    color: const Color.fromRGBO(
-                                        255, 255, 255, 0.12),
-                                  ),
+                          ),
+                        ],
+                      ),
+                      Row(
+                        mainAxisSize:
+                            _isIphone ? MainAxisSize.min : MainAxisSize.max,
+                        children: [
+                          // 复原按钮
+                          InkWell(
+                            onTap: _resetToFlat,
+                            borderRadius: BorderRadius.circular(6.0),
+                            child: Container(
+                              height: 28.0,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 14.0),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: const Color.fromRGBO(40, 48, 64, 0.7),
+                                borderRadius: BorderRadius.circular(6.0),
+                                border: Border.all(
+                                  color:
+                                      const Color.fromRGBO(255, 255, 255, 0.12),
                                 ),
-                                child: const Text(
-                                  '复原',
-                                  style: TextStyle(
-                                    fontSize: UIConfig.fontSmall,
-                                    color: UIConfig.textNormal,
-                                  ),
+                              ),
+                              child: const Text(
+                                '复原',
+                                style: TextStyle(
+                                  fontSize: UIConfig.fontSmall,
+                                  color: UIConfig.textNormal,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 10.0),
+                          ),
+                          const SizedBox(width: 10.0),
 
-                            // EQ 激活/旁路胶囊按钮
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _isEnabled = !_isEnabled;
-                                  _saveSettings();
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(14.0),
-                              child: Container(
-                                height: 28.0,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14.0),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
+                          // EQ 激活/旁路胶囊按钮
+                          InkWell(
+                            onTap: () {
+                              setState(() {
+                                _isEnabled = !_isEnabled;
+                                _saveSettings();
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(14.0),
+                            child: Container(
+                              height: 28.0,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 14.0),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _isEnabled
+                                    ? accent.withValues(alpha: 0.25)
+                                    : const Color.fromRGBO(255, 255, 255, 0.05),
+                                borderRadius: BorderRadius.circular(14.0),
+                                border: Border.all(
                                   color: _isEnabled
-                                      ? accent.withValues(alpha: 0.25)
+                                      ? accent
                                       : const Color.fromRGBO(
-                                          255, 255, 255, 0.05),
-                                  borderRadius: BorderRadius.circular(14.0),
-                                  border: Border.all(
-                                    color: _isEnabled
-                                        ? accent
-                                        : const Color.fromRGBO(
-                                            255, 255, 255, 0.15),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 6.0,
-                                      height: 6.0,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: _isEnabled
-                                            ? const Color(0xFF34C759)
-                                            : Colors.grey,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6.0),
-                                    Text(
-                                      _isEnabled ? 'EQ 已激活' : 'EQ 已旁路',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.bold,
-                                        color: _isEnabled
-                                            ? UIConfig.textActive
-                                            : UIConfig.textMuted,
-                                      ),
-                                    ),
-                                  ],
+                                          255, 255, 255, 0.15),
                                 ),
                               ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 6.0,
+                                    height: 6.0,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: _isEnabled
+                                          ? const Color(0xFF34C759)
+                                          : Colors.grey,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6.0),
+                                  Text(
+                                    _isEnabled ? 'EQ 已激活' : 'EQ 已旁路',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: _isEnabled
+                                          ? UIConfig.textActive
+                                          : UIConfig.textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 14.0),
 
