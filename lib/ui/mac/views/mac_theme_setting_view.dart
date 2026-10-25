@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../core/platform_helper.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
@@ -180,21 +181,38 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
   /// 预设卡片网格 (2列)
   Widget _buildPresetsGrid(ThemeService theme) {
     return LayoutBuilder(builder: (context, constraints) {
-      final cols = constraints.maxWidth < 560 ? 1 : 2;
+      final compact =
+          (PlatformHelper.overridePlatform ?? PlatformHelper.currentPlatform) ==
+                  HifiPlatformType.iphone &&
+              MediaQuery.orientationOf(context) == Orientation.landscape;
+      final cols = compact ? 2 : (constraints.maxWidth < 560 ? 1 : 2);
       return GridView.builder(
+        key: const ValueKey('theme-presets-grid'),
         primary: false,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: cols,
           mainAxisSpacing: 10.0,
-          crossAxisSpacing: 14.0,
+          crossAxisSpacing: compact ? 10.0 : 14.0,
           mainAxisExtent: 56.0,
         ),
         itemCount: ThemeService.presets.length,
         itemBuilder: (context, i) {
           final p = ThemeService.presets[i];
           final isCur = theme.currentThemeId == p.id;
+          final name = Text(
+            p.name,
+            maxLines: compact ? 1 : null,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: compact ? 13.0 : UIConfig.fontRegular,
+              fontWeight: isCur ? FontWeight.w600 : FontWeight.normal,
+              color: isCur
+                  ? UIConfig.textActive
+                  : const Color.fromRGBO(220, 230, 245, 0.9),
+            ),
+          );
 
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -206,8 +224,9 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
               );
             },
             child: AnimatedContainer(
+              key: ValueKey('theme-preset-${p.id}'),
               duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 14.0),
+              padding: EdgeInsets.symmetric(horizontal: compact ? 10.0 : 14.0),
               decoration: BoxDecoration(
                 gradient: isCur
                     ? LinearGradient(
@@ -256,8 +275,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                 children: [
                   // 发烧微光珠宝指示圆环
                   Container(
-                    width: 16.0,
-                    height: 16.0,
+                    width: compact ? 12.0 : 16.0,
+                    height: compact ? 12.0 : 16.0,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: p.accentColor,
@@ -282,7 +301,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                           )
                         : null,
                   ),
-                  const SizedBox(width: 12.0),
+                  SizedBox(width: compact ? 8.0 : 12.0),
 
                   // 主题名称与声学风格
                   Expanded(
@@ -290,24 +309,22 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          p.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: UIConfig.fontRegular,
-                            fontWeight:
-                                isCur ? FontWeight.w600 : FontWeight.normal,
-                            color: isCur
-                                ? UIConfig.textActive
-                                : const Color.fromRGBO(220, 230, 245, 0.9),
-                          ),
-                        ),
+                        if (compact)
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: name,
+                          )
+                        else
+                          name,
                         const SizedBox(height: 2.0),
                         Text(
                           p.soundStyle,
+                          maxLines: compact ? 2 : null,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11.0,
+                          style: TextStyle(
+                            fontSize: compact ? 10.0 : 11.0,
+                            height: compact ? 1.15 : null,
                             color: UIConfig.textMuted,
                           ),
                         ),
@@ -316,13 +333,15 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                   ),
 
                   // 3 颗微晶胶囊调色代表柱
-                  _buildColorChip(p.accentColor),
-                  const SizedBox(width: 4.0),
-                  _buildColorChip(p.litColor),
-                  const SizedBox(width: 4.0),
-                  _buildColorChip(p.peakColor),
+                  if (!compact) ...[
+                    _buildColorChip(p.accentColor),
+                    const SizedBox(width: 4.0),
+                    _buildColorChip(p.litColor),
+                    const SizedBox(width: 4.0),
+                    _buildColorChip(p.peakColor),
+                  ],
 
-                  if (isCur) ...[
+                  if (isCur && !compact) ...[
                     const SizedBox(width: 10.0),
                     Container(
                       padding: const EdgeInsets.symmetric(

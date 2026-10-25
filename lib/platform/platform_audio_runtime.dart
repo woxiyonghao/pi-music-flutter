@@ -12,26 +12,37 @@ class PlatformAudioRuntime extends ChangeNotifier {
       : _channel = const MethodChannel('hifi/platform_audio'),
         _iosOverride = null,
         _hostOutputOverride = null,
-        _activateSessionOverride = null;
+        _activateSessionOverride = null,
+        _deactivateSessionOverride = null;
 
   @visibleForTesting
   PlatformAudioRuntime.forTesting(
       {required MethodChannel channel,
       void Function(Map<String, dynamic>)? reportOutput,
-      Future<bool> Function()? activateSession})
+      Future<bool> Function()? activateSession,
+      Future<void> Function()? deactivateSession})
       : _channel = channel,
         _iosOverride = true,
         _hostOutputOverride = reportOutput,
-        _activateSessionOverride = activateSession;
+        _activateSessionOverride = activateSession,
+        _deactivateSessionOverride = deactivateSession;
 
   final MethodChannel _channel;
   final bool? _iosOverride;
   final void Function(Map<String, dynamic>)? _hostOutputOverride;
   final Future<bool> Function()? _activateSessionOverride;
+  final Future<void> Function()? _deactivateSessionOverride;
   Future<void>? _configuration;
-  Future<void> _routeOperations = Future<void>.value();
+  Future<void> _sessionOperations = Future<void>.value();
   AudioSession? _session;
   bool _active = false;
+  bool _disposed = false;
+  String? _sessionError;
+  bool get isSessionActive => _active;
+  String? get lastSessionError => _sessionError;
+  final List<Map<String, dynamic>> _routeDiagnostics = [];
+  List<Map<String, dynamic>> get routeDiagnostics =>
+      List.unmodifiable(_routeDiagnostics);
   final SessionResumePolicy resumePolicy = SessionResumePolicy();
   bool Function() isPlaying = () => false;
   void Function() pauseForSystem = () {};
@@ -99,7 +110,7 @@ class PlatformAudioRuntime extends ChangeNotifier {
   Future<void> _configure() async {
     if (!_mobileHost || _testing) return;
     final session = _session = await AudioSession.instance;
-    await session.configure(const AudioSessionConfiguration.music());
+    await session.configure(configurationFor(isIOS: isIOS));
     session.interruptionEventStream.listen((event) {
       if (event.begin) {
         _active = false;
@@ -136,65 +147,114 @@ class PlatformAudioRuntime extends ChangeNotifier {
     await _channel.invokeMethod<void>('prepareBackgroundStorage');
   }
 
-  Future<bool> activate({int? sourceSampleRate}) async {
-    await configure();
-    if (sourceSampleRate != null && sourceSampleRate >= 8000) {
-      _sourceSampleRate = sourceSampleRate;
-    }
-    if (!_mobileHost) return true;
-    // Request preferences before activation, then read back the actual format.
-    if (isIOS && (!_testing || _iosOverride != null)) await refreshOutput();
-    if (_testing) {
-      if (!_active) {
-        _active =
-            await (_activateSessionOverride?.call() ?? Future.value(true));
-      }
-      if (_active && isIOS) await refreshOutput();
-      return _active;
-    }
-    if (!_active) {
-      _active = await _session!.setActive(true);
-      if (_active && isIOS) {
-        try {
-          await _channel
-              .invokeMethod<void>('setPreferredBufferFrames', {'frames': 256});
-        } on PlatformException {/* Keep the negotiated buffer. */}
-      }
-    }
-    if (!_active) return false;
-    if (isIOS) await refreshOutput();
-    return true;
+  /// Music uses the same long-form output route as the system Music app.
+  /// Android keeps audio_session's existing music/focus configuration.
+  @visibleForTesting
+  static AudioSessionConfiguration configurationFor({required bool isIOS}) {
+    const music = AudioSessionConfiguration.music();
+    return isIOS
+        ? music.copyWith(
+            avAudioSessionRouteSharingPolicy:
+                AVAudioSessionRouteSharingPolicy.longFormAudio)
+        : music;
   }
 
-  /// Reading an inactive iOS session can return a stale speaker route even
-  /// after the system has enumerated a USB DAC. Activate before reading back;
-  /// this does not open a track or generate an audio signal.
-  Future<void> probeOutputs() async {
-    try {
-      if (!await activate()) {
-        throw StateError('iOS 未允许激活音频会话，请结束其他占用音频的操作后重试');
-      }
-      if (_routeError != null) throw StateError(_routeError!);
-      if (_output == null && isIOS) {
-        throw StateError('iOS 暂未提供音频输出，请重新连接设备后重试');
-      }
-      _lastProbeAt = DateTime.now();
-      _lastProbeError = null;
-    } catch (error) {
-      _lastProbeError = error.toString();
-      rethrow;
-    } finally {
-      notifyListeners();
-    }
-  }
-
-  Future<void> refreshOutput({bool force = false}) {
-    if (!isIOS) return Future<void>.value();
-    final work = _routeOperations.then((_) => _refreshAndApply(force));
-    _routeOperations = work.catchError((Object error) {
+  Future<T> _serialize<T>(Future<T> Function() operation) {
+    final work = _sessionOperations.then((_) => operation());
+    // A rejected OS request must not poison the queue for the next retry.
+    _sessionOperations =
+        work.then<void>((_) {}, onError: (Object error, StackTrace _) {
       debugPrint('[PlatformAudioRuntime] $error');
     });
     return work;
+  }
+
+  Future<bool> activate({int? sourceSampleRate}) =>
+      _serialize(() => _activate(sourceSampleRate: sourceSampleRate));
+
+  Future<bool> _activate({int? sourceSampleRate, bool force = false}) async {
+    try {
+      await configure();
+      if (sourceSampleRate != null && sourceSampleRate >= 8000) {
+        _sourceSampleRate = sourceSampleRate;
+      }
+      if (!_mobileHost) return true;
+      // All preferences, activations and route reads execute in this same queue.
+      if (isIOS && (!_testing || _iosOverride != null)) {
+        await _refreshAndApply(false);
+        _recordRoute('before_activation');
+      }
+      if (!_active || force) {
+        if (force && isIOS && !_testing) {
+          // An explicit probe also repairs session policy after an OS reset or
+          // another component replacing the shared category configuration.
+          await _session!.configure(configurationFor(isIOS: true));
+        }
+        _active = _testing
+            ? await (_activateSessionOverride?.call() ?? Future.value(true))
+            : await _session!.setActive(true);
+        if (!_active) {
+          _sessionError = 'iOS 未允许激活音频会话，请结束其他占用音频的操作后重试';
+          return false;
+        }
+        // Keep the negotiated I/O buffer. Forcing a tiny buffer after activation
+        // restarts active I/O and can disrupt an external USB route.
+      }
+      _sessionError = null;
+      if (isIOS && (!_testing || _iosOverride != null)) {
+        await _refreshAndApply(force);
+        _recordRoute('after_activation');
+      }
+      return true;
+    } catch (error) {
+      // After a failed request the cached flag cannot prove OS activation.
+      _active = false;
+      _sessionError = error.toString();
+      rethrow;
+    } finally {
+      _notifyState();
+    }
+  }
+
+  /// A user-requested probe always verifies activation, even if our cached flag
+  /// says active. A late deactivation or an OS reset may have invalidated it.
+  Future<void> probeOutputs() => _serialize(() async {
+        try {
+          if (!await _activate(force: true)) {
+            throw StateError(_sessionError ?? '音频会话激活失败');
+          }
+          if (_routeError != null) throw StateError(_routeError!);
+          if (_output == null && isIOS) {
+            throw StateError('iOS 暂未提供音频输出，请重新连接设备后重试');
+          }
+          _lastProbeAt = DateTime.now();
+          _lastProbeError = null;
+        } catch (error) {
+          _lastProbeError = error.toString();
+          rethrow;
+        } finally {
+          _notifyState();
+        }
+      });
+
+  Future<void> refreshOutput({bool force = false, String? stage}) {
+    if (!isIOS) return Future<void>.value();
+    return _serialize(() async {
+      await _refreshAndApply(force);
+      if (stage != null) _recordRoute(stage);
+    });
+  }
+
+  void _recordRoute(String stage) {
+    _routeDiagnostics.add(Map.unmodifiable({
+      'stage': stage,
+      'at': DateTime.now().toIso8601String(),
+      'route': _output,
+      'sessionActive': _active,
+      'sessionError': _sessionError,
+      'routeError': _routeError,
+    }));
+    if (_routeDiagnostics.length > 24) _routeDiagnostics.removeAt(0);
   }
 
   Future<void> _refreshAndApply(bool force) async {
@@ -223,6 +283,7 @@ class PlatformAudioRuntime extends ChangeNotifier {
       // Read again: a successful preference request is not proof of the format.
       _publishOutput(
           await _channel.invokeMapMethod<String, dynamic>('getOutputFormat'));
+      _recordRoute('after_sample_rate_preference');
     } on MissingPluginException {
       _routeError = 'iOS 音频路由接口不可用，请更新并重新启动 App';
       _publishOutput(null);
@@ -230,7 +291,7 @@ class PlatformAudioRuntime extends ChangeNotifier {
       _routeError = error.message ?? error.code;
       _publishOutput(null);
     } finally {
-      notifyListeners();
+      _notifyState();
     }
   }
 
@@ -244,13 +305,41 @@ class PlatformAudioRuntime extends ChangeNotifier {
     }
   }
 
-  void userPaused() {
+  /// The caller must stop/pause native audio before requesting deactivation.
+  /// Never fire setActive(false) outside the session queue: a delayed false
+  /// could otherwise overtake a subsequent play/probe's setActive(true).
+  Future<void> userPaused() {
     resumePolicy.cancel();
-    if (_active) {
+    if (!_mobileHost) return Future<void>.value();
+    return _serialize(() async {
+      if (!_active) return;
       _active = false;
-      unawaited(_session?.setActive(false).then<void>((_) {}) ??
-          Future<void>.value());
-    }
+      try {
+        if (_testing) {
+          await _deactivateSessionOverride?.call();
+        } else {
+          await _session?.setActive(false);
+        }
+        _sessionError = null;
+      } catch (error) {
+        // Deactivation can report isBusy while still making the session
+        // inactive. Keep the error visible and require a fresh activation.
+        _sessionError = '音频会话停用失败：$error';
+        debugPrint('[PlatformAudioRuntime] $_sessionError');
+      } finally {
+        _notifyState();
+      }
+    });
+  }
+
+  void _notifyState() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }
 

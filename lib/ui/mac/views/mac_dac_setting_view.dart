@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../common/hifi_slider.dart';
 import '../../../core/hifi_audio_bindings.dart';
 import '../../../core/hifi_audio_service.dart';
@@ -11,6 +13,7 @@ import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
 import '../../common/module_scroll_view.dart';
+import '../../common/ios_audio_route_picker.dart';
 
 /// 动态发烧 DAC 解码设置视图 (Master-Detail 架构)
 /// 严格根据实际连接的物理硬件 (如【本机解码器】与【外接解码器: 拓品 TOPPING DX12】) 动态呈现，
@@ -148,6 +151,41 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
             header: [
               // 1. 顶栏：标题与动态状态指示
               _buildHeader(theme, accent, dac),
+              if (_currentPlatform == HifiPlatformType.iphone) ...[
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () async {
+                        final runtime = dac.audioRuntime;
+                        await runtime.refreshOutput();
+                        await Clipboard.setData(ClipboardData(
+                          text: const JsonEncoder.withIndent('  ').convert({
+                            'route': runtime.output,
+                            'sessionActive': runtime.isSessionActive,
+                            'sessionError': runtime.lastSessionError,
+                            'probeError': runtime.lastProbeError,
+                            'history': runtime.routeDiagnostics,
+                          }),
+                        ));
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('音频诊断已复制')),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded, size: 16),
+                      label: const Text('复制音频诊断'),
+                    ),
+                    const IosAudioRoutePicker(),
+                  ],
+                ),
+                const Text(
+                  '点击系统输出按钮查看系统当前提供的播放设备。以实际输出路由为准。',
+                  style: TextStyle(color: UIConfig.textMuted, fontSize: 11),
+                ),
+              ],
               const SizedBox(height: 12),
 
               // 2. 实际连接的解码器选项卡 (如: 本机解码器、外接解码器 TOPPING DX12)

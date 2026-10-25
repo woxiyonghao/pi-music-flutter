@@ -255,6 +255,9 @@ class WebRemoteService extends ChangeNotifier {
         'audio_route_last_checked':
             PlatformAudioRuntime.instance.lastProbeAt?.toIso8601String(),
         'audio_route_error': PlatformAudioRuntime.instance.lastProbeError,
+        'audio_session_active': PlatformAudioRuntime.instance.isSessionActive,
+        'audio_session_error': PlatformAudioRuntime.instance.lastSessionError,
+        'audio_route_history': PlatformAudioRuntime.instance.routeDiagnostics,
         'load_error': HifiAudioBindings.instance.loadError,
         'is_loaded': HifiAudioBindings.instance.isLoaded,
         'last_debug_log': audio.lastDebugLog,

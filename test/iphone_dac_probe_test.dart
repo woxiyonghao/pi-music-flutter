@@ -83,9 +83,9 @@ void main() {
     expect(runtime.lastProbeAt, isNotNull);
     expect(runtime.lastProbeError, isNull);
     await dac.probeOutputs();
-    expect(activationCalls, 1,
+    expect(activationCalls, 2,
         reason:
-            'Repeated probes must not reactivate an already active session');
+            'Explicit probes must verify OS activation instead of trusting a cached flag');
   });
 
   test('activation rejection reports failure rather than claiming mounted USB',

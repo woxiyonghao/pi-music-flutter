@@ -168,7 +168,7 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView>
         // landscapeRight puts the camera cutout on the right. Keep that inset
         // and the Home Indicator clear, reclaiming the symmetric empty left edge.
         final contentInsets = systemInsets.copyWith(
-          left: systemInsets.left.clamp(0.0, 8.0),
+          left: systemInsets.left.clamp(0.0, 16.0),
         );
         return Scaffold(
           resizeToAvoidBottomInset: false,
@@ -200,16 +200,16 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView>
                           final sidebarWidth =
                               constraints.maxWidth < 700 ? 160.0 : 180.0;
                           const margin = 10.0;
-                          const horizontalMargin = 4.0;
+                          const leftMargin = 8.0;
+                          const rightMargin = 0.0;
                           const gap = 8.0;
-                          final mainLeft =
-                              sidebarWidth + horizontalMargin + gap;
+                          final mainLeft = sidebarWidth + leftMargin + gap;
                           return Stack(
                             fit: StackFit.expand,
                             children: [
                               if (progress < 0.999) ...[
                                 Positioned(
-                                  left: horizontalMargin,
+                                  left: leftMargin,
                                   top: margin,
                                   bottom: margin,
                                   width: sidebarWidth,
@@ -237,7 +237,7 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView>
                                 ),
                                 Positioned(
                                   left: mainLeft,
-                                  right: horizontalMargin,
+                                  right: rightMargin,
                                   top: margin,
                                   bottom:
                                       margin + UIConfig.bottomBarHeight + gap,
@@ -248,7 +248,7 @@ class _IphoneLandscapeViewState extends State<IphoneLandscapeView>
                                 ),
                                 Positioned(
                                   left: mainLeft,
-                                  right: horizontalMargin,
+                                  right: rightMargin,
                                   bottom: margin,
                                   height: UIConfig.bottomBarHeight,
                                   child: _panel(

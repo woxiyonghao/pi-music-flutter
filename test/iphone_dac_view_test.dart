@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -85,6 +86,70 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('iPhone copies fresh route and session diagnostics',
+      (tester) async {
+    String? clipboard;
+    var sampleRate = 48000;
+    var routeReads = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method != 'getOutputFormat') return null;
+      routeReads++;
+      return {
+        'id': 'usb-dx1',
+        'name': 'TOPPING DX1 II',
+        'transport': 'USB',
+        'sampleRate': sampleRate,
+      };
+    });
+    // Keep the serialized runtime queue inside this widget test's fake zone.
+    // A runtime created by setUp has a real-zone tail that pump cannot flush.
+    final copyRuntime = PlatformAudioRuntime.forTesting(
+      channel: channel,
+      reportOutput: (_) {},
+    );
+    final copyDac = DacSettingService.forTesting(
+      runtime: copyRuntime,
+      readDevices: () => '[]',
+      selectOutput: (_) => false,
+      followsSystemOutput: true,
+    );
+    addTearDown(() {
+      copyDac.dispose();
+      copyRuntime.dispose();
+    });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        clipboard = (call.arguments as Map)['text'] as String;
+      }
+      return null;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null));
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: MacDACSettingView(
+                platform: HifiPlatformType.iphone, service: copyDac))));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final readsBeforeCopy = routeReads;
+    sampleRate = 96000;
+    await tester.tap(find.text('复制音频诊断'));
+    await tester.pump();
+    expect(clipboard, isNotNull);
+    final report = jsonDecode(clipboard!) as Map;
+    expect(report['route']['name'], 'TOPPING DX1 II');
+    expect(report['route']['transport'], 'USB');
+    expect(report['route']['sampleRate'], 96000);
+    expect(routeReads, greaterThan(readsBeforeCopy));
+    expect(report['sessionActive'], isTrue);
+    expect(report['sessionError'], isNull);
+    expect(find.text('音频诊断已复制'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('entering iPhone DAC probes once and polls the live OS route',
       (tester) async {
     const liveChannel = MethodChannel('test/iphone-dac-view-live-probe');
@@ -150,8 +215,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(liveDac.currentDevice!.name, 'TOPPING DX1 II');
-    expect(activationCalls, 1,
-        reason: 'A manual retry reuses the already active session');
+    expect(activationCalls, 2,
+        reason: 'A manual retry verifies OS activation despite cached state');
     expect(find.text('系统当前 USB 音频输出：TOPPING DX1 II'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

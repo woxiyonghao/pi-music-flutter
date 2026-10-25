@@ -15,6 +15,9 @@ class HifiAudioService extends ChangeNotifier {
   static final HifiAudioService instance = HifiAudioService._();
 
   final HifiAudioBindings _bindings = HifiAudioBindings.instance;
+  final PlatformAudioRuntime _runtime;
+  final VoidCallback? _pauseNativeOverride;
+  final VoidCallback? _stopNativeOverride;
   final Future<void> Function(String)? _prepareFileOverride;
   final bool Function(String, double, double)? _openFileOverride;
   final bool _ownsBindings;
@@ -41,10 +44,10 @@ class HifiAudioService extends ChangeNotifier {
   PlaybackState _state = const PlaybackState();
   // iOS exposes the negotiated PCM format, not exclusive ownership of its
   // mixer. Do not turn a clean software signal into a hardware bit-perfect claim.
-  PlaybackState get state => _state.isBitPerfect &&
-          (PlatformAudioRuntime.instance.isIOS || isDspEnabled)
-      ? _state.withBitPerfect(false)
-      : _state;
+  PlaybackState get state =>
+      _state.isBitPerfect && (_runtime.isIOS || isDspEnabled)
+          ? _state.withBitPerfect(false)
+          : _state;
 
   Timer? _ticker;
   final _completion = PlaybackCompletionTracker();
@@ -69,14 +72,17 @@ class HifiAudioService extends ChangeNotifier {
   final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
 
   HifiAudioService._()
-      : _prepareFileOverride = null,
+      : _runtime = PlatformAudioRuntime.instance,
+        _pauseNativeOverride = null,
+        _stopNativeOverride = null,
+        _prepareFileOverride = null,
         _openFileOverride = null,
         _ownsBindings = true,
         _applyDspOverride = null {
     _bindings.init();
     _loadEqSettings();
     _mseb.addListener(_onMsebChanged);
-    final runtime = PlatformAudioRuntime.instance;
+    final runtime = _runtime;
     runtime.isPlaying = () => _state.isPlaying;
     runtime.pauseForSystem = () => pause(fromSystem: true);
     runtime.resumeAfterSystem = () {
@@ -92,7 +98,13 @@ class HifiAudioService extends ChangeNotifier {
     required Future<void> Function(String) prepareFile,
     required bool Function(String, double, double) openFile,
     void Function(bool, List<double>)? applyDsp,
-  })  : _prepareFileOverride = prepareFile,
+    PlatformAudioRuntime? runtime,
+    VoidCallback? pauseNative,
+    VoidCallback? stopNative,
+  })  : _runtime = runtime ?? PlatformAudioRuntime.instance,
+        _pauseNativeOverride = pauseNative,
+        _stopNativeOverride = stopNative,
+        _prepareFileOverride = prepareFile,
         _openFileOverride = openFile,
         _ownsBindings = false,
         _applyDspOverride = applyDsp {
@@ -350,9 +362,9 @@ class HifiAudioService extends ChangeNotifier {
     try {
       await (_prepareFileOverride ?? _prepareFile)(resolvedPath);
       if (generation != _loadGeneration) return;
-      if (!await PlatformAudioRuntime.instance
-          .activate(sourceSampleRate: track.sampleRate)) {
-        throw StateError('Audio session activation was denied');
+      if (!await _runtime.activate(sourceSampleRate: track.sampleRate)) {
+        throw StateError(
+            _runtime.lastSessionError ?? 'Audio session activation was denied');
       }
     } catch (error) {
       fileError = error;
@@ -420,9 +432,13 @@ class HifiAudioService extends ChangeNotifier {
     }
 
     lastDebugLog = 'SUCCESS_PLAY: $resolvedPath';
+    unawaited(_runtime.refreshOutput(stage: 'native_playback_started'));
     final position = _pendingSeek ?? 0.0;
     if (_pendingSeek != null) _bindings.seek(position);
-    if (!_playWhenPrepared) _bindings.pause();
+    if (!_playWhenPrepared) {
+      (_pauseNativeOverride ?? _bindings.pause)();
+      unawaited(_runtime.userPaused());
+    }
     _consecutiveErrors = 0;
     _completion.reset();
     isPlayingNotifier.value = _playWhenPrepared;
@@ -460,8 +476,16 @@ class HifiAudioService extends ChangeNotifier {
     if (_isPreparingTrack) return;
     final generation = _loadGeneration;
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      if (!await PlatformAudioRuntime.instance
-          .activate(sourceSampleRate: _currentTrack?.sampleRate)) {
+      try {
+        if (!await _runtime.activate(
+            sourceSampleRate: _currentTrack?.sampleRate)) {
+          throw StateError(_runtime.lastSessionError ??
+              'Audio session activation was denied');
+        }
+      } catch (error) {
+        lastDebugLog = 'AUDIO_SESSION_FAILED: $error';
+        debugPrint('[HifiAudioService] $lastDebugLog');
+        notifyListeners();
         return;
       }
       if (generation != _loadGeneration || !_playWhenPrepared) return;
@@ -491,10 +515,10 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void pause({bool fromSystem = false}) {
-    if (!fromSystem) PlatformAudioRuntime.instance.userPaused();
     _playWhenPrepared = false;
     _completion.reset();
-    _bindings.pause();
+    (_pauseNativeOverride ?? _bindings.pause)();
+    if (!fromSystem) unawaited(_runtime.userPaused());
     isPlayingNotifier.value = false;
     _state = PlaybackState(
       isPlaying: false,
@@ -514,13 +538,13 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void stop() {
-    PlatformAudioRuntime.instance.userPaused();
     _loadGeneration++;
     _isPreparingTrack = false;
     _pendingSeek = null;
     _playWhenPrepared = false;
     _completion.reset();
-    _bindings.stop();
+    (_stopNativeOverride ?? _bindings.stop)();
+    unawaited(_runtime.userPaused());
     isPlayingNotifier.value = false;
     _state = PlaybackState(
       isPlaying: false,

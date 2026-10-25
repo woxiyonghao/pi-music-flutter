@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import AVFoundation
+import AVKit
 import Darwin
 import os
 
@@ -10,11 +11,13 @@ import os
     private var routeObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
     private var lastRouteChangeReason: UInt = 0
+    private var recentRouteChanges: [[String: Any]] = []
     private var systemChannel: FlutterMethodChannel?
 
     func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
         GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
         guard let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "HifiPlatformAudio") else { return }
+        registrar.register(AudioRoutePickerFactory(), withId: "hifi/audio_route_picker")
         let channel = FlutterMethodChannel(name: "hifi/platform_audio", binaryMessenger: registrar.messenger())
         audioChannel = channel
         let system = FlutterMethodChannel(name: "hifi/system", binaryMessenger: registrar.messenger())
@@ -74,6 +77,21 @@ import os
             object: nil, queue: .main) { [weak self] notification in
                 let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
                 self?.lastRouteChangeReason = reason
+                if let self {
+                    let session = AVAudioSession.sharedInstance()
+                    let previous = notification.userInfo?[AVAudioSessionRouteChangePreviousRouteKey]
+                        as? AVAudioSessionRouteDescription
+                    self.recentRouteChanges.append([
+                        "reason": reason,
+                        "at": ISO8601DateFormatter().string(from: Date()),
+                        "previousOutputs": previous?.outputs.map(self.portInfo) ?? [],
+                        "outputs": session.currentRoute.outputs.map(self.portInfo),
+                        "sampleRate": session.sampleRate,
+                        "category": session.category.rawValue,
+                        "routeSharingPolicy": session.routeSharingPolicy.rawValue
+                    ])
+                    self.recentRouteChanges = Array(self.recentRouteChanges.suffix(12))
+                }
                 self?.audioChannel?.invokeMethod("routeChanged", arguments: ["reason": reason])
             }
         foregroundObserver = NotificationCenter.default.addObserver(
@@ -83,20 +101,21 @@ import os
         }
     }
 
-    private func outputFormat(_ session: AVAudioSession) -> [String: Any] {
-        func portInfo(_ port: AVAudioSessionPortDescription) -> [String: Any] {
-            let transport: String
-            switch port.portType {
-            case .usbAudio: transport = "USB"
-            case .bluetoothA2DP, .bluetoothHFP, .bluetoothLE: transport = "Bluetooth"
-            case .builtInSpeaker, .builtInReceiver, .headphones: transport = "BuiltIn"
-            case .airPlay: transport = "AirPlay"
-            default: transport = port.portType.rawValue
-            }
-            return ["id": port.uid, "name": port.portName, "transport": transport,
-                    "portType": port.portType.rawValue,
-                    "channelCount": port.channels?.count ?? 0]
+    private func portInfo(_ port: AVAudioSessionPortDescription) -> [String: Any] {
+        let transport: String
+        switch port.portType {
+        case .usbAudio: transport = "USB"
+        case .bluetoothA2DP, .bluetoothHFP, .bluetoothLE: transport = "Bluetooth"
+        case .builtInSpeaker, .builtInReceiver, .headphones: transport = "BuiltIn"
+        case .airPlay: transport = "AirPlay"
+        default: transport = port.portType.rawValue
         }
+        return ["id": port.uid, "name": port.portName, "transport": transport,
+                "portType": port.portType.rawValue,
+                "channelCount": port.channels?.count ?? 0]
+    }
+
+    private func outputFormat(_ session: AVAudioSession) -> [String: Any] {
         let route = session.currentRoute
         let outputs = route.outputs.map(portInfo)
         var format = outputs.first ?? ["id": "", "name": "", "transport": "System"]
@@ -108,7 +127,12 @@ import os
         format["inputs"] = route.inputs.map(portInfo)
         format["category"] = session.category.rawValue
         format["mode"] = session.mode.rawValue
+        format["routeSharingPolicy"] = session.routeSharingPolicy.rawValue
+        format["categoryOptions"] = session.categoryOptions.rawValue
+        format["preferredSampleRate"] = session.preferredSampleRate
+        format["bridgeVersion"] = 3
         format["lastRouteChangeReason"] = lastRouteChangeReason
+        format["recentRouteChanges"] = recentRouteChanges
         return format
     }
 
@@ -278,4 +302,29 @@ import os
         if let routeObserver { NotificationCenter.default.removeObserver(routeObserver) }
         if let foregroundObserver { NotificationCenter.default.removeObserver(foregroundObserver) }
     }
+}
+
+/// Use Apple's public output selector. A playback-only session cannot select a
+/// USB output by setting a preferred microphone or a speaker override.
+private final class AudioRoutePickerFactory: NSObject, FlutterPlatformViewFactory {
+    func create(withFrame frame: CGRect, viewIdentifier viewId: Int64,
+                arguments args: Any?) -> FlutterPlatformView {
+        AudioRoutePickerPlatformView(frame: frame)
+    }
+}
+
+private final class AudioRoutePickerPlatformView: NSObject, FlutterPlatformView {
+    private let picker: AVRoutePickerView
+
+    init(frame: CGRect) {
+        picker = AVRoutePickerView(frame: frame)
+        super.init()
+        picker.prioritizesVideoDevices = false
+        picker.tintColor = .white
+        picker.activeTintColor = .systemPink
+        picker.backgroundColor = .clear
+        picker.accessibilityLabel = "选择音频输出"
+    }
+
+    func view() -> UIView { picker }
 }

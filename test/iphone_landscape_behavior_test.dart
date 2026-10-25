@@ -57,7 +57,7 @@ void main() {
         expect(tester.takeException(), isNull, reason: '$tab must fit $size');
         expect(find.byIcon(Icons.screen_rotation_rounded), findsNothing);
         final sidebar = tester.getRect(find.byType(MacSidebarWidget));
-        expect(sidebar.left, 12);
+        expect(sidebar.left, 24);
         expect(sidebar.bottom, lessThanOrEqualTo(size.height - 21));
       }
       await tester.pumpWidget(const SizedBox());

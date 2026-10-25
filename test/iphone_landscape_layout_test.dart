@@ -47,8 +47,8 @@ void main() {
     final sidebar = tester.getRect(find.byType(MacSidebarWidget));
     final stage = tester.getRect(find.byType(MacAllMusicView));
     final transport = tester.getRect(find.byType(IphoneBottomBarWidget));
-    expect(sidebar.left, 12); // 8 safe pixels + 4 workspace pixels.
-    expect(stage.right, 844 - 62 - 4);
+    expect(sidebar.left, 24); // 16 safe pixels + 8 workspace pixels.
+    expect(stage.right, 844 - 62);
     expect(transport.right, stage.right);
     expect(transport.bottom, 390 - 21 - 10);
     expect(tester.takeException(), isNull);
@@ -56,12 +56,12 @@ void main() {
   });
 
   testWidgets(
-      'Phones without a camera cutout only reserve the four-pixel workspace margin',
+      'Phones without a camera cutout keep the requested asymmetric workspace margins',
       (tester) async {
     await mount(tester, SidebarTab.allMusic, const Size(667, 375),
         padding: EdgeInsets.zero);
-    expect(tester.getRect(find.byType(MacSidebarWidget)).left, 4);
-    expect(tester.getRect(find.byType(MacAllMusicView)).right, 663);
+    expect(tester.getRect(find.byType(MacSidebarWidget)).left, 8);
+    expect(tester.getRect(find.byType(MacAllMusicView)).right, 667);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
