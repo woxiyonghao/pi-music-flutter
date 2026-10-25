@@ -6,7 +6,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 set(AUDIO_ENGINE_SOURCES
-    src/AudioEngine.cpp src/DacDeviceCatalog.cpp src/DsfParser.cpp
+    src/AudioEngine.cpp src/DacDeviceCatalog.cpp src/DsfParser.cpp src/IphoneDsdDecoder.cpp
     src/decoders/FlacDecoder.cpp src/decoders/WavDecoder.cpp src/decoders/Mp3Decoder.cpp)
 if(ANDROID)
     list(APPEND AUDIO_ENGINE_SOURCES src/sinks/AAudioSink.cpp)

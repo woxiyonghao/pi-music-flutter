@@ -23,7 +23,10 @@ int main() {
         RuntimeContext context;
         require(context.configure("ipad", prefer_remote_io), "iPad initialization failed");
         require(!context.configure("iphone", prefer_remote_io), "Initialized identity changed");
-        require(!context.updateHostOutput({0, 2, "id", "speaker", "BuiltIn"}), "Invalid rate accepted");
+        require(context.updateHostOutput({0, 2, "id", "speaker", "BuiltIn"}), "Automatic host rate rejected");
+        require(context.hostOutput().sample_rate == 0, "Automatic host rate was not preserved");
+        require(!context.updateHostOutput({1, 2, "id", "speaker", "BuiltIn"}), "Invalid 1 Hz rate accepted");
+        require(!context.updateHostOutput({7999, 2, "id", "speaker", "BuiltIn"}), "Invalid 7999 Hz rate accepted");
         require(!context.updateHostOutput({48000, 0, "id", "speaker", "BuiltIn"}), "Invalid channel count accepted");
         HostOutput output{48000, 2, "airpods-id", "AirPods Pro", "Bluetooth"};
         require(context.updateHostOutput(output), "Host output rejected");
@@ -40,7 +43,10 @@ int main() {
         const std::string capabilities = hifi_audio_get_capabilities_json();
         require(capabilities.find("\"platform\":\"mac\"") != std::string::npos, "Injected platform missing");
         require(capabilities.find("\"session_owner\":\"host\"") != std::string::npos, "Host session ownership missing");
-        require(!hifi_audio_update_host_output(0, 2, "id", "name", "BuiltIn"), "Invalid C ABI format accepted");
+        require(hifi_audio_update_host_output(0, 2, "id", "name", "BuiltIn"), "Automatic C ABI host rate rejected");
+        require(runtimeContext().hostOutput().sample_rate == 0, "C ABI automatic host rate was not preserved");
+        require(!hifi_audio_update_host_output(1, 2, "id", "name", "BuiltIn"), "Invalid C ABI 1 Hz rate accepted");
+        require(!hifi_audio_update_host_output(7999, 2, "id", "name", "BuiltIn"), "Invalid C ABI 7999 Hz rate accepted");
         std::cout << "Explicit platform, immutable initialization, host format, C ABI and capabilities: passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

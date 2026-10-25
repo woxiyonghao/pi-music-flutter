@@ -4,6 +4,7 @@
 #include "audio_engine/decoders/WavDecoder.hpp"
 #include "audio_engine/decoders/Mp3Decoder.hpp"
 #include "audio_engine/DsfParser.hpp"
+#include "audio_engine/IphoneDsdDecoder.hpp"
 
 #if defined(__APPLE__)
 #include "audio_engine/decoders/AppleAudioDecoder.hpp"
@@ -106,7 +107,7 @@ std::unique_ptr<IAudioDecoder> AudioEngine::createDecoderForFile(const std::stri
     } else if (ext == ".mp3") {
         return std::make_unique<Mp3Decoder>();
     } else if (ext == ".dsf" || ext == ".dff") {
-        return std::make_unique<DsfParser>();
+        return createDsdDecoderForClient(runtimeContext().platformName());
 #if defined(__APPLE__)
     } else if (ext == ".m4a" || ext == ".alac" || ext == ".aac" || ext == ".aiff" || ext == ".aif" || ext == ".caf") {
         return std::make_unique<AppleAudioDecoder>();
