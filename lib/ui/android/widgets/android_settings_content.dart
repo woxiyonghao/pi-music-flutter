@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/app_paths.dart';
 import '../../../core/hifi_audio_bindings.dart';
 import '../../../core/hifi_audio_service.dart';
+import '../../../services/mseb_service.dart';
 import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../services/web_remote_service.dart';
@@ -47,6 +48,7 @@ class _AndroidSettingsContentState extends State<AndroidSettingsContent> {
           ...switch (widget.section) {
             AndroidPlayerSection.scan => _scan(),
             AndroidPlayerSection.equalizer => _equalizer(),
+            AndroidPlayerSection.mseb => _mseb(),
             AndroidPlayerSection.theme => _theme(),
             AndroidPlayerSection.output => _output(),
             AndroidPlayerSection.network => [_network()],
@@ -171,6 +173,103 @@ class _AndroidSettingsContentState extends State<AndroidSettingsContent> {
                 onChanged: _audio.eqEnabled
                     ? (gain) => _audio.setEqBand(index, gain)
                     : null,
+              ),
+            ],
+          ),
+        ),
+    ];
+  }
+
+  List<Widget> _mseb() {
+    final mseb = MsebService.instance;
+    const params = [
+      (title: '声音冷暖', left: '偏冷通透', right: '偏暖醇厚'),
+      (title: '低音下潜', left: '紧致轻盈', right: '深沉澎湃'),
+      (title: '低音质感', left: '速度迅捷', right: '蓬松弹性'),
+      (title: '音符厚度', left: '纤细轻盈', right: '扎实饱满'),
+      (title: '人声位置', left: '舞台后缩', right: '贴耳靠前'),
+      (title: '女声甜度', left: '自然平直', right: '润泽甜美'),
+      (title: '齿音消除', left: '柔化去刺', right: '原生锋芒'),
+      (title: '瞬态存在感', left: '柔和松弛', right: '硬朗凌厉'),
+      (title: '空气感', left: '凝聚内敛', right: '空灵弥漫'),
+      (title: '声场明亮度', left: '紧凑聚焦', right: '宏大宽广'),
+    ];
+
+    return [
+      SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('启用调音魔棒 (MSEB)'),
+        subtitle: const Text('基于海贝 MSEB 调音算法，融合 10 维专业声学参量'),
+        value: mseb.isEnabled,
+        onChanged: (val) {
+          mseb.setEnabled(val);
+          setState(() {});
+        },
+      ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: () {
+            mseb.resetAll();
+            setState(() {});
+          },
+          icon: const Icon(Icons.restart_alt_rounded),
+          label: const Text('全部复位'),
+        ),
+      ),
+      for (var index = 0; index < params.length; index++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(params[index].title,
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600)),
+                  Text(
+                    mseb.values[index].toStringAsFixed(1),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: mseb.values[index].abs() > 0.05
+                          ? _accent
+                          : HifiTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Text(
+                    params[index].left,
+                    style: const TextStyle(
+                        fontSize: 11, color: HifiTheme.textSecondary),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      key: Key('android-mseb-param-$index'),
+                      min: -10,
+                      max: 10,
+                      divisions: 40,
+                      activeColor: _accent,
+                      value: mseb.values[index].clamp(-10, 10),
+                      label: mseb.values[index].toStringAsFixed(1),
+                      onChanged: (val) {
+                        mseb.setParam(index, val);
+                        setState(() {});
+                      },
+                    ),
+                  ),
+                  Text(
+                    params[index].right,
+                    style: const TextStyle(
+                        fontSize: 11, color: HifiTheme.textSecondary),
+                  ),
+                ],
               ),
             ],
           ),

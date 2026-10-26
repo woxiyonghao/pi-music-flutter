@@ -4,6 +4,7 @@ import '../../core/hifi_audio_bindings.dart';
 import '../../core/hifi_audio_service.dart';
 import '../../models/playback_state.dart';
 import '../../models/track.dart';
+import '../../services/mseb_service.dart';
 import '../../services/music_database_service.dart';
 import '../../services/theme_service.dart';
 import '../../theme/hifi_theme.dart';
@@ -14,6 +15,7 @@ enum AndroidPlayerSection {
   library('音乐库', Icons.library_music_rounded),
   scan('扫描音乐', Icons.folder_open_rounded),
   equalizer('均衡器', Icons.equalizer_rounded),
+  mseb('调音魔棒', Icons.auto_fix_high_rounded),
   theme('主题动效', Icons.palette_outlined),
   output('音频输出', Icons.headphones_rounded),
   network('无线服务', Icons.wifi_rounded),
@@ -50,6 +52,7 @@ class _AndroidPlayerViewState extends State<AndroidPlayerView> {
       _audio,
       _library,
       ThemeService.instance,
+      MsebService.instance,
     ]);
   }
 
