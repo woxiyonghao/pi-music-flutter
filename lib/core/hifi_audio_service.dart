@@ -32,6 +32,7 @@ class HifiAudioService extends ChangeNotifier {
   double? _queuedSeekTarget;
   Future<void>? _activeSeekDrain;
   bool _stopAfterSeek = false;
+  bool? _postSeekPlayState;
 
   Track? _currentTrack;
   Track? get currentTrack => _currentTrack;
@@ -237,8 +238,8 @@ class HifiAudioService extends ChangeNotifier {
         return;
       }
 
-      final isPlaying = _bindings.isPlaying();
-      final isPaused = _bindings.isPaused();
+      final isPlaying = _isSeeking ? _state.isPlaying : _bindings.isPlaying();
+      final isPaused = _isSeeking ? _state.isPaused : _bindings.isPaused();
       final currentTime =
           _isSeeking ? _state.currentTime : _bindings.getCurrentTime();
       final duration = _bindings.getDuration();
@@ -263,6 +264,7 @@ class HifiAudioService extends ChangeNotifier {
 
       // 停播也可能来自设备重建；只有引擎确认 EOF 且缓冲区已耗尽才自动切歌。
       if (!_isPreparingTrack &&
+          !_isSeeking &&
           _completion.update(
               isPlaying: isPlaying,
               isPaused: isPaused,
@@ -326,6 +328,7 @@ class HifiAudioService extends ChangeNotifier {
     _pendingSeek = null;
     _queuedSeekTarget = null;
     _stopAfterSeek = false;
+    _postSeekPlayState = null;
     _currentTrack = track;
     currentTrackIdNotifier.value = track.id;
     currentTrackNotifier.value = track;
@@ -520,12 +523,16 @@ class HifiAudioService extends ChangeNotifier {
       }
       if (generation != _loadGeneration || !_playWhenPrepared) return;
       // A selection paused during preparation has no native decoder yet.
-      if (_bindings.isIdle() && _currentTrack != null) {
+      if (!_isSeeking && _bindings.isIdle() && _currentTrack != null) {
         await playTrack(_currentTrack!);
         return;
       }
     }
-    _bindings.play();
+    if (_isSeeking) {
+      _postSeekPlayState = true;
+    } else {
+      _bindings.play();
+    }
     isPlayingNotifier.value = true;
     _state = PlaybackState(
       isPlaying: true,
@@ -547,7 +554,11 @@ class HifiAudioService extends ChangeNotifier {
   void pause({bool fromSystem = false}) {
     _playWhenPrepared = false;
     _completion.reset();
-    (_pauseNativeOverride ?? _bindings.pause)();
+    if (_isSeeking) {
+      _postSeekPlayState = false;
+    } else {
+      (_pauseNativeOverride ?? _bindings.pause)();
+    }
     if (!fromSystem) unawaited(_runtime.userPaused());
     isPlayingNotifier.value = false;
     _state = PlaybackState(
@@ -576,7 +587,7 @@ class HifiAudioService extends ChangeNotifier {
     _completion.reset();
     if (_isSeeking) {
       _stopAfterSeek = true;
-      (_pauseNativeOverride ?? _bindings.pause)();
+      _postSeekPlayState = null;
     } else {
       (_stopNativeOverride ?? _bindings.stop)();
     }
@@ -794,7 +805,16 @@ class HifiAudioService extends ChangeNotifier {
       }
       if (_stopAfterSeek) {
         _stopAfterSeek = false;
+        _postSeekPlayState = null;
         (_stopNativeOverride ?? _bindings.stop)();
+      } else if (_postSeekPlayState != null) {
+        final shouldPlay = _postSeekPlayState!;
+        _postSeekPlayState = null;
+        if (shouldPlay) {
+          _bindings.play();
+        } else {
+          (_pauseNativeOverride ?? _bindings.pause)();
+        }
       }
     } finally {
       _isSeeking = false;
