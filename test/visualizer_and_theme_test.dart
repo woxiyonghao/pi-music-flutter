@@ -22,7 +22,7 @@ void main() {
 
   group('Visualizers and Theme System Headless Verification', () {
     test('VisualizerType display names and subtitles are complete', () {
-      expect(VisualizerType.values.length, 11);
+      expect(VisualizerType.values.length, 12);
       expect(VisualizerType.bubbles.displayName, contains('气泡'));
       expect(VisualizerType.cyberGrid.displayName, contains('赛博'));
       expect(VisualizerType.glassClock.displayName, contains('时钟'));

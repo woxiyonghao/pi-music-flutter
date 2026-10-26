@@ -152,7 +152,7 @@ class GlassClockPainter extends CustomPainter {
     drawGlassText(minStr, Offset(startX + hourW + spacing + colonW + spacing, startY), 1.0);
 
     // 4. 底部发烧铭牌
-    const footerLeft = 'Apple iOS StandBy · Liquid Glass Clock Dynamics';
+    const footerLeft = 'HiFi StandBy · Liquid Glass Clock Dynamics';
     const footerRight = 'REAL-TIME ACOUSTIC CAUSTIC REFRACTION';
 
     final footerStyle = TextStyle(

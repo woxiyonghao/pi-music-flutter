@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import '../core/app_paths.dart';
 import 'music_database_service.dart';
 import 'web_remote_service.dart';
 import 'wifi_transfer_html.dart';
@@ -54,7 +56,8 @@ class WifiTransferService extends ChangeNotifier {
   String get targetDir => _targetDir;
 
   final List<UploadedMusicFile> _uploadedFiles = [];
-  List<UploadedMusicFile> get uploadedFiles => List.unmodifiable(_uploadedFiles);
+  List<UploadedMusicFile> get uploadedFiles =>
+      List.unmodifiable(_uploadedFiles);
   int get completedCount => _uploadedFiles.length;
 
   WifiTransferService._() {
@@ -71,23 +74,13 @@ class WifiTransferService extends ChangeNotifier {
 
   /// 智能探测默认音乐存储目录
   static String _resolveDefaultMusicDir() {
-    final home = Platform.environment['HOME'] ?? '';
-    if (home.isNotEmpty) {
-      final downloadsMusic = '$home/Downloads/music';
-      if (Directory(downloadsMusic).existsSync()) return downloadsMusic;
+    return AppPaths.musicDirectory;
+  }
 
-      final macMusic = '$home/Music';
-      if (Directory(macMusic).existsSync()) return macMusic;
-
-      final downloads = '$home/Downloads';
-      if (Directory(downloads).existsSync()) return downloads;
-
-      return macMusic;
-    }
-    if (Platform.isLinux) {
-      return '/home/pi/Music';
-    }
-    return '/tmp/music';
+  Future<String> refreshIp() async {
+    _localIp = await WebRemoteService.findLocalIp();
+    notifyListeners();
+    return _localIp;
   }
 
   /// 启动 WiFi 传歌 HTTP 服务 (默认端口 8080)
@@ -101,9 +94,11 @@ class WifiTransferService extends ChangeNotifier {
 
     _port = port;
     _localIp = await WebRemoteService.findLocalIp();
-    _targetDir = (targetDir != null && targetDir.isNotEmpty)
-        ? targetDir
-        : _resolveDefaultMusicDir();
+    _targetDir = (Platform.isIOS || Platform.isAndroid)
+        ? AppPaths.musicDirectory
+        : ((targetDir != null && targetDir.isNotEmpty)
+            ? targetDir
+            : _resolveDefaultMusicDir());
 
     // 确保目标目录存在
     try {
@@ -113,11 +108,15 @@ class WifiTransferService extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('[WifiTransferService] 创建存储目录失败: $e');
+      return false;
     }
 
     try {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, _port, shared: true);
-      debugPrint('[WifiTransferService] 服务已启动: http://$_localIp:$_port (存储: $_targetDir)');
+      _server =
+          await HttpServer.bind(InternetAddress.anyIPv4, _port, shared: true);
+      _port = _server!.port;
+      debugPrint(
+          '[WifiTransferService] 服务已启动: http://$_localIp:$_port (存储: $_targetDir)');
 
       _server!.listen(
         _handleHttpRequest,
@@ -156,7 +155,8 @@ class WifiTransferService extends ChangeNotifier {
   void _handleHttpRequest(HttpRequest request) async {
     // 设置通用跨域头部
     request.response.headers.set('Access-Control-Allow-Origin', '*');
-    request.response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    request.response.headers
+        .set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD');
     request.response.headers.set('Access-Control-Allow-Headers', '*');
 
     // OPTIONS 预检请求 (现代浏览器拖拽上传前必查)
@@ -171,9 +171,13 @@ class WifiTransferService extends ChangeNotifier {
     // 1. GET / 或 /index.html: 返回 H5 拖拽传歌网页 (同时兼容 HEAD 请求)
     if ((request.method == 'GET' || request.method == 'HEAD') &&
         (path == '/' || path == '/index.html')) {
-      final platformLabel = Platform.isMacOS
-          ? 'Mac'
-          : (Platform.isLinux ? '树莓派' : 'HiFi主机');
+      final platformLabel = Platform.isAndroid
+          ? 'Android'
+          : (Platform.isIOS
+              ? 'iPhone'
+              : (Platform.isMacOS
+                  ? 'Mac'
+                  : (Platform.isLinux ? '树莓派' : 'HiFi主机')));
       final html = wifiTransferHtml.replaceAll('{{PLATFORM}}', platformLabel);
 
       request.response.headers.contentType = ContentType.html;
@@ -209,104 +213,141 @@ class WifiTransferService extends ChangeNotifier {
     await request.response.close();
   }
 
-  /// 接收并落地音乐文件二进制流
+  @visibleForTesting
+  static String? normalizeUploadPath(String filename) {
+    // queryParameters has already decoded the filename exactly once.
+    final normalized = filename.replaceAll(r'\', '/');
+    if (normalized.startsWith('/') ||
+        RegExp(r'^[A-Za-z]:').hasMatch(normalized) ||
+        normalized.contains('\u0000')) {
+      return null;
+    }
+    final parts = normalized.split('/');
+    if (parts.any((part) => part == '..')) return null;
+    final safeParts = parts
+        .where((part) => part.isNotEmpty && part != '.')
+        .map((part) => part.replaceAll(RegExp(r'[:*?"<>|]'), '_').trim())
+        .toList();
+    if (safeParts.isEmpty ||
+        safeParts.any((part) => part.isEmpty || part == '.' || part == '..')) {
+      return null;
+    }
+    if (safeParts.any((part) => part.toLowerCase() == 'hifi_player') ||
+        safeParts.last.toLowerCase().endsWith('.db') ||
+        safeParts.last.toLowerCase().endsWith('.db-wal') ||
+        safeParts.last.toLowerCase().endsWith('.db-shm')) {
+      return null;
+    }
+    return p.joinAll(safeParts);
+  }
+
+  int _uploadSerial = 0;
+
+  /// Receive each upload under the same public music root, retaining album
+  /// folders so CUE references and duplicate CDImage.wav names remain intact.
   Future<void> _handleFileUpload(HttpRequest request) async {
-    // 解析文件名
-    String filename = 'uploaded_track.flac';
     final queryName = request.uri.queryParameters['filename'];
-    if (queryName != null && queryName.isNotEmpty) {
-      try {
-        filename = Uri.decodeComponent(queryName);
-      } catch (_) {
-        filename = queryName;
-      }
-    } else {
+    String filename = queryName ?? '';
+    if (filename.isEmpty) {
       final headerName = request.headers.value('x-filename');
-      if (headerName != null && headerName.isNotEmpty) {
+      if (headerName != null) {
         try {
           filename = Uri.decodeComponent(headerName);
         } catch (_) {
           filename = headerName;
         }
-      } else {
-        filename = 'track_${DateTime.now().millisecondsSinceEpoch}.flac';
       }
     }
-
-    // 文件名安全过滤 (防路径穿越)
-    filename = filename
-        .replaceAll('/', '_')
-        .replaceAll(r'\', '_')
-        .replaceAll('..', '_')
-        .trim();
-    if (filename.isEmpty) {
-      filename = 'track_${DateTime.now().millisecondsSinceEpoch}.flac';
+    filename = filename.isEmpty
+        ? 'track_${DateTime.now().millisecondsSinceEpoch}.flac'
+        : filename;
+    final relativePath = normalizeUploadPath(filename);
+    if (relativePath == null) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response
+          .write(jsonEncode({'status': 'error', 'message': '无效的相对文件路径'}));
+      await request.response.close();
+      return;
     }
 
-    final targetDir = Directory(_targetDir);
-    if (!targetDir.existsSync()) {
-      try {
-        targetDir.createSync(recursive: true);
-      } catch (_) {}
-    }
-
-    final tempFile = File('${targetDir.path}/$filename.part');
-    final finalFile = File('${targetDir.path}/$filename');
-
+    final root = Directory(_targetDir).absolute;
+    final finalFile = File(p.join(root.path, relativePath));
+    final tempFile = File(
+        '${finalFile.path}.${DateTime.now().microsecondsSinceEpoch}.${_uploadSerial++}.part');
+    IOSink? sink;
     try {
-      final sink = tempFile.openWrite();
+      await root.create(recursive: true);
+      var component = root.path;
+      for (final part in p.split(relativePath)) {
+        component = p.join(component, part);
+        if (FileSystemEntity.isLinkSync(component)) {
+          throw const FileSystemException('传歌路径不能包含符号链接');
+        }
+      }
+      if (FileSystemEntity.isDirectorySync(finalFile.path)) {
+        throw const FileSystemException('目标路径是文件夹');
+      }
+      await finalFile.parent.create(recursive: true);
+      sink = tempFile.openWrite();
       int totalBytes = 0;
-
       await for (final chunk in request) {
         sink.add(chunk);
         totalBytes += chunk.length;
       }
-
       await sink.flush();
       await sink.close();
-
-      // 覆盖旧文件 (如有同名)
-      if (finalFile.existsSync()) {
-        try {
-          finalFile.deleteSync();
-        } catch (_) {}
+      sink = null;
+      if (totalBytes == 0) {
+        await tempFile.delete();
+        request.response.statusCode = HttpStatus.badRequest;
+        request.response.headers.contentType = ContentType.json;
+        request.response
+            .write(jsonEncode({'status': 'error', 'message': '上传内容为空 (0 字节)'}));
+        await request.response.close();
+        return;
       }
+      // On iOS/POSIX, rename atomically replaces an existing regular file.
+      // Never delete the user's original before the complete upload is ready.
       await tempFile.rename(finalFile.path);
-
-      // 记录到已上传列表中
-      final record = UploadedMusicFile(
-        name: filename,
-        sizeBytes: totalBytes,
-        path: finalFile.path,
-        timestamp: DateTime.now(),
-      );
-      _uploadedFiles.insert(0, record);
+      _uploadedFiles.insert(
+          0,
+          UploadedMusicFile(
+            name: relativePath,
+            sizeBytes: totalBytes,
+            path: finalFile.path,
+            timestamp: DateTime.now(),
+          ));
       notifyListeners();
 
-      // 核心发烧特性：即传即入库！自动触发 MusicDatabaseService 重新加载曲库
-      MusicDatabaseService.instance.loadLibrary();
-
-      debugPrint('[WifiTransferService] 文件上传成功: $filename ($totalBytes bytes) -> ${finalFile.path}');
-
+      String? scanError;
+      try {
+        await MusicDatabaseService.instance.scanLibrary(customPath: _targetDir);
+      } catch (error) {
+        scanError = error.toString();
+        debugPrint('[WifiTransferService] 文件已保存，扫描失败: $error');
+      }
       request.response.headers.contentType = ContentType.json;
       request.response.write(jsonEncode({
         'status': 'ok',
-        'filename': filename,
+        'filename': relativePath,
         'bytes': totalBytes,
+        'indexed': scanError == null,
+        if (scanError != null) 'scan_error': scanError,
       }));
       await request.response.close();
-    } catch (e) {
-      debugPrint('[WifiTransferService] 写入文件失败: $e');
+    } catch (error) {
+      debugPrint('[WifiTransferService] 写入文件失败: $error');
       try {
-        if (tempFile.existsSync()) tempFile.deleteSync();
+        await sink?.close();
       } catch (_) {}
-
+      try {
+        if (await tempFile.exists()) await tempFile.delete();
+      } catch (_) {}
       request.response.statusCode = HttpStatus.internalServerError;
       request.response.headers.contentType = ContentType.json;
-      request.response.write(jsonEncode({
-        'status': 'error',
-        'message': '文件写入失败: $e',
-      }));
+      request.response
+          .write(jsonEncode({'status': 'error', 'message': '文件写入失败: $error'}));
       await request.response.close();
     }
   }

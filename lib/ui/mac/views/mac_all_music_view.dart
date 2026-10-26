@@ -2,17 +2,24 @@ import 'package:flutter/material.dart';
 import '../../../models/track.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../services/theme_service.dart';
+import '../../../services/music_database_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
 
 /// 所有音乐全景树状视图 (1:1 严格对齐 C++ AllMusicPlaylistView.cpp)
 class MacAllMusicView extends StatefulWidget {
   final List<Track> tracks;
+  final String title;
+  final bool isPlaylist;
+  final int? playlistId;
   final VoidCallback? onNavigateToScan;
 
   const MacAllMusicView({
     super.key,
     required this.tracks,
+    this.title = '所有音乐',
+    this.isPlaylist = false,
+    this.playlistId,
     this.onNavigateToScan,
   });
 
@@ -39,27 +46,27 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
         widget.tracks.fold(0, (sum, t) => sum + t.durationSec);
     final totalMinutes = (totalDurationSec / 60).floor();
 
-    const title = '所有音乐';
+    final title = widget.title;
     final subtitle = totalCount > 0
-        ? '发烧曲库全景树状视图 · 共 $totalCount 首 · 总时长: $totalMinutes 分钟'
+        ? '共 $totalCount 首 · 总时长: $totalMinutes 分钟 · 长按曲目管理歌单'
         : '本地发烧曲库树列表';
 
     return GlassCard(
       borderRadius: UIConfig.containerRounding,
-      padding: const EdgeInsets.all(20.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 1. 卡片标头：主标题与副描述
-          const Text(
+          Text(
             title,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: UIConfig.fontMedium,
               fontWeight: FontWeight.bold,
               color: UIConfig.textActive,
             ),
           ),
-          const SizedBox(height: 4.0),
+          const SizedBox(height: 2.0),
           Text(
             subtitle,
             style: const TextStyle(
@@ -67,18 +74,17 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
               color: UIConfig.textMuted,
             ),
           ),
-          const SizedBox(height: 16.0),
+          const SizedBox(height: 10.0),
 
           // 2. 顶层工具栏：模式切换胶囊
           _buildToolbar(),
 
-          const SizedBox(height: 12.0),
+          const SizedBox(height: 8.0),
 
           // 3. 树状列表主视口
           Expanded(
-            child: totalCount == 0
-                ? _buildEmptyState()
-                : _buildTreeScrollView(),
+            child:
+                totalCount == 0 ? _buildEmptyState() : _buildTreeScrollView(),
           ),
         ],
       ),
@@ -86,12 +92,12 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
   }
 
   Widget _buildToolbar() {
-    return Row(
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
       children: [
         _buildModeButton('按音频格式', 0),
-        const SizedBox(width: 8.0),
         _buildModeButton('按艺术家/专辑', 1),
-        const SizedBox(width: 8.0),
         _buildModeButton('按存储目录', 2),
       ],
     );
@@ -134,39 +140,45 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            '本地发烧曲库暂无音乐',
-            style: TextStyle(
-              fontSize: UIConfig.fontRegular,
-              color: UIConfig.textNormal,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8.0),
-          const Text(
-            '请前往「扫描音乐」检索本地音乐文件，或将歌曲导入播放列表。',
-            style: TextStyle(
-              fontSize: UIConfig.fontSmall,
-              color: UIConfig.textMuted,
-            ),
-          ),
-          const SizedBox(height: 18.0),
-          ElevatedButton(
-            onPressed: widget.onNavigateToScan,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: UIConfig.accent,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(7.0),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.isPlaylist ? '此播放列表暂无音乐' : '本地发烧曲库暂无音乐',
+              style: const TextStyle(
+                fontSize: UIConfig.fontRegular,
+                color: UIConfig.textNormal,
+                fontWeight: FontWeight.w500,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             ),
-            child: const Text('前往扫描音乐', style: TextStyle(fontSize: UIConfig.fontSmall)),
-          ),
-        ],
+            const SizedBox(height: 8.0),
+            Text(
+              widget.isPlaylist
+                  ? '请从曲库中添加歌曲到此播放列表。'
+                  : '请前往「扫描音乐」检索本地音乐文件，或通过 Wi-Fi 传歌导入。',
+              style: const TextStyle(
+                fontSize: UIConfig.fontSmall,
+                color: UIConfig.textMuted,
+              ),
+            ),
+            const SizedBox(height: 18.0),
+            ElevatedButton(
+              onPressed: widget.onNavigateToScan,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: UIConfig.accent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(7.0),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              child: const Text('前往扫描音乐',
+                  style: TextStyle(fontSize: UIConfig.fontSmall)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -232,7 +244,7 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
           _buildGroup(
             key: 'alac',
             badge: 'ALAC',
-            title: 'Apple Lossless (ALAC)',
+            title: 'ALAC 高解析无损音频',
             tracks: alacTracks,
           ),
         if (mp3Tracks.isNotEmpty)
@@ -433,6 +445,51 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
     );
   }
 
+  Future<void> _showTrackActions(Track track) async {
+    final database = MusicDatabaseService.instance;
+    final playlists = database.playlists.toList();
+    final choice = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF121620),
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .8),
+      builder: (context) => SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+                title: Text(track.title,
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: const Text('加入歌单')),
+            if (widget.playlistId != null)
+              ListTile(
+                leading: const Icon(Icons.playlist_remove_rounded),
+                title: const Text('从本歌单移除'),
+                onTap: () => Navigator.pop(context, -1),
+              ),
+            if (playlists.isEmpty) const ListTile(title: Text('请先在侧边栏创建播放列表')),
+            for (final playlist in playlists)
+              ListTile(
+                leading: const Icon(Icons.queue_music_rounded),
+                title: Text(playlist.name),
+                onTap: () => Navigator.pop(context, playlist.id),
+              ),
+          ]),
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final removed = choice == -1 && widget.playlistId != null;
+    final success = removed
+        ? database.removeTrackFromPlaylist(widget.playlistId!, track.id)
+        : database.addTrackToPlaylist(choice, track.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:
+            Text(success ? (removed ? '已从歌单移除' : '已加入歌单') : '歌单更新失败，请重试')));
+  }
+
   Widget _buildTrackRow(Track track, int index, List<Track> queueContext) {
     final service = HifiAudioService.instance;
     return ListenableBuilder(
@@ -455,6 +512,8 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
             onTap: () {
               service.playTracks(queueContext, index);
             },
+            onLongPress: () => _showTrackActions(track),
+            onSecondaryTap: () => _showTrackActions(track),
             borderRadius: BorderRadius.circular(6.0),
             child: Container(
               height: 30.0,
@@ -465,7 +524,8 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(6.0),
                 border: isCurrent
-                    ? Border.all(color: accent.withValues(alpha: 0.5), width: 1.0)
+                    ? Border.all(
+                        color: accent.withValues(alpha: 0.5), width: 1.0)
                     : null,
               ),
               child: Row(
@@ -506,8 +566,9 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: UIConfig.fontRegular,
-                              fontWeight:
-                                  isCurrent ? FontWeight.w600 : FontWeight.normal,
+                              fontWeight: isCurrent
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
                               color: isCurrent
                                   ? UIConfig.textActive
                                   : const Color.fromRGBO(215, 225, 238, 0.9),
@@ -516,14 +577,15 @@ class _MacAllMusicViewState extends State<MacAllMusicView> {
                         ),
                         if (track.artist.isNotEmpty) ...[
                           const SizedBox(width: 8.0),
-                          Text(
+                          Flexible(
+                              child: Text(
                             '- ${track.artist}',
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: UIConfig.fontSmall,
                               color: UIConfig.textMuted,
                             ),
-                          ),
+                          )),
                         ],
                       ],
                     ),

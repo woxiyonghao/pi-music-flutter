@@ -1,20 +1,24 @@
+import '../../core/platform_helper.dart';
+
 /// 发烧动效主题类型定义 (1:1 对齐 C++ BackgroundVisualMode)
 enum VisualizerType {
-  ledSpectrum,  // 48列全景 LED 频谱
-  mcIntosh,     // 经典麦景图 (McIntosh) 湖蓝夜光双动圈表头
-  accuphase,    // 经典金嗓子 (Accuphase) 香槟金大表头
-  tapeReel,     // 复古开盘磁带机
-  siriWave,     // Siri 流光声波
-  siriOrb,      // Siri 悬浮微光球
-  bubbles,      // 音乐微光气泡
-  pureBlack,    // 极简纯黑纯音直通
-  neonWave,     // 电光霓虹声波
-  cyberGrid,    // 赛博粒子网格
-  glassClock,   // 液态玻璃时钟
+  ledSpectrum, // 48列全景 LED 频谱
+  mcIntosh, // 经典麦景图 (McIntosh) 湖蓝夜光双动圈表头
+  accuphase, // 经典金嗓子 (Accuphase) 香槟金大表头
+  tapeReel, // 复古开盘磁带机
+  siriWave, // Siri 流光声波
+  siriOrb, // Siri 悬浮微光球
+  bubbles, // 音乐微光气泡
+  pureBlack, // 极简纯黑纯音直通
+  neonWave, // 电光霓虹声波
+  cyberGrid, // 赛博粒子网格
+  glassClock, // 液态玻璃时钟
+  ipadTelemetryDashboard, // iPad 硬件大师数据大屏
 }
 
 extension VisualizerTypeExtension on VisualizerType {
-  String get displayName {
+  String getDisplayName([HifiPlatformType? platform]) {
+    final p = platform ?? PlatformHelper.currentPlatform;
     switch (this) {
       case VisualizerType.ledSpectrum:
         return '48列全景 LED 频谱';
@@ -38,10 +42,20 @@ extension VisualizerTypeExtension on VisualizerType {
         return '赛博粒子网格 (Cyber Grid)';
       case VisualizerType.glassClock:
         return '液态玻璃时钟 (Glass Clock)';
+      case VisualizerType.ipadTelemetryDashboard:
+        if (p == HifiPlatformType.android) return 'Android 硬件大师';
+        if (p == HifiPlatformType.iphone) return 'iPhone 硬件大师';
+        if (p == HifiPlatformType.ipad) return 'iPad 硬件大师大屏';
+        if (p == HifiPlatformType.mac) return 'Mac 硬件数据大屏';
+        if (p == HifiPlatformType.pi) return '树莓派硬件数据大屏';
+        return '系统硬件数据大屏';
     }
   }
 
-  String get subtitle {
+  String get displayName => getDisplayName();
+
+  String getSubtitle([HifiPlatformType? platform]) {
+    final p = platform ?? PlatformHelper.currentPlatform;
     switch (this) {
       case VisualizerType.ledSpectrum:
         return '48-Band Peak Hold · Real-time Audio Spectrum';
@@ -65,6 +79,25 @@ extension VisualizerTypeExtension on VisualizerType {
         return 'Perspective Audio Matrix Plane';
       case VisualizerType.glassClock:
         return 'Frosted Glass Precision Audio Clock';
+      case VisualizerType.ipadTelemetryDashboard:
+        if (p == HifiPlatformType.android) {
+          return 'Android System Telemetry & Audio Matrix';
+        }
+        if (p == HifiPlatformType.iphone) {
+          return 'iPhone System Telemetry & Audio Matrix';
+        }
+        if (p == HifiPlatformType.ipad) {
+          return 'Apple Studio AOP · Real-time Telemetry & Hardware Matrix';
+        }
+        if (p == HifiPlatformType.mac) {
+          return 'Apple Silicon Architecture · Real-time Telemetry & Hardware Matrix';
+        }
+        if (p == HifiPlatformType.pi) {
+          return 'BCM2712 Quad-Core · Real-time Telemetry & Hardware Matrix';
+        }
+        return 'System Hardware Telemetry & Audio Matrix';
     }
   }
+
+  String get subtitle => getSubtitle();
 }

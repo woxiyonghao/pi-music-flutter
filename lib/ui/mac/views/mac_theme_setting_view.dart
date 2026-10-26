@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../core/platform_helper.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
+import '../../common/module_scroll_view.dart';
 import '../../visualizers/visualizer_type.dart';
 
 /// 主题与背景动效设置视图 (1:1 严格对齐 C++ ThemeSettingView.cpp)
@@ -32,9 +34,9 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
         return GlassCard(
           borderRadius: UIConfig.containerRounding,
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: ModuleScrollView(
+            storageId: 'theme-module-scroll',
+            header: [
               // 1. 顶部 Header 栏：主标题「主题」，右侧「恢复名机预设」按钮
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -76,36 +78,29 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                 ],
               ),
               const SizedBox(height: 14.0),
-
-              // 2. 独立滚动区域
-              Expanded(
-                child: ListView(
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    // 板块一：预设 (8款名机经典主题)
-                    _buildSectionContainer(
-                      title: '预设',
-                      child: _buildPresetsGrid(theme),
-                    ),
-                    const SizedBox(height: 12.0),
-
-                    // 板块二：背景律动 (11款律动模式)
-                    _buildSectionContainer(
-                      title: '背景律动',
-                      child: _buildVisualizerModesGrid(theme),
-                    ),
-                    const SizedBox(height: 12.0),
-
-                    // 板块三：自由调色 (macOS HSV 色轮与调色台)
-                    _buildSectionContainer(
-                      title: '自由调色',
-                      headerTrailing: _buildHexPill(accent),
-                      child: _buildColorWheelSection(theme),
-                    ),
-                    const SizedBox(height: 16.0),
-                  ],
-                ),
+            ],
+            children: [
+              // 板块一：预设 (8款名机经典主题)
+              _buildSectionContainer(
+                title: '预设',
+                child: _buildPresetsGrid(theme),
               ),
+              const SizedBox(height: 12.0),
+
+              // 板块二：背景律动 (11款律动模式)
+              _buildSectionContainer(
+                title: '背景律动',
+                child: _buildVisualizerModesGrid(theme),
+              ),
+              const SizedBox(height: 12.0),
+
+              // 板块三：自由调色 (macOS HSV 色轮与调色台)
+              _buildSectionContainer(
+                title: '自由调色',
+                headerTrailing: _buildHexPill(accent),
+                child: _buildColorWheelSection(theme),
+              ),
+              const SizedBox(height: 16.0),
             ],
           ),
         );
@@ -114,17 +109,18 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
   }
 
   static const List<IconData> _visualModeIcons = [
-    Icons.equalizer_rounded,           // 48列全景 LED 频谱
-    Icons.speed_rounded,               // 名机动圈大表头
-    Icons.speed_outlined,              // 金嗓子旗舰大表头
-    Icons.album_rounded,               // 复古开盘磁带机
-    Icons.waves_rounded,               // Siri 流光声波
-    Icons.lens_blur_rounded,           // Siri 悬浮微光球
-    Icons.bubble_chart_rounded,        // 音乐微光气泡
-    Icons.nightlight_round,            // 极简纯黑纯音直通
-    Icons.graphic_eq_rounded,          // 电光霓虹声波
-    Icons.grid_4x4_rounded,            // 赛博粒子网格
-    Icons.access_time_filled_rounded,  // 液态玻璃时钟
+    Icons.equalizer_rounded, // 48列全景 LED 频谱
+    Icons.speed_rounded, // 名机动圈大表头
+    Icons.speed_outlined, // 金嗓子旗舰大表头
+    Icons.album_rounded, // 复古开盘磁带机
+    Icons.waves_rounded, // Siri 流光声波
+    Icons.lens_blur_rounded, // Siri 悬浮微光球
+    Icons.bubble_chart_rounded, // 音乐微光气泡
+    Icons.nightlight_round, // 极简纯黑纯音直通
+    Icons.graphic_eq_rounded, // 电光霓虹声波
+    Icons.grid_4x4_rounded, // 赛博粒子网格
+    Icons.access_time_filled_rounded, // 液态玻璃时钟
+    Icons.memory_rounded, // 实时硬件遥测
   ];
 
   /// 毛玻璃板块卡片容器
@@ -185,32 +181,53 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
   /// 预设卡片网格 (2列)
   Widget _buildPresetsGrid(ThemeService theme) {
     return LayoutBuilder(builder: (context, constraints) {
-      final cols = constraints.maxWidth < 560 ? 1 : 2;
+      final activePlatform =
+          PlatformHelper.overridePlatform ?? PlatformHelper.currentPlatform;
+      final compact = (activePlatform == HifiPlatformType.iphone ||
+              activePlatform == HifiPlatformType.android) &&
+          MediaQuery.orientationOf(context) == Orientation.landscape;
+      final cols = compact ? 2 : (constraints.maxWidth < 560 ? 1 : 2);
       return GridView.builder(
+        key: const ValueKey('theme-presets-grid'),
+        primary: false,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: cols,
           mainAxisSpacing: 10.0,
-          crossAxisSpacing: 14.0,
+          crossAxisSpacing: compact ? 10.0 : 14.0,
           mainAxisExtent: 56.0,
         ),
         itemCount: ThemeService.presets.length,
         itemBuilder: (context, i) {
           final p = ThemeService.presets[i];
           final isCur = theme.currentThemeId == p.id;
+          final name = Text(
+            p.name,
+            maxLines: compact ? 1 : null,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: compact ? 13.0 : UIConfig.fontRegular,
+              fontWeight: isCur ? FontWeight.w600 : FontWeight.normal,
+              color: isCur
+                  ? UIConfig.textActive
+                  : const Color.fromRGBO(220, 230, 245, 0.9),
+            ),
+          );
 
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () {
               theme.setTheme(p.id);
               widget.onVisualizerChanged(
-                VisualizerType.values[p.defaultVisualMode.clamp(0, VisualizerType.values.length - 1)],
+                VisualizerType.values[p.defaultVisualMode
+                    .clamp(0, VisualizerType.values.length - 1)],
               );
             },
             child: AnimatedContainer(
+              key: ValueKey('theme-preset-${p.id}'),
               duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 14.0),
+              padding: EdgeInsets.symmetric(horizontal: compact ? 10.0 : 14.0),
               decoration: BoxDecoration(
                 gradient: isCur
                     ? LinearGradient(
@@ -259,14 +276,15 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                 children: [
                   // 发烧微光珠宝指示圆环
                   Container(
-                    width: 16.0,
-                    height: 16.0,
+                    width: compact ? 12.0 : 16.0,
+                    height: compact ? 12.0 : 16.0,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: p.accentColor,
                       boxShadow: [
                         BoxShadow(
-                          color: p.accentColor.withValues(alpha: isCur ? 0.75 : 0.35),
+                          color: p.accentColor
+                              .withValues(alpha: isCur ? 0.75 : 0.35),
                           blurRadius: isCur ? 8.0 : 4.0,
                         ),
                       ],
@@ -284,7 +302,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                           )
                         : null,
                   ),
-                  const SizedBox(width: 12.0),
+                  SizedBox(width: compact ? 8.0 : 12.0),
 
                   // 主题名称与声学风格
                   Expanded(
@@ -292,23 +310,22 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          p.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: UIConfig.fontRegular,
-                            fontWeight: isCur ? FontWeight.w600 : FontWeight.normal,
-                            color: isCur
-                                ? UIConfig.textActive
-                                : const Color.fromRGBO(220, 230, 245, 0.9),
-                          ),
-                        ),
+                        if (compact)
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: name,
+                          )
+                        else
+                          name,
                         const SizedBox(height: 2.0),
                         Text(
                           p.soundStyle,
+                          maxLines: compact ? 2 : null,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11.0,
+                          style: TextStyle(
+                            fontSize: compact ? 10.0 : 11.0,
+                            height: compact ? 1.15 : null,
                             color: UIConfig.textMuted,
                           ),
                         ),
@@ -317,13 +334,15 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                   ),
 
                   // 3 颗微晶胶囊调色代表柱
-                  _buildColorChip(p.accentColor),
-                  const SizedBox(width: 4.0),
-                  _buildColorChip(p.litColor),
-                  const SizedBox(width: 4.0),
-                  _buildColorChip(p.peakColor),
+                  if (!compact) ...[
+                    _buildColorChip(p.accentColor),
+                    const SizedBox(width: 4.0),
+                    _buildColorChip(p.litColor),
+                    const SizedBox(width: 4.0),
+                    _buildColorChip(p.peakColor),
+                  ],
 
-                  if (isCur) ...[
+                  if (isCur && !compact) ...[
                     const SizedBox(width: 10.0),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -400,6 +419,7 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
     return LayoutBuilder(builder: (context, constraints) {
       final cols = constraints.maxWidth < 620 ? 3 : 4;
       return GridView.builder(
+        primary: false,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -422,7 +442,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
             onTap: () {
               theme.setBackgroundVisualMode(i);
               widget.onVisualizerChanged(
-                VisualizerType.values[i.clamp(0, VisualizerType.values.length - 1)],
+                VisualizerType
+                    .values[i.clamp(0, VisualizerType.values.length - 1)],
               );
             },
             child: AnimatedContainer(
@@ -482,7 +503,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: isCur ? FontWeight.w600 : FontWeight.normal,
-                        color: isCur ? UIConfig.textActive : UIConfig.textNormal,
+                        color:
+                            isCur ? UIConfig.textActive : UIConfig.textNormal,
                       ),
                     ),
                   ),
@@ -607,7 +629,8 @@ class _MacThemeSettingViewState extends State<MacThemeSettingView> {
   }
 
   Widget _buildHexPill(Color c) {
-    final hex = '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+    final hex =
+        '#${c.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
     final cr = (c.r * 255).round();
     final cg = (c.g * 255).round();
     final cb = (c.b * 255).round();
@@ -767,7 +790,8 @@ class _ColorWheelPainter extends CustomPainter {
 
     // 3. 绘制明度遮罩 (黑色半透)
     if (value < 0.99) {
-      final valPaint = Paint()..color = Colors.black.withValues(alpha: 1.0 - value);
+      final valPaint = Paint()
+        ..color = Colors.black.withValues(alpha: 1.0 - value);
       canvas.drawCircle(center, radius, valPaint);
     }
 
@@ -781,11 +805,24 @@ class _ColorWheelPainter extends CustomPainter {
     // 5. 准星指示器 (Crosshair Reticle)
     final angle = hue * math.pi / 180.0;
     final dist = saturation * radius;
-    final retPos = Offset(center.dx + math.cos(angle) * dist, center.dy + math.sin(angle) * dist);
+    final retPos = Offset(
+        center.dx + math.cos(angle) * dist, center.dy + math.sin(angle) * dist);
 
     // 准星外阴影与白环
-    canvas.drawCircle(retPos, 7.0, Paint()..color = const Color.fromRGBO(0, 0, 0, 0.85)..style = PaintingStyle.stroke..strokeWidth = 2.5);
-    canvas.drawCircle(retPos, 6.0, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.6);
+    canvas.drawCircle(
+        retPos,
+        7.0,
+        Paint()
+          ..color = const Color.fromRGBO(0, 0, 0, 0.85)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5);
+    canvas.drawCircle(
+        retPos,
+        6.0,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.6);
     canvas.drawCircle(retPos, 3.2, Paint()..color = accentColor);
   }
 

@@ -1,5 +1,7 @@
-/// 内嵌 WiFi 局域网拖拽传歌 Web 单页应用 (来自 C++ WifiTransferServer.cpp 1:1 原生实现)
-const String wifiTransferHtml = r'''<html lang="zh-CN">
+/// 内嵌 WiFi 局域网拖拽与文件夹递归传歌 Web 单页应用
+/// 支持批量拖拽、文件夹递归解析 (HTML5 Directory Entry API)、多格式发烧音频即传即入库
+const String wifiTransferHtml = r'''<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -7,7 +9,7 @@ const String wifiTransferHtml = r'''<html lang="zh-CN">
 <style>
 :root {
   --bg-color: #0c1017;
-  --card-bg: rgba(22, 28, 40, 0.85);
+  --card-bg: rgba(22, 28, 40, 0.88);
   --card-border: rgba(255, 255, 255, 0.12);
   --accent: #10b981;
   --accent-glow: rgba(16, 185, 129, 0.35);
@@ -16,6 +18,7 @@ const String wifiTransferHtml = r'''<html lang="zh-CN">
   --text-muted: #64748b;
   --progress-bg: #1e293b;
   --danger: #ef4444;
+  --warning: #f59e0b;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif; }
 body {
@@ -28,7 +31,7 @@ body {
   padding: 24px 16px;
   background-image: radial-gradient(circle at 50% 10%, rgba(16, 185, 129, 0.08), transparent 45%);
 }
-.container { width: 100%; max-width: 680px; }
+.container { width: 100%; max-width: 720px; }
 .header { text-align: center; margin-bottom: 24px; }
 .header h1 { font-size: 26px; font-weight: 700; color: var(--text-active); letter-spacing: 0.5px; margin-bottom: 8px; }
 .header p { font-size: 14px; color: var(--text-muted); }
@@ -46,7 +49,7 @@ body {
 .drop-zone {
   border: 2px dashed rgba(255, 255, 255, 0.2);
   border-radius: 12px;
-  padding: 40px 20px;
+  padding: 36px 20px;
   text-align: center;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -57,11 +60,24 @@ body {
   background: rgba(16, 185, 129, 0.05);
   box-shadow: 0 0 20px var(--accent-glow);
 }
-.drop-icon { font-size: 44px; margin-bottom: 12px; color: var(--accent); }
+.drop-icon { font-size: 40px; margin-bottom: 12px; color: var(--accent); }
 .drop-title { font-size: 17px; font-weight: 600; color: var(--text-active); margin-bottom: 6px; }
 .drop-sub { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
 .file-formats { margin-top: 12px; font-size: 12px; color: var(--text-muted); }
 .file-formats span { background: rgba(255, 255, 255, 0.06); padding: 2px 6px; border-radius: 4px; margin: 0 2px; }
+.select-buttons { display: flex; gap: 12px; margin-top: 18px; justify-content: center; }
+.btn-select {
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-active);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-select:hover { background: rgba(255, 255, 255, 0.15); border-color: var(--accent); }
 input[type="file"] { display: none; }
 .actions { display: flex; gap: 12px; margin-top: 16px; }
 .btn {
@@ -84,7 +100,7 @@ input[type="file"] { display: none; }
 .btn-outline { background: transparent; border: 1px solid rgba(255, 255, 255, 0.2); color: var(--text-normal); }
 .btn-outline:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
 .queue-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-size: 14px; font-weight: 600; color: var(--text-active); }
-.queue-list { display: flex; flex-direction: column; gap: 10px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
+.queue-list { display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; padding-right: 4px; }
 .queue-item {
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -92,7 +108,7 @@ input[type="file"] { display: none; }
   padding: 12px 14px;
 }
 .queue-top { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; }
-.file-name { font-weight: 500; color: var(--text-active); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 75%; }
+.file-name { font-weight: 500; color: var(--text-active); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
 .file-status { font-size: 12px; color: var(--text-muted); }
 .progress-bar-bg { width: 100%; height: 6px; background: var(--progress-bg); border-radius: 3px; overflow: hidden; }
 .progress-bar-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 3px; transition: width 0.15s ease; }
@@ -100,29 +116,40 @@ input[type="file"] { display: none; }
 .status-success { color: var(--accent) !important; font-weight: 600; }
 .status-error { color: var(--danger) !important; }
 .empty-tip { text-align: center; color: var(--text-muted); padding: 24px; font-size: 14px; }
+.scan-tip { display: none; text-align: center; color: var(--warning); padding: 8px; font-size: 13px; font-weight: 500; }
+.tip-banner { margin-top: 14px; padding: 10px 14px; border-radius: 8px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); font-size: 12px; color: #93c5fd; line-height: 1.5; }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="header">
-    <h1>PiHiFi 发烧纯音无线传歌中枢</h1>
-    <p>树莓派局域网极速无损传输 · 即传即播 · 自动扫描入库</p>
-    <div class="badge"><div class="badge-dot"></div><span>树莓派服务已就绪 · 本地直连</span></div>
+    <h1>{{PLATFORM}} 发烧纯音无线传歌中枢</h1>
+    <p>{{PLATFORM}}局域网极速无损传输 · 即传即播 · 自动扫描入库</p>
+    <div class="badge"><div class="badge-dot"></div><span>{{PLATFORM}}服务已就绪 · 本地直连</span></div>
   </div>
 
   <div class="card">
     <div class="drop-zone" id="dropZone">
       <div class="drop-icon">&#9835;</div>
-      <div class="drop-title">拖拽音频文件到此处，或点击浏览文件</div>
-      <div class="drop-sub">支持单选、多选或批量拖拽，传输完毕后数播自动更新曲库</div>
+      <div class="drop-title">拖拽音频文件或音乐文件夹到此处</div>
+      <div class="drop-sub">自动递归提取文件夹及子目录内的所有无损音频</div>
       <div class="file-formats">
-        <span>FLAC</span><span>WAV</span><span>DSF</span><span>DFF</span><span>APE</span><span>MP3</span><span>M4A</span><span>AAC</span>
+        <span>FLAC</span><span>WAV</span><span>DSF</span><span>DFF</span><span>APE</span><span>MP3</span><span>M4A</span><span>AAC</span><span>ALAC</span><span>CUE</span>
       </div>
-      <input type="file" id="fileInput" multiple accept=".flac,.wav,.dsf,.dff,.ape,.mp3,.m4a,.aac,.ogg,.wma,audio/*">
+      <div class="select-buttons" onclick="event.stopPropagation()">
+        <button class="btn-select" id="btnPickFiles">🎵 选择音频文件</button>
+        <button class="btn-select" id="btnPickFolder">📁 选择音乐文件夹</button>
+      </div>
+      <input type="file" id="fileInput" multiple accept=".flac,.wav,.dsf,.dff,.ape,.mp3,.m4a,.aac,.ogg,.wma,.alac,.aiff,.cue,.iso,audio/*">
+      <input type="file" id="folderInput" webkitdirectory directory multiple>
     </div>
+    <div class="scan-tip" id="scanTip">⚡ 正在递归解析文件夹中的音频文件，请稍候...</div>
     <div class="actions">
       <button class="btn btn-primary" id="btnUpload" disabled>开始批量传输 (0)</button>
       <button class="btn btn-outline" id="btnClear" disabled>清空列表</button>
+    </div>
+    <div class="tip-banner">
+      💡 提示：上传过程中请保持 {{PLATFORM}} 处于亮屏且 HiFi Player 应用在前台运行，避免系统锁屏休眠中断网络传输。
     </div>
   </div>
 
@@ -140,6 +167,10 @@ input[type="file"] { display: none; }
 <script>
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
+const folderInput = document.getElementById('folderInput');
+const btnPickFiles = document.getElementById('btnPickFiles');
+const btnPickFolder = document.getElementById('btnPickFolder');
+const scanTip = document.getElementById('scanTip');
 const btnUpload = document.getElementById('btnUpload');
 const btnClear = document.getElementById('btnClear');
 const queueList = document.getElementById('queueList');
@@ -147,27 +178,127 @@ const emptyTip = document.getElementById('emptyTip');
 const queueCount = document.getElementById('queueCount');
 const overallSpeed = document.getElementById('overallSpeed');
 
+const AUDIO_EXTS = ['.flac', '.wav', '.dsf', '.dff', '.ape', '.mp3', '.m4a', '.aac', '.ogg', '.wma', '.alac', '.aiff', '.iso', '.cue'];
+
+function isAudioFile(name) {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  return AUDIO_EXTS.some(ext => lower.endsWith(ext));
+}
+
 let fileQueue = [];
 let isUploading = false;
 
 dropZone.addEventListener('click', () => fileInput.click());
+btnPickFiles.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+btnPickFolder.addEventListener('click', (e) => { e.stopPropagation(); folderInput.click(); });
+
 dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', (e) => {
+
+dropZone.addEventListener('drop', async (e) => {
   e.preventDefault();
   dropZone.classList.remove('dragover');
-  if (e.dataTransfer.files.length > 0) {
-    addFiles(e.dataTransfer.files);
+
+  const items = e.dataTransfer.items;
+  if (items && items.length > 0) {
+    scanTip.style.display = 'block';
+    const collectedFiles = [];
+    const promises = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.webkitGetAsEntry) {
+        const entry = item.webkitGetAsEntry();
+        if (entry) {
+          promises.push(traverseEntry(entry, collectedFiles));
+        }
+      } else if (item.kind === 'file') {
+        const f = item.getAsFile();
+        if (f && f.size > 0 && isAudioFile(f.name)) {
+          collectedFiles.push(f);
+        }
+      }
+    }
+
+    try {
+      await Promise.all(promises);
+    } catch (_) {}
+    scanTip.style.display = 'none';
+
+    if (collectedFiles.length > 0) {
+      addFiles(collectedFiles);
+    } else {
+      alert('未在所选文件/文件夹中检测到支持的音频文件（支持 FLAC, WAV, DSD, APE, MP3 等）');
+    }
+    return;
+  }
+
+  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    const rawFiles = Array.from(e.dataTransfer.files).filter(f => f.size > 0 && isAudioFile(f.name));
+    if (rawFiles.length > 0) {
+      addFiles(rawFiles);
+    } else {
+      alert('所选文件为空或非支持的音频格式');
+    }
   }
 });
+
+async function traverseEntry(entry, fileList) {
+  if (!entry) return;
+  if (entry.isFile) {
+    return new Promise(resolve => {
+      entry.file(f => {
+        if (f && f.size > 0 && isAudioFile(f.name)) {
+          if (entry.fullPath) {
+            f.fullRelativePath = entry.fullPath.replace(/^\//, '');
+          }
+          fileList.push(f);
+        }
+        resolve();
+      }, () => resolve());
+    });
+  } else if (entry.isDirectory) {
+    return new Promise(resolve => {
+      const dirReader = entry.createReader();
+      const readBatch = () => {
+        dirReader.readEntries(async entries => {
+          if (!entries || entries.length === 0) {
+            resolve();
+          } else {
+            const subPromises = entries.map(sub => traverseEntry(sub, fileList));
+            await Promise.all(subPromises);
+            readBatch();
+          }
+        }, () => resolve());
+      };
+      readBatch();
+    });
+  }
+}
+
 fileInput.addEventListener('change', () => {
   if (fileInput.files.length > 0) {
-    addFiles(fileInput.files);
+    const valid = Array.from(fileInput.files).filter(f => f.size > 0 && isAudioFile(f.name));
+    addFiles(valid);
+    fileInput.value = '';
+  }
+});
+
+folderInput.addEventListener('change', () => {
+  if (folderInput.files.length > 0) {
+    const valid = Array.from(folderInput.files).filter(f => f.size > 0 && isAudioFile(f.name));
+    if (valid.length > 0) {
+      addFiles(valid);
+    } else {
+      alert('所选文件夹中未找到支持的音频文件');
+    }
+    folderInput.value = '';
   }
 });
 
 function formatBytes(bytes) {
-  if (bytes === 0) return '0 B';
+  if (!bytes || bytes === 0) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -176,7 +307,8 @@ function formatBytes(bytes) {
 
 function addFiles(files) {
   for (let file of files) {
-    if (!fileQueue.some(item => item.file.name === file.name && item.file.size === file.size)) {
+    const key = file.fullRelativePath || file.webkitRelativePath || file.name;
+    if (!fileQueue.some(item => (item.file.fullRelativePath || item.file.webkitRelativePath || item.file.name) === key && item.file.size === file.size)) {
       fileQueue.push({ file: file, status: 'pending', loaded: 0, total: file.size, speed: '0 MB/s' });
     }
   }
@@ -200,7 +332,7 @@ function renderQueue() {
   btnUpload.textContent = `开始批量传输 (${fileQueue.filter(i => i.status === 'pending').length})`;
 
   queueList.innerHTML = '';
-  fileQueue.forEach((item, index) => {
+  fileQueue.forEach((item) => {
     const div = document.createElement('div');
     div.className = 'queue-item';
     let pct = item.total > 0 ? Math.round((item.loaded / item.total) * 100) : 0;
@@ -211,16 +343,17 @@ function renderQueue() {
     if (item.status === 'uploading') {
       statusText = `上传中 ${pct}% · ${item.speed}`;
     } else if (item.status === 'success') {
-      statusText = '已入库 ✓';
+      statusText = item.indexed === false ? '已保存，待重新扫描' : '已入库 ✓';
       statusClass = 'file-status status-success';
     } else if (item.status === 'error') {
       statusText = item.errorMsg ? `失败: ${item.errorMsg} ✗` : '上传失败 ✗';
       statusClass = 'file-status status-error';
     }
 
+    const displayName = item.file.fullRelativePath || item.file.webkitRelativePath || item.file.name;
     div.innerHTML = `
       <div class="queue-top">
-        <span class="file-name" title="${item.file.name}">${item.file.name}</span>
+        <span class="file-name" title="${displayName}">${displayName}</span>
         <span class="${statusClass}">${statusText}</span>
       </div>
       <div class="progress-bar-bg">
@@ -280,10 +413,16 @@ btnUpload.addEventListener('click', async () => {
 
 function uploadSingleFile(item) {
   return new Promise((resolve, reject) => {
+    if (!item.file || item.file.size === 0) {
+      reject(new Error('文件为空或无法读取'));
+      return;
+    }
+
+    const uploadPath = item.file.fullRelativePath || item.file.webkitRelativePath || item.file.name;
     const xhr = new XMLHttpRequest();
-    const encodedName = encodeURIComponent(item.file.name);
-    xhr.open('POST', `/upload?filename=${encodedName}`);
-    xhr.timeout = 300000; // 5分钟超时
+    const encodedName = encodeURIComponent(uploadPath);
+    xhr.open('POST', `/upload?filename=${encodedName}`, true);
+    xhr.timeout = 600000; // 10分钟超时
 
     let startTime = Date.now();
     let lastLoaded = 0;
@@ -295,7 +434,7 @@ function uploadSingleFile(item) {
 
         let now = Date.now();
         let elapsed = (now - startTime) / 1000;
-        if (elapsed > 0.3) {
+        if (elapsed > 0.25) {
           let speedVal = ((e.loaded - lastLoaded) / elapsed / 1024 / 1024).toFixed(1);
           item.speed = `${speedVal} MB/s`;
           overallSpeed.textContent = `正在传输: ${item.file.name} · ${item.speed}`;
@@ -308,18 +447,19 @@ function uploadSingleFile(item) {
 
     xhr.onload = () => {
       if (xhr.status === 200) {
+        try { item.indexed = JSON.parse(xhr.responseText).indexed; } catch (_) {}
         resolve();
       } else {
-        let msg = '上传失败';
+        let msg = `服务器错误 (HTTP ${xhr.status})`;
         try {
-          let resp = JSON.parse(xhr.responseText);
+          const resp = JSON.parse(xhr.responseText);
           if (resp && resp.message) msg = resp.message;
         } catch (_) {}
         reject(new Error(msg));
       }
     };
-    xhr.onerror = () => reject(new Error('网络断开或跨域受阻'));
-    xhr.ontimeout = () => reject(new Error('传输超时'));
+    xhr.onerror = () => reject(new Error('网络断开，请确保 {{PLATFORM}} 处于亮屏且应用在前台'));
+    xhr.ontimeout = () => reject(new Error('传输超时，请检查局域网连接'));
     xhr.send(item.file);
   });
 }

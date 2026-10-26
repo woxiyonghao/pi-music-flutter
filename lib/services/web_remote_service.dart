@@ -2,9 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import '../core/app_paths.dart';
+import '../core/hifi_audio_bindings.dart';
 import '../core/hifi_audio_service.dart';
 import '../models/playback_state.dart';
 import '../models/track.dart';
+import '../platform/platform_audio_runtime.dart';
+import 'dac_setting_service.dart';
+import 'mseb_service.dart';
 import 'music_database_service.dart';
 import 'theme_service.dart';
 import 'web_remote_html.dart';
@@ -27,12 +32,23 @@ class WebRemoteService extends ChangeNotifier {
   int get clientCount => _clients.length;
 
   Timer? _broadcastTimer;
+  Timer? _dacBroadcastTimer;
+  final DacSettingService? _dacOverride;
+  final Future<int> Function()? _scanOverride;
 
-  WebRemoteService._() {
+  WebRemoteService._()
+      : _dacOverride = null,
+        _scanOverride = null {
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       _initLocalIp();
     }
   }
+
+  @visibleForTesting
+  WebRemoteService.forTesting(
+      {required DacSettingService dac, Future<int> Function()? scanLibrary})
+      : _dacOverride = dac,
+        _scanOverride = scanLibrary;
 
   Future<void> _initLocalIp() async {
     _localIp = await findLocalIp();
@@ -49,15 +65,19 @@ class WebRemoteService extends ChangeNotifier {
 
       // 优先选择常用物理网卡 en0 (Wi-Fi/Ethernet), eth0, wlan0
       interfaces.sort((a, b) {
-        final aPref = (a.name == 'en0' || a.name == 'eth0' || a.name == 'wlan0') ? 0 : 1;
-        final bPref = (b.name == 'en0' || b.name == 'eth0' || b.name == 'wlan0') ? 0 : 1;
+        final aPref =
+            (a.name == 'en0' || a.name == 'eth0' || a.name == 'wlan0') ? 0 : 1;
+        final bPref =
+            (b.name == 'en0' || b.name == 'eth0' || b.name == 'wlan0') ? 0 : 1;
         return aPref.compareTo(bPref);
       });
 
       for (final iface in interfaces) {
         for (final addr in iface.addresses) {
           final ip = addr.address;
-          if (!addr.isLoopback && !ip.startsWith('127.') && !ip.startsWith('169.254.')) {
+          if (!addr.isLoopback &&
+              !ip.startsWith('127.') &&
+              !ip.startsWith('169.254.')) {
             return ip;
           }
         }
@@ -66,6 +86,12 @@ class WebRemoteService extends ChangeNotifier {
       debugPrint('[WebRemoteService] 获取局域网 IP 异常: $e');
     }
     return '127.0.0.1';
+  }
+
+  Future<String> refreshIp() async {
+    _localIp = await findLocalIp();
+    notifyListeners();
+    return _localIp;
   }
 
   /// 启动 Web 远程遥控服务 (默认端口 8088)
@@ -79,8 +105,10 @@ class WebRemoteService extends ChangeNotifier {
     _localIp = await findLocalIp();
 
     try {
-      _server = await HttpServer.bind(InternetAddress.anyIPv4, _port, shared: true);
-      debugPrint('[WebRemoteService] 服务已启动: http://$_localIp:$_port (监听 0.0.0.0:$_port)');
+      _server =
+          await HttpServer.bind(InternetAddress.anyIPv4, _port, shared: true);
+      debugPrint(
+          '[WebRemoteService] 服务已启动: http://$_localIp:$_port (监听 0.0.0.0:$_port)');
 
       _server!.listen(
         _handleHttpRequest,
@@ -89,7 +117,10 @@ class WebRemoteService extends ChangeNotifier {
         },
       );
 
+      _port = _server!.port;
       _startBroadcastTimer();
+      (_dacOverride ?? DacSettingService.instance).onBroadcastNeeded =
+          broadcastDac;
       notifyListeners();
       return true;
     } catch (e) {
@@ -102,8 +133,11 @@ class WebRemoteService extends ChangeNotifier {
 
   /// 停止 Web 远程遥控服务
   Future<void> stop() async {
+    (_dacOverride ?? DacSettingService.instance).onBroadcastNeeded = null;
     _broadcastTimer?.cancel();
     _broadcastTimer = null;
+    _dacBroadcastTimer?.cancel();
+    _dacBroadcastTimer = null;
 
     for (final ws in _clients) {
       try {
@@ -132,13 +166,21 @@ class WebRemoteService extends ChangeNotifier {
         broadcastState();
       }
     });
+
+    // 路由变更与热插拔设备定时广播给处于待机状态的客户端
+    _dacBroadcastTimer?.cancel();
+    _dacBroadcastTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!isRunning || _clients.isEmpty) return;
+      _broadcast(jsonEncode(_buildDacMap()));
+    });
   }
 
   /// 处理 HTTP 请求与 WebSocket 握手升级
   void _handleHttpRequest(HttpRequest request) async {
     // 设置通用跨域头部
     request.response.headers.set('Access-Control-Allow-Origin', '*');
-    request.response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    request.response.headers
+        .set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     request.response.headers.set('Access-Control-Allow-Headers', '*');
 
     if (request.method == 'OPTIONS') {
@@ -164,6 +206,7 @@ class WebRemoteService extends ChangeNotifier {
     if ((request.method == 'GET' || request.method == 'HEAD') &&
         (path == '/' || path == '/index.html')) {
       request.response.headers.contentType = ContentType.html;
+      request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
       if (request.method == 'GET') {
         request.response.write(webRemoteHtml);
       }
@@ -203,6 +246,41 @@ class WebRemoteService extends ChangeNotifier {
       return;
     }
 
+    // 5.1 GET /api/debug: 诊断内部路径与音频引擎状态
+    if (request.method == 'GET' && path == '/api/debug') {
+      final audio = HifiAudioService.instance;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({
+        'audio_route': PlatformAudioRuntime.instance.output,
+        'audio_route_last_checked':
+            PlatformAudioRuntime.instance.lastProbeAt?.toIso8601String(),
+        'audio_route_error': PlatformAudioRuntime.instance.lastProbeError,
+        'audio_session_active': PlatformAudioRuntime.instance.isSessionActive,
+        'audio_session_error': PlatformAudioRuntime.instance.lastSessionError,
+        'audio_route_history': PlatformAudioRuntime.instance.routeDiagnostics,
+        'load_error': HifiAudioBindings.instance.loadError,
+        'is_loaded': HifiAudioBindings.instance.isLoaded,
+        'last_debug_log': audio.lastDebugLog,
+        'documents_dir': AppPaths.documentsDirectory,
+        'music_dir': AppPaths.musicDirectory,
+        'tracks_count': MusicDatabaseService.instance.tracks.length,
+        'first_track_path': MusicDatabaseService.instance.tracks.isNotEmpty
+            ? MusicDatabaseService.instance.tracks.first.filepath
+            : '',
+        'resolved_first_path': MusicDatabaseService.instance.tracks.isNotEmpty
+            ? MusicDatabaseService.resolveTrackPath(
+                MusicDatabaseService.instance.tracks.first.filepath)
+            : '',
+        'first_exists': MusicDatabaseService.instance.tracks.isNotEmpty
+            ? File(MusicDatabaseService.resolveTrackPath(
+                    MusicDatabaseService.instance.tracks.first.filepath))
+                .existsSync()
+            : false,
+      }));
+      await request.response.close();
+      return;
+    }
+
     // 6. REST API 控制指令 (POST /api/...)
     if (request.method == 'POST') {
       final audio = HifiAudioService.instance;
@@ -210,6 +288,8 @@ class WebRemoteService extends ChangeNotifier {
         audio.play();
       } else if (path == '/api/pause') {
         audio.pause();
+      } else if (path == '/api/stop') {
+        audio.stop();
       } else if (path == '/api/toggle') {
         audio.togglePlayPause();
       } else if (path == '/api/next') {
@@ -226,6 +306,33 @@ class WebRemoteService extends ChangeNotifier {
       } else if (path == '/api/volume') {
         final val = double.tryParse(request.uri.queryParameters['value'] ?? '');
         if (val != null) audio.setVolume(val);
+      } else if (path == '/api/play_index') {
+        final idx = int.tryParse(request.uri.queryParameters['index'] ?? '');
+        final db = MusicDatabaseService.instance;
+        if (idx != null && idx >= 0 && idx < db.tracks.length) {
+          audio.playTracks(db.tracks, idx);
+        }
+      } else if (path == '/api/play_track') {
+        final id = int.tryParse(request.uri.queryParameters['id'] ?? '');
+        final db = MusicDatabaseService.instance;
+        if (id != null) {
+          final t = db.tracks
+              .cast<Track?>()
+              .firstWhere((item) => item?.id == id, orElse: () => null);
+          if (t != null) {
+            audio.playTrack(t);
+          }
+        }
+      } else if (path == '/api/theme') {
+        final tid = int.tryParse(request.uri.queryParameters['id'] ?? '');
+        if (tid != null) {
+          ThemeService.instance.setTheme(tid);
+        }
+      } else if (path == '/api/visual_mode') {
+        final mode = int.tryParse(request.uri.queryParameters['mode'] ?? '');
+        if (mode != null) {
+          ThemeService.instance.setBackgroundVisualMode(mode);
+        }
       }
 
       broadcastState();
@@ -275,7 +382,7 @@ class WebRemoteService extends ChangeNotifier {
   }
 
   /// 分发客户端下发的遥控动作 (1:1 严格对齐 C++ WebService 动作表)
-  void _processClientCommand(String rawJson, WebSocket socket) {
+  Future<void> _processClientCommand(String rawJson, WebSocket socket) async {
     try {
       final cmd = jsonDecode(rawJson) as Map<String, dynamic>;
       final action = cmd['action'] as String? ?? '';
@@ -351,7 +458,9 @@ class WebRemoteService extends ChangeNotifier {
         case 'add_to_queue':
           final id = (cmd['id'] as num?)?.toInt();
           if (id != null) {
-            final t = db.tracks.cast<Track?>().firstWhere((item) => item?.id == id, orElse: () => null);
+            final t = db.tracks
+                .cast<Track?>()
+                .firstWhere((item) => item?.id == id, orElse: () => null);
             if (t != null) {
               audio.addToQueue(t);
               _broadcast(jsonEncode(_buildQueueMap()));
@@ -375,8 +484,11 @@ class WebRemoteService extends ChangeNotifier {
           socket.add(jsonEncode(_buildPlaylistsMap()));
           break;
         case 'start_scan':
-          db.loadLibrary();
+          final count = await (_scanOverride?.call() ?? db.scanLibrary());
           _broadcast(jsonEncode(_buildLibraryMap()));
+          _broadcast(jsonEncode(_buildPlaylistsMap()));
+          socket
+              .add(jsonEncode({'type': 'scan_complete', 'track_count': count}));
           break;
         case 'set_theme':
           final tid = (cmd['theme_id'] as num?)?.toInt();
@@ -392,9 +504,98 @@ class WebRemoteService extends ChangeNotifier {
             broadcastState();
           }
           break;
+        case 'set_eq_enabled':
+          final en = cmd['enabled'] as bool? ?? false;
+          audio.setEqEnabled(en);
+          broadcastState();
+          break;
+        case 'set_eq_band':
+          final idx = (cmd['index'] as num?)?.toInt();
+          final val = (cmd['value'] as num?)?.toDouble() ??
+              (cmd['gain'] as num?)?.toDouble();
+          if (idx != null && val != null) {
+            audio.setEqBand(idx, val);
+            audio.setEqEnabled(true);
+            broadcastState();
+          }
+          break;
+        case 'reset_eq':
+          audio.resetEq();
+          broadcastState();
+          break;
+        case 'set_eq_preset':
+          final bandsRaw = cmd['bands'] as List?;
+          if (bandsRaw != null && bandsRaw.length == 10) {
+            final bands = bandsRaw.map((e) => (e as num).toDouble()).toList();
+            audio.setEqBands(bands);
+            audio.setEqEnabled(true);
+            broadcastState();
+          }
+          break;
+        case 'set_mseb_enabled':
+          final en = cmd['enabled'] as bool? ?? false;
+          MsebService.instance.setEnabled(en);
+          broadcastMseb();
+          broadcastState();
+          break;
+        case 'set_mseb_param':
+          final idx = (cmd['index'] as num?)?.toInt();
+          final val = (cmd['value'] as num?)?.toDouble() ??
+              (cmd['gain'] as num?)?.toDouble();
+          if (idx != null && val != null) {
+            MsebService.instance.setParam(idx, val);
+            MsebService.instance.setEnabled(true);
+            broadcastMseb();
+            broadcastState();
+          }
+          break;
+        case 'reset_mseb':
+          MsebService.instance.resetAll();
+          broadcastMseb();
+          broadcastState();
+          break;
+        case 'play_playlist':
+          final pid = (cmd['id'] as num?)?.toInt();
+          if (pid != null) {
+            final pl = db.playlists.cast<Playlist?>().firstWhere(
+                  (p) => p?.id == pid,
+                  orElse: () => null,
+                );
+            if (pl != null && pl.tracks.isNotEmpty) {
+              audio.playTracks(pl.tracks, 0);
+              _broadcast(jsonEncode(_buildQueueMap()));
+              broadcastState();
+            }
+          }
+          break;
+        case 'delete_playlist':
+          final pid = (cmd['id'] as num?)?.toInt();
+          if (pid != null) {
+            db.deletePlaylist(pid);
+            _broadcast(jsonEncode(_buildPlaylistsMap()));
+          }
+          break;
+        case 'set_dac_chip':
+          final chip = (cmd['chip'] as num?)?.toInt();
+          if (chip != null) {
+            DacSettingService.instance.setChip(chip);
+            broadcastDac();
+          }
+          break;
+        case 'set_dac_param':
+          final key = cmd['key'] as String?;
+          final val = ((cmd['val'] ?? cmd['value']) as num?)?.toInt();
+          if (key != null && val != null) {
+            DacSettingService.instance.setParam(key, val);
+            broadcastDac();
+          }
+          break;
       }
     } catch (e) {
       debugPrint('[WebRemoteService] 处理客户端指令失败: $e');
+      if (socket.readyState == WebSocket.open) {
+        socket.add(jsonEncode({'type': 'error', 'message': e.toString()}));
+      }
     }
   }
 
@@ -402,6 +603,16 @@ class WebRemoteService extends ChangeNotifier {
   void broadcastState() {
     if (_clients.isEmpty) return;
     _broadcast(jsonEncode(_buildStateMap()));
+  }
+
+  void broadcastMseb() {
+    if (_clients.isEmpty) return;
+    _broadcast(jsonEncode(_buildMsebMap()));
+  }
+
+  void broadcastDac() {
+    if (_clients.isEmpty) return;
+    _broadcast(jsonEncode(_buildDacMap()));
   }
 
   void _broadcast(String message) {
@@ -415,6 +626,7 @@ class WebRemoteService extends ChangeNotifier {
   Map<String, dynamic> _buildStateMap() {
     final audio = HifiAudioService.instance;
     final theme = ThemeService.instance;
+    final mseb = MsebService.instance;
     final cur = audio.currentTrack;
 
     String modeStr = 'list';
@@ -441,10 +653,10 @@ class WebRemoteService extends ChangeNotifier {
       'is_muted': audio.state.isMuted,
       'mode': modeStr,
       'spectrum': audio.state.spectrumLevels,
-      'eq_enabled': false,
-      'eq_bands': List.filled(10, 0.0),
-      'mseb_enabled': false,
-      'mseb_params': List.filled(10, 0.0),
+      'eq_enabled': audio.eqEnabled,
+      'eq_bands': audio.eqBands,
+      'mseb_enabled': mseb.isEnabled,
+      'mseb_params': mseb.values,
       'theme_id': theme.currentThemeId,
       'visual_mode': theme.backgroundVisualMode,
       'fade_duration': 0.5,
@@ -458,14 +670,17 @@ class WebRemoteService extends ChangeNotifier {
     return {
       'type': 'queue',
       'current_index': audio.currentIndex,
-      'tracks': queue.map((t) => {
-        'id': t.id,
-        'title': t.title,
-        'artist': t.artist,
-        'album': t.album,
-        'duration': t.durationSec,
-        'badge': '${t.format.name.toUpperCase()} ${t.sampleRate ~/ 1000}k',
-      }).toList(),
+      'tracks': queue
+          .map((t) => {
+                'id': t.id,
+                'title': t.title,
+                'artist': t.artist,
+                'album': t.album,
+                'duration': t.durationSec,
+                'badge':
+                    '${t.format.name.toUpperCase()} ${t.sampleRate ~/ 1000}k',
+              })
+          .toList(),
     };
   }
 
@@ -473,14 +688,17 @@ class WebRemoteService extends ChangeNotifier {
     final db = MusicDatabaseService.instance;
     return {
       'type': 'library',
-      'tracks': db.tracks.map((t) => {
-        'id': t.id,
-        'title': t.title,
-        'artist': t.artist,
-        'album': t.album,
-        'duration': t.durationSec,
-        'badge': '${t.format.name.toUpperCase()} ${t.sampleRate ~/ 1000}k',
-      }).toList(),
+      'tracks': db.tracks
+          .map((t) => {
+                'id': t.id,
+                'title': t.title,
+                'artist': t.artist,
+                'album': t.album,
+                'duration': t.durationSec,
+                'badge':
+                    '${t.format.name.toUpperCase()} ${t.sampleRate ~/ 1000}k',
+              })
+          .toList(),
     };
   }
 
@@ -488,37 +706,45 @@ class WebRemoteService extends ChangeNotifier {
     final db = MusicDatabaseService.instance;
     return {
       'type': 'playlists',
-      'playlists': db.playlists.map((p) => {
-        'id': p.id,
-        'name': p.name,
-        'track_count': 0,
-        'duration': 0,
-      }).toList(),
+      'playlists': db.playlists
+          .map((p) => {
+                'id': p.id,
+                'name': p.name,
+                'track_count': p.tracks.length,
+                'duration': p.totalDurationSec,
+              })
+          .toList(),
     };
   }
 
   Map<String, dynamic> _buildDacMap() {
+    final dac = _dacOverride ?? DacSettingService.instance;
+    final active = dac.currentDevice;
     return {
       'type': 'dac',
-      'has_external_dac': false,
-      'dac_name': '系统默认声卡 (Apple Direct)',
-      'active_output': '系统默认音频输出',
-      'selected_chip': 0,
-      'chip_name': 'Apple Direct',
-      'params': {
-        'apple_exclusive': 0,
-        'apple_sample_rate': 0,
-        'apple_drive': 0,
-        'apple_bit_depth': 0,
-      },
+      'dac_name': active?.name ?? '',
+      'sample_rate': active?.currentSampleRate ?? 0,
+      'transport': active?.transport ?? '',
+      'follows_system_output': dac.followsSystemOutput,
+      'devices': [
+        for (final device in dac.connectedDevices)
+          {
+            'id': device.id,
+            'name': device.name,
+            'transport': device.transport,
+            'sample_rate': device.currentSampleRate,
+            'is_active': device.id == active?.id,
+          },
+      ],
     };
   }
 
   Map<String, dynamic> _buildMsebMap() {
+    final mseb = MsebService.instance;
     return {
       'type': 'mseb',
-      'enabled': false,
-      'params': List.filled(10, 0.0),
+      'enabled': mseb.isEnabled,
+      'params': mseb.values,
     };
   }
 

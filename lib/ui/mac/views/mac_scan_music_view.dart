@@ -7,6 +7,7 @@ import '../../../services/music_database_service.dart';
 import '../../../services/theme_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
+import '../../common/module_scroll_view.dart';
 import '../widgets/mac_music_item_widget.dart';
 
 enum ScanUIState {
@@ -58,9 +59,9 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
       'tag': '1-bit Stream',
     },
     AudioFormat.alac: {
-      'title': 'Apple-ALAC',
-      'subtitle': 'Apple-Lossless-Audio-Codec',
-      'tag': 'Apple 无损',
+      'title': 'ALAC',
+      'subtitle': 'Lossless-Audio-Codec',
+      'tag': 'ALAC 无损',
     },
     AudioFormat.flac: {
       'title': 'FLAC',
@@ -101,23 +102,160 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
     super.dispose();
   }
 
-  void _triggerScan() {
+  Future<void> _triggerScan() async {
     setState(() {
       _state = ScanUIState.scanning;
       _isEditMode = false;
       _selectedTrackIds.clear();
     });
 
-    // 异步扫描音乐文件
-    Timer(const Duration(milliseconds: 2200), () {
+    int count;
+    try {
+      count = await MusicDatabaseService.instance.scanLibrary();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _state = MusicDatabaseService.instance.tracks.isEmpty
+            ? ScanUIState.idle
+            : ScanUIState.completed;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('扫描失败，原曲库已保留：$error'),
+        backgroundColor: const Color(0xFFEF4444),
+      ));
+      return;
+    }
+
+    if (mounted) {
+      widget.onScanComplete?.call();
+      final total = MusicDatabaseService.instance.tracks.length;
+      setState(() {
+        _state = total == 0 ? ScanUIState.idle : ScanUIState.completed;
+      });
+
+      if (total == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('未在本地存储目录中发现音频文件。\n请点击左侧【Web服务】开启局域网传歌，或通过电脑隔空投放歌曲。'),
+            backgroundColor: Color(0xFFEAB308),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('全盘检索完成！曲库共 $count 首音轨。'),
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmAndDeleteSelectedTracks() async {
+    final count = _selectedTrackIds.length;
+    if (count == 0) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color.fromRGBO(20, 24, 34, 0.95),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14.0),
+            side: const BorderSide(color: Color.fromRGBO(255, 255, 255, 0.15)),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  color: Color(0xFFEF4444), size: 22.0),
+              SizedBox(width: 8.0),
+              Text(
+                '确认删除曲目与源文件',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16.0,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            '确定要从曲库中移除并彻底删除已选择的 $count 首歌曲本地源文件吗？\n\n⚠️ 警告：该操作将直接从本地存储中彻底删除音频源文件，删除后无法找回！',
+            style: const TextStyle(
+              color: Color.fromRGBO(255, 255, 255, 0.85),
+              fontSize: 13.0,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              style: TextButton.styleFrom(
+                foregroundColor: UIConfig.textMuted,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+              ),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6.0),
+                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              ),
+              child: const Text('彻底删除'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      final current = HifiAudioService.instance.currentTrack;
+      if (current != null && _selectedTrackIds.contains(current.id)) {
+        HifiAudioService.instance.stop();
+      }
+
+      final int deletedCount;
+      try {
+        deletedCount = await MusicDatabaseService.instance.deleteTracks(
+          Set<int>.from(_selectedTrackIds),
+          deleteSourceFiles: true,
+        );
+      } catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('删除失败，请检查文件和曲库状态：$error'),
+          backgroundColor: const Color(0xFFEF4444),
+        ));
+        return;
+      }
+
       if (mounted) {
-        MusicDatabaseService.instance.loadLibrary();
         widget.onScanComplete?.call();
         setState(() {
-          _state = ScanUIState.completed;
+          _selectedTrackIds.clear();
+          _isEditMode = false;
+          if (MusicDatabaseService.instance.tracks.isEmpty) {
+            _state = ScanUIState.idle;
+          }
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已成功删除 $deletedCount 首歌曲及其本地源文件'),
+            backgroundColor: const Color(0xFFEF4444),
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
-    });
+    }
   }
 
   @override
@@ -125,11 +263,11 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
     return ListenableBuilder(
       listenable: Listenable.merge([
         ThemeService.instance,
+        MusicDatabaseService.instance,
         HifiAudioService.instance.currentTrackNotifier,
         HifiAudioService.instance.isPlayingNotifier,
       ]),
       builder: (context, _) {
-
         final theme = ThemeService.instance;
         final accent = theme.accentColor;
 
@@ -140,9 +278,13 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
             fit: StackFit.expand,
             children: [
               // 状态机分发渲染
-              if (_state == ScanUIState.idle) _buildIdleState(accent),
+              if (_state != ScanUIState.scanning &&
+                  MusicDatabaseService.instance.tracks.isEmpty)
+                _buildIdleState(accent),
               if (_state == ScanUIState.scanning) _buildScanningState(accent),
-              if (_state == ScanUIState.completed) _buildCompletedState(accent),
+              if (_state != ScanUIState.scanning &&
+                  MusicDatabaseService.instance.tracks.isNotEmpty)
+                _buildCompletedState(accent),
             ],
           ),
         );
@@ -161,55 +303,100 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
         final offsetX = math.cos(t * 1.5) * 12.0;
         final offsetY = math.sin(t * 2.2) * 9.0;
 
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Transform.translate(
-                offset: Offset(offsetX, offsetY - 20.0),
-                child: CustomPaint(
-                  size: const Size(110.0, 110.0),
-                  painter: _SearchIconPainter(accentColor: accent),
-                ),
-              ),
-              const SizedBox(height: 36.0),
-
-              // 全盘检索发烧胶囊按钮
-              InkWell(
-                onTap: _triggerScan,
-                borderRadius: BorderRadius.circular(21.0),
-                child: Container(
-                  width: 190.0,
-                  height: 42.0,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(21.0),
-                    border: Border.all(
-                      color: const Color.fromRGBO(255, 255, 255, 0.4),
-                      width: 1.0,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accent.withValues(alpha: 0.25),
-                        blurRadius: 12.0,
+        return LayoutBuilder(builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Transform.translate(
+                      offset: Offset(offsetX, offsetY - 10.0),
+                      child: CustomPaint(
+                        size: const Size(100.0, 100.0),
+                        painter: _SearchIconPainter(accentColor: accent),
                       ),
-                    ],
-                  ),
-                  child: const Text(
-                    '全盘检索',
-                    style: TextStyle(
-                      fontSize: UIConfig.fontRegular,
-                      fontWeight: FontWeight.bold,
-                      color: UIConfig.textActive,
-                      letterSpacing: 1.2,
                     ),
-                  ),
+                    const SizedBox(height: 28.0),
+
+                    // 全盘检索发烧胶囊按钮
+                    InkWell(
+                      onTap: _triggerScan,
+                      borderRadius: BorderRadius.circular(21.0),
+                      child: Container(
+                        width: 190.0,
+                        height: 42.0,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(21.0),
+                          border: Border.all(
+                            color: const Color.fromRGBO(255, 255, 255, 0.4),
+                            width: 1.0,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: accent.withValues(alpha: 0.25),
+                              blurRadius: 12.0,
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          '全盘检索',
+                          style: TextStyle(
+                            fontSize: UIConfig.fontRegular,
+                            fontWeight: FontWeight.bold,
+                            color: UIConfig.textActive,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24.0),
+
+                    // 友好提示卡片：指导用户如何导入发烧音乐
+                    Container(
+                      constraints: const BoxConstraints(maxWidth: 440),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0, vertical: 12.0),
+                      decoration: BoxDecoration(
+                        color: const Color.fromRGBO(255, 255, 255, 0.04),
+                        borderRadius: BorderRadius.circular(10.0),
+                        border: Border.all(
+                          color: const Color.fromRGBO(255, 255, 255, 0.08),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text(
+                            '本地曲库暂无音乐 · 支持 FLAC, WAV, DSD, ALAC, MP3 等母带格式',
+                            style: TextStyle(
+                                fontSize: 12.0,
+                                color: UIConfig.textNormal,
+                                fontWeight: FontWeight.w600),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 6.0),
+                          Text(
+                            '• 无线导入：点击左侧【Web服务】进入 WiFi 传歌，同一局域网用电脑直接拖拽\n'
+                            '• 有线导入：将手机连接电脑（USB 文件传输），将歌曲拷贝至应用音乐目录',
+                            style: TextStyle(
+                                fontSize: 11.0,
+                                color:
+                                    UIConfig.textMuted.withValues(alpha: 0.9),
+                                height: 1.4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        );
+            ),
+          );
+        });
       },
     );
   }
@@ -249,15 +436,59 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
       formatBuckets.putIfAbsent(t.format, () => []).add(t);
     }
 
-    return Column(
-      children: [
-        // 顶部操作栏：「选择」多选模式切换 +「重新扫描」
+    return ModuleScrollView(
+      storageId: 'scan-module-scroll',
+      header: [
+        // 顶部操作栏：「全选」+「选择」多选模式切换 +「删除」/「重新扫描」
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
+            if (_isEditMode) ...[
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  setState(() {
+                    if (_selectedTrackIds.length == allTracks.length) {
+                      _selectedTrackIds.clear();
+                    } else {
+                      _selectedTrackIds.addAll(allTracks.map((t) => t.id));
+                    }
+                  });
+                },
+                child: Container(
+                  height: 28.0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(40, 48, 64, 0.7),
+                    borderRadius: BorderRadius.circular(6.0),
+                    border: Border.all(
+                      color: const Color.fromRGBO(255, 255, 255, 0.12),
+                    ),
+                  ),
+                  child: Text(
+                    _selectedTrackIds.length == allTracks.length
+                        ? '取消全选'
+                        : '全选',
+                    style: const TextStyle(
+                      fontSize: UIConfig.fontSmall,
+                      color: UIConfig.textNormal,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8.0),
+            ],
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _isEditMode = !_isEditMode),
+              onTap: () {
+                setState(() {
+                  _isEditMode = !_isEditMode;
+                  if (!_isEditMode) {
+                    _selectedTrackIds.clear();
+                  }
+                });
+              },
               child: Container(
                 height: 28.0,
                 padding: const EdgeInsets.symmetric(horizontal: 14.0),
@@ -277,57 +508,86 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
                   _isEditMode ? '完成选择' : '选择',
                   style: TextStyle(
                     fontSize: UIConfig.fontSmall,
-                    color: _isEditMode ? UIConfig.textActive : UIConfig.textNormal,
+                    color:
+                        _isEditMode ? UIConfig.textActive : UIConfig.textNormal,
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 8.0),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _triggerScan,
-              child: Container(
-                height: 28.0,
-                padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color.fromRGBO(40, 48, 64, 0.7),
-                  borderRadius: BorderRadius.circular(6.0),
-                  border: Border.all(
-                    color: const Color.fromRGBO(255, 255, 255, 0.12),
+            if (_isEditMode && _selectedTrackIds.isNotEmpty)
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _confirmAndDeleteSelectedTracks,
+                child: Container(
+                  height: 28.0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(6.0),
+                    border: Border.all(
+                      color: const Color(0xFFEF4444),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.delete_outline_rounded,
+                          size: 14.0, color: Color(0xFFEF4444)),
+                      const SizedBox(width: 4.0),
+                      Text(
+                        '删除 (${_selectedTrackIds.length})',
+                        style: const TextStyle(
+                          fontSize: UIConfig.fontSmall,
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: const Text(
-                  '重新扫描',
-                  style: TextStyle(
-                    fontSize: UIConfig.fontSmall,
-                    color: UIConfig.textNormal,
+              )
+            else
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _triggerScan,
+                child: Container(
+                  height: 28.0,
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(40, 48, 64, 0.7),
+                    borderRadius: BorderRadius.circular(6.0),
+                    border: Border.all(
+                      color: const Color.fromRGBO(255, 255, 255, 0.12),
+                    ),
+                  ),
+                  child: const Text(
+                    '重新扫描',
+                    style: TextStyle(
+                      fontSize: UIConfig.fontSmall,
+                      color: UIConfig.textNormal,
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 8.0),
-
-        // 纵向滚动列表 (每个格式一行横向卡片)
-        Expanded(
-          child: ListView(
-            physics: const BouncingScrollPhysics(),
-            children: [
-              for (final fmt in formatOrder)
-                if (formatBuckets.containsKey(fmt) && formatBuckets[fmt]!.isNotEmpty)
-                  _buildFormatSection(
-                    fmt: fmt,
-                    tracks: formatBuckets[fmt]!,
-                    currentPlaying: currentPlayingTrack,
-                    isEnginePlaying: isEnginePlaying,
-                    accent: accent,
-                  ),
-              const SizedBox(height: 20.0),
-            ],
-          ),
-        ),
+      ],
+      children: [
+        // 操作栏与格式分组共同纵向滚动，分组内保留横向曲目浏览。
+        for (final fmt in formatOrder)
+          if (formatBuckets.containsKey(fmt) && formatBuckets[fmt]!.isNotEmpty)
+            _buildFormatSection(
+              fmt: fmt,
+              tracks: formatBuckets[fmt]!,
+              currentPlaying: currentPlayingTrack,
+              isEnginePlaying: isEnginePlaying,
+              accent: accent,
+            ),
+        const SizedBox(height: 20.0),
       ],
     );
   }
@@ -339,11 +599,12 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
     required bool isEnginePlaying,
     required Color accent,
   }) {
-    final meta = formatMeta[fmt] ?? {
-      'title': '未知格式',
-      'subtitle': '',
-      'tag': '本地音频',
-    };
+    final meta = formatMeta[fmt] ??
+        {
+          'title': '未知格式',
+          'subtitle': '',
+          'tag': '本地音频',
+        };
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 24.0),
@@ -380,40 +641,38 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
                 physics: const BouncingScrollPhysics(),
                 itemCount: tracks.length,
                 separatorBuilder: (context, _) => const SizedBox(width: 16.0),
+                itemBuilder: (context, index) {
+                  final track = tracks[index];
+                  final isPlaying = currentPlaying != null &&
+                      currentPlaying.matches(track) &&
+                      isEnginePlaying;
+                  final isSelected = _selectedTrackIds.contains(track.id);
 
-              itemBuilder: (context, index) {
-                final track = tracks[index];
-                final isPlaying = currentPlaying != null &&
-                    currentPlaying.matches(track) &&
-                    isEnginePlaying;
-                final isSelected = _selectedTrackIds.contains(track.id);
-
-                return MacMusicItemWidget(
-                  track: track,
-                  categoryTag: meta['tag']!,
-                  isEditMode: _isEditMode,
-                  isSelected: isSelected,
-                  isPlaying: isPlaying,
-
-                  onTap: () {
-                    if (_isEditMode) {
-                      setState(() {
-                        if (isSelected) {
-                          _selectedTrackIds.remove(track.id);
-                        } else {
-                          _selectedTrackIds.add(track.id);
-                        }
-                      });
-                    } else {
-                      HifiAudioService.instance.playTrack(track, tracks, index);
-                    }
-                  },
-                );
-              },
+                  return MacMusicItemWidget(
+                    track: track,
+                    categoryTag: meta['tag']!,
+                    isEditMode: _isEditMode,
+                    isSelected: isSelected,
+                    isPlaying: isPlaying,
+                    onTap: () {
+                      if (_isEditMode) {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedTrackIds.remove(track.id);
+                          } else {
+                            _selectedTrackIds.add(track.id);
+                          }
+                        });
+                      } else {
+                        HifiAudioService.instance
+                            .playTrack(track, tracks, index);
+                      }
+                    },
+                  );
+                },
+              ),
             ),
           ),
-        ),
-
         ],
       ),
     );
@@ -432,11 +691,24 @@ class _SearchIconPainter extends CustomPainter {
     const lensR = 30.0;
 
     // 1. 镜片半透明微光底板
-    canvas.drawCircle(c, lensR - 2.0, Paint()..color = const Color.fromRGBO(255, 255, 255, 0.08));
+    canvas.drawCircle(c, lensR - 2.0,
+        Paint()..color = const Color.fromRGBO(255, 255, 255, 0.08));
 
     // 2. 外部主镜框 (主题色外发光)
-    canvas.drawCircle(c, lensR + 2.5, Paint()..color = accentColor.withValues(alpha: 0.2)..style = PaintingStyle.stroke..strokeWidth = 2.0);
-    canvas.drawCircle(c, lensR, Paint()..color = accentColor..style = PaintingStyle.stroke..strokeWidth = 3.5);
+    canvas.drawCircle(
+        c,
+        lensR + 2.5,
+        Paint()
+          ..color = accentColor.withValues(alpha: 0.2)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0);
+    canvas.drawCircle(
+        c,
+        lensR,
+        Paint()
+          ..color = accentColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.5);
 
     // 3. 镜片弧光反射 (左上圆弧高光)
     canvas.drawArc(
@@ -444,26 +716,47 @@ class _SearchIconPainter extends CustomPainter {
       -2.4,
       1.5,
       false,
-      Paint()..color = const Color.fromRGBO(255, 255, 255, 0.65)..style = PaintingStyle.stroke..strokeWidth = 2.0..strokeCap = StrokeCap.round,
+      Paint()
+        ..color = const Color.fromRGBO(255, 255, 255, 0.65)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..strokeCap = StrokeCap.round,
     );
 
     // 4. 镜内探索引导小圆
-    canvas.drawCircle(c, lensR * 0.38, Paint()..color = accentColor.withValues(alpha: 0.15));
-    canvas.drawCircle(c, lensR * 0.38, Paint()..color = accentColor..style = PaintingStyle.stroke..strokeWidth = 2.0);
+    canvas.drawCircle(
+        c, lensR * 0.38, Paint()..color = accentColor.withValues(alpha: 0.15));
+    canvas.drawCircle(
+        c,
+        lensR * 0.38,
+        Paint()
+          ..color = accentColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0);
 
     // 5. 45度斜向手柄
     final hStart = Offset(c.dx + lensR * 0.7071, c.dy + lensR * 0.7071);
     final hEnd = Offset(hStart.dx + 26.0, hStart.dy + 26.0);
-    canvas.drawLine(hStart, hEnd, Paint()..color = accentColor..strokeWidth = 5.5..strokeCap = StrokeCap.round);
+    canvas.drawLine(
+        hStart,
+        hEnd,
+        Paint()
+          ..color = accentColor
+          ..strokeWidth = 5.5
+          ..strokeCap = StrokeCap.round);
     canvas.drawLine(
       Offset(hStart.dx + 1.2, hStart.dy + 1.2),
       Offset(hEnd.dx - 2.5, hEnd.dy - 2.5),
-      Paint()..color = const Color.fromRGBO(255, 255, 255, 0.45)..strokeWidth = 1.8..strokeCap = StrokeCap.round,
+      Paint()
+        ..color = const Color.fromRGBO(255, 255, 255, 0.45)
+        ..strokeWidth = 1.8
+        ..strokeCap = StrokeCap.round,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _SearchIconPainter old) => old.accentColor != accentColor;
+  bool shouldRepaint(covariant _SearchIconPainter old) =>
+      old.accentColor != accentColor;
 }
 
 /// 扫描态纯净宇宙太阳光球与星芒激光流绘制器 (1:1 严格对齐 C++ ScanMusicWidget::drawLaserWarpAnimation)
@@ -486,7 +779,8 @@ class _CosmicWarpPainter extends CustomPainter {
     ));
 
     final center = Offset(size.width / 2, size.height / 2);
-    final maxDist = math.sqrt(center.dx * center.dx + center.dy * center.dy) + 40.0;
+    final maxDist =
+        math.sqrt(center.dx * center.dx + center.dy * center.dy) + 40.0;
 
     final r = (accentColor.r * 255).round();
     final g = (accentColor.g * 255).round();
@@ -511,7 +805,8 @@ class _CosmicWarpPainter extends CustomPainter {
 
       // 连续长光束延伸
       final rStart = 18.0 + progress * 50.0;
-      final rEnd = math.min(maxDist, rStart + 80.0 + (progress * progress) * (maxDist - 80.0));
+      final rEnd = math.min(
+          maxDist, rStart + 80.0 + (progress * progress) * (maxDist - 80.0));
 
       final x1 = center.dx + math.cos(angle) * rStart;
       final y1 = center.dy + math.sin(angle) * (rStart * 0.90);
@@ -535,7 +830,8 @@ class _CosmicWarpPainter extends CustomPainter {
         final midX = x1 + (x2 - x1) * 0.5;
         final midY = y1 + (y2 - y1) * 0.5;
         final corePaint = Paint()
-          ..color = Color.fromARGB((alpha * 0.65).round().clamp(0, 255), rLight, gLight, bLight)
+          ..color = Color.fromARGB(
+              (alpha * 0.65).round().clamp(0, 255), rLight, gLight, bLight)
           ..strokeWidth = 1.0;
         canvas.drawLine(Offset(midX, midY), Offset(x2, y2), corePaint);
       }
@@ -576,7 +872,9 @@ class _CosmicWarpPainter extends CustomPainter {
         canvas.drawCircle(
           Offset(px, py),
           haloR,
-          Paint()..color = Color.fromARGB((pAlpha * 0.35).round().clamp(0, 255), r, g, b),
+          Paint()
+            ..color =
+                Color.fromARGB((pAlpha * 0.35).round().clamp(0, 255), r, g, b),
         );
         canvas.drawCircle(
           Offset(px, py),
@@ -589,13 +887,18 @@ class _CosmicWarpPainter extends CustomPainter {
         canvas.drawCircle(
           Offset(px, py),
           pSize * 2.0,
-          Paint()..color = Color.fromARGB((pAlpha * 0.45).round().clamp(0, 255), r, g, b),
+          Paint()
+            ..color =
+                Color.fromARGB((pAlpha * 0.45).round().clamp(0, 255), r, g, b),
         );
         final flarePaint = Paint()
-          ..color = Color.fromARGB((pAlpha * 0.85).round().clamp(0, 255), rLight, gLight, bLight)
+          ..color = Color.fromARGB(
+              (pAlpha * 0.85).round().clamp(0, 255), rLight, gLight, bLight)
           ..strokeWidth = 1.0;
-        canvas.drawLine(Offset(px - flareLen, py), Offset(px + flareLen, py), flarePaint);
-        canvas.drawLine(Offset(px, py - flareLen), Offset(px, py + flareLen), flarePaint);
+        canvas.drawLine(
+            Offset(px - flareLen, py), Offset(px + flareLen, py), flarePaint);
+        canvas.drawLine(
+            Offset(px, py - flareLen), Offset(px, py + flareLen), flarePaint);
         canvas.drawCircle(
           Offset(px, py),
           1.5,
@@ -610,10 +913,14 @@ class _CosmicWarpPainter extends CustomPainter {
     final pulse = 1.0 + 0.03 * math.sin(timer * 2.5);
 
     // 1. 广域深空外日冕柔和微光辉晕 (由 36px 向外平滑渐隐入深空背景)
-    canvas.drawCircle(center, 36.0 * pulse, Paint()..color = Color.fromARGB(20, r, g, b));
-    canvas.drawCircle(center, 28.0 * pulse, Paint()..color = Color.fromARGB(45, r, g, b));
-    canvas.drawCircle(center, 21.0 * pulse, Paint()..color = Color.fromARGB(85, r, g, b));
-    canvas.drawCircle(center, 15.0 * pulse, Paint()..color = Color.fromARGB(140, r, g, b));
+    canvas.drawCircle(
+        center, 36.0 * pulse, Paint()..color = Color.fromARGB(20, r, g, b));
+    canvas.drawCircle(
+        center, 28.0 * pulse, Paint()..color = Color.fromARGB(45, r, g, b));
+    canvas.drawCircle(
+        center, 21.0 * pulse, Paint()..color = Color.fromARGB(85, r, g, b));
+    canvas.drawCircle(
+        center, 15.0 * pulse, Paint()..color = Color.fromARGB(140, r, g, b));
 
     // 2. 高温过渡色球层 (由主题色经由白炽过渡)
     final r1 = (r + (255 - r) * 0.40).round().clamp(0, 255);
@@ -628,12 +935,16 @@ class _CosmicWarpPainter extends CustomPainter {
     final g3 = (g + (255 - g) * 0.90).round().clamp(0, 255);
     final b3 = (b + (255 - b) * 0.90).round().clamp(0, 255);
 
-    canvas.drawCircle(center, 11.0 * pulse, Paint()..color = Color.fromARGB(190, r1, g1, b1));
-    canvas.drawCircle(center, 7.5 * pulse, Paint()..color = Color.fromARGB(230, r2, g2, b2));
-    canvas.drawCircle(center, 5.0 * pulse, Paint()..color = Color.fromARGB(250, r3, g3, b3));
+    canvas.drawCircle(
+        center, 11.0 * pulse, Paint()..color = Color.fromARGB(190, r1, g1, b1));
+    canvas.drawCircle(
+        center, 7.5 * pulse, Paint()..color = Color.fromARGB(230, r2, g2, b2));
+    canvas.drawCircle(
+        center, 5.0 * pulse, Paint()..color = Color.fromARGB(250, r3, g3, b3));
 
     // 3. 极热白炽恒星核 (100% 纯净白炽圆球)
-    canvas.drawCircle(center, 3.2 * pulse, Paint()..color = const Color.fromARGB(255, 255, 255, 255));
+    canvas.drawCircle(center, 3.2 * pulse,
+        Paint()..color = const Color.fromARGB(255, 255, 255, 255));
 
     canvas.restore();
   }

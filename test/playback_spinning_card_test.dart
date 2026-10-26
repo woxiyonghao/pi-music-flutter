@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
 import 'package:hide_player_flutter/models/track.dart';
+import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:hide_player_flutter/services/theme_service.dart';
 import 'package:hide_player_flutter/ui/mac/views/mac_scan_music_view.dart';
 import 'package:hide_player_flutter/ui/mac/widgets/mac_music_item_widget.dart';
@@ -31,11 +32,26 @@ void main() {
     durationSec: 290,
   );
 
-  tearDown(() {
-    HifiAudioService.instance.pause();
+  late List<Track> previousTracks;
+  setUp(() {
+    final library = MusicDatabaseService.instance;
+    previousTracks = List<Track>.of(library.tracks);
+    library.tracks
+      ..clear()
+      ..addAll([testTrack1, testTrack2]);
   });
 
-  testWidgets('MacMusicItemWidget automatically spins when current track plays without hover',
+  tearDown(() {
+    HifiAudioService.instance
+      ..pause()
+      ..stopTicker();
+    MusicDatabaseService.instance.tracks
+      ..clear()
+      ..addAll(previousTracks);
+  });
+
+  testWidgets(
+      'MacMusicItemWidget automatically spins when current track plays without hover',
       (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -65,20 +81,23 @@ void main() {
     expect(initialText.style?.color, isNot(accent));
 
     // 2. Play testTrack1 via HifiAudioService
-    HifiAudioService.instance.playTrack(testTrack1, [testTrack1, testTrack2], 0);
+    HifiAudioService.instance
+        .playTrack(testTrack1, [testTrack1, testTrack2], 0);
     await tester.pump(const Duration(milliseconds: 50));
 
     // Title should now immediately turn into accent color
     final Text playingText = tester.widget(track1TextFinder);
     expect(playingText.style?.color, accent,
-        reason: 'Current playing track title must turn accent color without hover');
+        reason:
+            'Current playing track title must turn accent color without hover');
 
     // testTrack2 should not be accent color
     final Text track2Text = tester.widget(find.text('爱上你等于爱上寂寞'));
     expect(track2Text.style?.color, isNot(accent));
 
     // 3. Switch to testTrack2 via audio service (simulating auto next or remote control)
-    HifiAudioService.instance.playTrack(testTrack2, [testTrack1, testTrack2], 1);
+    HifiAudioService.instance
+        .playTrack(testTrack2, [testTrack1, testTrack2], 1);
     await tester.pump(const Duration(milliseconds: 50));
 
     final Text track1Updated = tester.widget(track1TextFinder);
@@ -98,10 +117,13 @@ void main() {
         reason: 'Paused track should reset active play styling');
   });
 
-  testWidgets('MacScanMusicView inside IndexedStack immediately responds to playback without tab switch',
+  testWidgets(
+      'MacScanMusicView inside IndexedStack immediately responds to playback without tab switch',
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
       const MaterialApp(
@@ -118,7 +140,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     // Find the first track in MacScanMusicView
-    final firstTrackFinder = find.text('decaud-goldberg-var5-dsd128');
+    final firstTrackFinder = find.text(testTrack1.title);
     expect(firstTrackFinder, findsOneWidget);
 
     final accent = ThemeService.instance.accentColor;
@@ -132,7 +154,7 @@ void main() {
     // Must be playing and highlighted in accent color immediately, WITHOUT tab switch!
     final Text playingText = tester.widget(firstTrackFinder);
     expect(playingText.style?.color, accent,
-        reason: 'Track must immediately highlight in accent color upon play without tab switch');
+        reason:
+            'Track must immediately highlight in accent color upon play without tab switch');
   });
 }
-

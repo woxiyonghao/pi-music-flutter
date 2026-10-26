@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/platform_helper.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../services/ota_update_service.dart';
@@ -8,6 +9,7 @@ import '../../../services/web_remote_service.dart';
 import '../../../services/wifi_transfer_service.dart';
 import '../../../theme/ui_config.dart';
 import '../../common/glass_card.dart';
+import '../../common/module_scroll_view.dart';
 
 /// Web服务模块 (合并 Web 远程遥控与 WiFi 传歌，1:1 对齐 C++ WebServiceView.cpp 与 WifiTransferView.cpp)
 class MacWebServiceView extends StatefulWidget {
@@ -34,6 +36,16 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
     _activeSubModule = widget.isWifiTransfer ? 1 : 0;
     _ipInputController =
         TextEditingController(text: WebRemoteService.instance.localIp);
+    _refreshIps();
+  }
+
+  void _refreshIps() async {
+    final ip = await WebRemoteService.instance.refreshIp();
+    await WifiTransferService.instance.refreshIp();
+    if (mounted) {
+      _ipInputController.text = ip;
+      setState(() {});
+    }
   }
 
   @override
@@ -60,14 +72,40 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
     if (!WebRemoteService.instance.isRunning) {
       await WebRemoteService.instance.start();
     }
-    _openUrl(url);
+    if (Platform.isIOS || Platform.isAndroid) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已复制 Web 遥控网址至剪贴板: $url\n请在同一局域网电脑/手机浏览器打开即可远程控制'),
+            backgroundColor: const Color(0xFF3B82F6),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } else {
+      _openUrl(url);
+    }
   }
 
   void _openWifiUrl(String url) async {
     if (!WifiTransferService.instance.isRunning) {
       await WifiTransferService.instance.start();
     }
-    _openUrl(url);
+    if (Platform.isIOS || Platform.isAndroid) {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已复制传歌网址至剪贴板: $url\n请在同一局域网电脑浏览器访问此地址，直接拖拽上传歌曲'),
+            backgroundColor: const Color(0xFF10B981),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } else {
+      _openUrl(url);
+    }
   }
 
   @override
@@ -86,93 +124,95 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
         return GlassCard(
           borderRadius: UIConfig.containerRounding,
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 顶部标题与子模块切换药丸
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        const Text(
-                          'Web 服务',
-                          style: TextStyle(
-                            fontSize: UIConfig.fontMedium,
-                            fontWeight: FontWeight.bold,
-                            color: UIConfig.textActive,
-                          ),
-                        ),
-                        const SizedBox(width: 12.0),
-                        Expanded(
-                          child: Text(
-                            _activeSubModule == 0
-                                ? '当前设备: macOS Desktop · 支持旧手机/平板当数播主机 · 双向毫秒级遥控'
-                                : '同一局域网下电脑或手机免线拖拽传输 · 即传即播 · 自动扫描入库',
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                            style: const TextStyle(
-                              fontSize: UIConfig.fontSmall,
-                              color: UIConfig.textMuted,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16.0),
-
-                  // 顶部子模块药丸切换组
-                  Container(
-                    padding: const EdgeInsets.all(2.0),
-                    decoration: BoxDecoration(
-                      color: const Color.fromRGBO(20, 26, 36, 0.8),
-                      borderRadius: BorderRadius.circular(8.0),
-                      border: Border.all(
-                        color: const Color.fromRGBO(255, 255, 255, 0.1),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        _buildSubModulePill(
-                          index: 0,
-                          label: 'Web 远程控制',
-                          isActive: _activeSubModule == 0,
-                          accent: accent,
-                        ),
-                        _buildSubModulePill(
-                          index: 1,
-                          label: 'WiFi 局域网传歌',
-                          isActive: _activeSubModule == 1,
-                          accent: accent,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+          child: ModuleScrollView(
+            storageId: 'web-module-scroll',
+            platform: widget.platform,
+            header: [
+              _buildHeader(accent),
               const SizedBox(height: 16.0),
-
-              // 核心内容区
-              Expanded(
-                child: ListView(
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    if (_activeSubModule == 0) ..._buildWebRemoteSection(accent),
-                    if (_activeSubModule == 1) ..._buildWifiTransferSection(accent),
-                  ],
-                ),
-              ),
+            ],
+            children: [
+              if (_activeSubModule == 0) ..._buildWebRemoteSection(accent),
+              if (_activeSubModule == 1) ..._buildWifiTransferSection(accent),
             ],
           ),
         );
       },
     );
   }
+
+  Widget _buildHeader(Color accent) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final activePlatform = widget.platform ?? PlatformHelper.currentPlatform;
+        final isIphone = activePlatform == HifiPlatformType.iphone ||
+            activePlatform == HifiPlatformType.android;
+        final subtitle =
+            _activeSubModule == 0 ? '电脑 / 平板远程遥控 · 实时同步播放状态' : '局域网传歌 · 自动扫描入库';
+        const heading = Text('Web 服务',
+            style: TextStyle(
+                fontSize: UIConfig.fontMedium,
+                fontWeight: FontWeight.bold,
+                color: UIConfig.textActive));
+        final title = isIphone
+            ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                heading,
+                const SizedBox(height: 3),
+                Text(subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: UIConfig.fontSmall,
+                        color: UIConfig.textMuted)),
+              ])
+            : Row(children: [
+                heading,
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: UIConfig.fontSmall,
+                            color: UIConfig.textMuted))),
+              ]);
+        final modules = Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: const Color.fromRGBO(20, 26, 36, 0.8),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            _buildSubModulePill(
+                index: 0,
+                label: 'Web 远程控制',
+                isActive: _activeSubModule == 0,
+                accent: accent),
+            _buildSubModulePill(
+                index: 1,
+                label: 'WiFi 局域网传歌',
+                isActive: _activeSubModule == 1,
+                accent: accent),
+          ]),
+        );
+        if (!isIphone && constraints.maxWidth < 600) {
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                title,
+                const SizedBox(height: 8),
+                modules,
+              ]);
+        }
+        return Row(
+            crossAxisAlignment:
+                isIphone ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+            children: [
+              Expanded(child: title),
+              SizedBox(width: isIphone ? 12 : 16),
+              modules
+            ]);
+      });
 
   Widget _buildSubModulePill({
     required int index,
@@ -254,14 +294,17 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                         ),
                       ),
                       const SizedBox(width: 8.0),
-                      Text(
-                        isRunning
-                            ? '【本机数播服务运行中】 ${clientCount > 0 ? clientCount : 1} 线程 $port 端口在线'
-                            : '【本机数播服务已停止】 0 线程 0 端口开销',
-                        style: const TextStyle(
-                          fontSize: UIConfig.fontRegular,
-                          fontWeight: FontWeight.w600,
-                          color: UIConfig.textActive,
+                      Expanded(
+                        child: Text(
+                          isRunning
+                              ? '【本机数播服务运行中】 $clientCount 个遥控连接 · 端口 $port'
+                              : '【本机数播服务已停止】',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: UIConfig.fontRegular,
+                            fontWeight: FontWeight.w600,
+                            color: UIConfig.textActive,
+                          ),
                         ),
                       ),
                     ],
@@ -277,14 +320,17 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            '遥控访问网址: $webUrl',
-                            style: const TextStyle(
-                              fontSize: UIConfig.fontSmall,
-                              color: Color(0xFF64B5F6),
-                              fontFamily: 'monospace',
-                              decoration: TextDecoration.underline,
-                              decorationColor: Color(0xFF64B5F6),
+                          Flexible(
+                            child: Text(
+                              '遥控访问网址: $webUrl',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: UIConfig.fontSmall,
+                                color: Color(0xFF64B5F6),
+                                fontFamily: 'monospace',
+                                decoration: TextDecoration.underline,
+                                decorationColor: Color(0xFF64B5F6),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6.0),
@@ -300,7 +346,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
                   const SizedBox(height: 4.0),
                   Text(
-                    'WebSocket 通道: $wsUrl · 网络: 局域网在线',
+                    'WebSocket 通道: $wsUrl · ${isRunning ? '服务已开启' : '服务未开启'}',
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 11.5,
                       color: UIConfig.textMuted,
@@ -308,7 +355,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                   ),
                   const SizedBox(height: 3.0),
                   const Text(
-                    '提示: 仅在开启服务后才占用系统端口和后台线程，平时开启 0 损耗',
+                    '提示：请连接同一局域网，并保持应用在前台以使用遥控和 WiFi 传歌。',
                     style: TextStyle(
                       fontSize: 11.0,
                       color: UIConfig.textMuted,
@@ -328,7 +375,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
               },
               borderRadius: BorderRadius.circular(6.0),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 10.0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 22.0, vertical: 10.0),
                 decoration: BoxDecoration(
                   color: isRunning
                       ? const Color.fromRGBO(239, 68, 68, 0.2)
@@ -365,49 +413,79 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('在线遥控设备', style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted)),
+                  const Text('在线遥控设备',
+                      style:
+                          TextStyle(fontSize: 11.5, color: UIConfig.textMuted)),
                   const SizedBox(height: 6.0),
-                  Text('$clientCount 台设备', style: const TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold, color: UIConfig.textActive)),
+                  Text('$clientCount 个连接',
+                      style: const TextStyle(
+                          fontSize: 18.0,
+                          fontWeight: FontWeight.bold,
+                          color: UIConfig.textActive)),
                   const SizedBox(height: 4.0),
-                  const Text('WebSocket 长连接保活', style: TextStyle(fontSize: 11.0, color: UIConfig.textMuted)),
+                  const Text('当前 WebSocket 连接',
+                      style:
+                          TextStyle(fontSize: 11.0, color: UIConfig.textMuted)),
                 ],
               ),
             ),
-            Container(width: 1.0, height: 50.0, color: const Color.fromRGBO(255, 255, 255, 0.08)),
+            Container(
+                width: 1.0,
+                height: 50.0,
+                color: const Color.fromRGBO(255, 255, 255, 0.08)),
             const SizedBox(width: 20.0),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('当前同步在播曲目', style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted)),
+                  const Text('当前同步在播曲目',
+                      style:
+                          TextStyle(fontSize: 11.5, color: UIConfig.textMuted)),
                   const SizedBox(height: 6.0),
                   Text(
-                    track != null ? '${track.title} - ${track.artist}' : '暂未载入曲目 - 未知',
-                    style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: UIConfig.textActive),
+                    track != null
+                        ? '${track.title} - ${track.artist}'
+                        : '暂未载入曲目 - 未知',
+                    style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: UIConfig.textActive),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
                   ),
                   const SizedBox(height: 4.0),
                   Text(
                     isPlaying
-                        ? '状态: 正在同步在播 (毫秒级)'
+                        ? '状态: 正在同步播放'
                         : (isPaused ? '状态: 已暂停' : '状态: 待机/空闲就绪'),
-                    style: const TextStyle(fontSize: 11.0, color: UIConfig.textMuted),
+                    style: const TextStyle(
+                        fontSize: 11.0, color: UIConfig.textMuted),
                   ),
                 ],
               ),
             ),
-            Container(width: 1.0, height: 50.0, color: const Color.fromRGBO(255, 255, 255, 0.08)),
+            Container(
+                width: 1.0,
+                height: 50.0,
+                color: const Color.fromRGBO(255, 255, 255, 0.08)),
             const SizedBox(width: 20.0),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('旧手机防休眠模式', style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted)),
+                  Text('连接使用提示',
+                      style:
+                          TextStyle(fontSize: 11.5, color: UIConfig.textMuted)),
                   SizedBox(height: 6.0),
-                  Text('已开启 (屏幕常亮)', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: Color(0xFF10B981))),
+                  Text('保持应用在前台',
+                      style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF10B981))),
                   SizedBox(height: 4.0),
-                  Text('网络心跳不中断', style: TextStyle(fontSize: 11.0, color: UIConfig.textMuted)),
+                  Text('休眠由系统控制',
+                      style:
+                          TextStyle(fontSize: 11.0, color: UIConfig.textMuted)),
                 ],
               ),
             ),
@@ -422,7 +500,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '【客户端模式】连接局域网内的其他数播设备 (树莓派 / 旧手机数播)',
+              '【客户端模式】连接局域网内的其他数播设备',
               style: TextStyle(
                 fontSize: UIConfig.fontSmall,
                 fontWeight: FontWeight.bold,
@@ -451,12 +529,14 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                       fontFamily: 'monospace',
                     ),
                     decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 6.0),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10.0, vertical: 6.0),
                       filled: true,
                       fillColor: const Color.fromRGBO(10, 14, 20, 0.8),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(5.0),
-                        borderSide: const BorderSide(color: Color.fromRGBO(255, 255, 255, 0.15)),
+                        borderSide: const BorderSide(
+                            color: Color.fromRGBO(255, 255, 255, 0.15)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(5.0),
@@ -489,7 +569,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.open_in_browser, size: 14.0, color: Color(0xFF10B981)),
+                        Icon(Icons.open_in_browser,
+                            size: 14.0, color: Color(0xFF10B981)),
                         SizedBox(width: 6.0),
                         Text(
                           '在浏览器中接管遥控',
@@ -524,16 +605,19 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
             ),
             SizedBox(height: 8.0),
             Text(
-              '1. 硬件连接直通: 旧 iPhone / iPad (Lightning/Type-C 转接线) 或 Android (OTG 线) 直接连接外置 USB DAC 或发烧耳放小尾巴。',
-              style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
+              '1. 硬件连接直通: Android 手机通过 Type-C / OTG 转接线直接连接外置 USB DAC 或发烧耳放小尾巴。',
+              style: TextStyle(
+                  fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
             ),
             Text(
-              '2. 极致纯净电池供电: 旧手机自带锂电池供电，天然隔绝 220V 市电高频杂波，底噪比普通 PC 和劣质开关电源更低！',
-              style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
+              '2. 稳定供电: 使用 USB DAC 时确保手机与外设电量充足；高功耗设备可能需要带供电的 USB 转接器。',
+              style: TextStyle(
+                  fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
             ),
             Text(
-              '3. 免路由器热点直连: 即使在展会或无 Wi-Fi 环境，旧手机开启「个人热点」，主力机连入即可通过 172.20.10.1:8088 畅快遥控。',
-              style: TextStyle(fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
+              '3. 网络连接: 遥控设备和播放器需连接同一 Wi-Fi 或热点；请使用本页面显示的实际访问网址。',
+              style: TextStyle(
+                  fontSize: 11.5, color: UIConfig.textMuted, height: 1.5),
             ),
           ],
         ),
@@ -541,54 +625,56 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
       const SizedBox(height: 12.0),
 
       // 卡片 5：系统在线 OTA 升级 (通过 Git 远程极速检查更新与一键热升级)
-      if (PlatformHelper.supportsGitOta(widget.platform ?? PlatformHelper.currentPlatform))
-      _buildCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.system_update_alt, size: 16.0, color: accent),
-                          const SizedBox(width: 8.0),
-                          const Text(
-                            '【系统在线 OTA 升级】Git 云端远程固件与应用热更新',
-                            style: TextStyle(
-                              fontSize: UIConfig.fontSmall,
-                              fontWeight: FontWeight.bold,
-                              color: UIConfig.textActive,
+      if (PlatformHelper.supportsGitOta(
+          widget.platform ?? PlatformHelper.currentPlatform))
+        _buildCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.system_update_alt,
+                                size: 16.0, color: accent),
+                            const SizedBox(width: 8.0),
+                            const Text(
+                              '【系统在线 OTA 升级】Git 云端远程固件与应用热更新',
+                              style: TextStyle(
+                                fontSize: UIConfig.fontSmall,
+                                fontWeight: FontWeight.bold,
+                                color: UIConfig.textActive,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4.0),
-                      const Text(
-                        '支持 macOS 桌面端与树莓派 Linux 硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: UIConfig.textMuted,
+                          ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4.0),
+                        const Text(
+                          '支持 macOS 桌面端与树莓派 Linux 硬件直连 GitHub 官方源码库 · 差量秒级升级 · 自动编译部署',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: UIConfig.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16.0),
-                _buildOtaActionButton(accent),
-              ],
-            ),
-            const SizedBox(height: 12.0),
-            _buildOtaVersionBanner(accent),
-            ..._buildOtaDetails(accent),
-          ],
+                  const SizedBox(width: 16.0),
+                  _buildOtaActionButton(accent),
+                ],
+              ),
+              const SizedBox(height: 12.0),
+              _buildOtaVersionBanner(accent),
+              ..._buildOtaDetails(accent),
+            ],
+          ),
         ),
-      ),
     ];
   }
 
@@ -626,7 +712,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                   const SizedBox(width: 8.0),
                   Text(
                     '(${ota.currentDate})',
-                    style: const TextStyle(fontSize: 11.0, color: UIConfig.textMuted),
+                    style: const TextStyle(
+                        fontSize: 11.0, color: UIConfig.textMuted),
                   ),
                 ],
               ],
@@ -692,7 +779,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
   Widget _buildOtaActionButton(Color accent) {
     final ota = OtaUpdateService.instance;
-    final isBusy = ota.status == OtaStatus.checking || ota.status == OtaStatus.updating;
+    final isBusy =
+        ota.status == OtaStatus.checking || ota.status == OtaStatus.updating;
 
     if (ota.status == OtaStatus.updateAvailable) {
       return InkWell(
@@ -764,9 +852,7 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
               : accent.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(6.0),
           border: Border.all(
-            color: isBusy
-                ? const Color.fromRGBO(255, 255, 255, 0.15)
-                : accent,
+            color: isBusy ? const Color.fromRGBO(255, 255, 255, 0.15) : accent,
           ),
         ),
         child: Row(
@@ -803,7 +889,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
   List<Widget> _buildOtaDetails(Color accent) {
     final ota = OtaUpdateService.instance;
     return [
-      if (ota.status == OtaStatus.checking || ota.status == OtaStatus.updating) ...[
+      if (ota.status == OtaStatus.checking ||
+          ota.status == OtaStatus.updating) ...[
         const SizedBox(height: 10.0),
         ClipRRect(
           borderRadius: BorderRadius.circular(4.0),
@@ -820,7 +907,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
           style: const TextStyle(fontSize: 11.0, color: Color(0xFF64B5F6)),
         ),
       ],
-      if (ota.status == OtaStatus.updateAvailable && ota.changelog.isNotEmpty) ...[
+      if (ota.status == OtaStatus.updateAvailable &&
+          ota.changelog.isNotEmpty) ...[
         const SizedBox(height: 10.0),
         Container(
           width: double.infinity,
@@ -835,7 +923,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.new_releases, size: 14.0, color: Color(0xFFFFB300)),
+                  const Icon(Icons.new_releases,
+                      size: 14.0, color: Color(0xFFFFB300)),
                   const SizedBox(width: 6.0),
                   Text(
                     '待升级云端提交 (${ota.pendingCommitCount} 个新提交):',
@@ -865,7 +954,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
         const SizedBox(height: 8.0),
         const Row(
           children: [
-            Icon(Icons.check_circle_outline, size: 14.0, color: Color(0xFF10B981)),
+            Icon(Icons.check_circle_outline,
+                size: 14.0, color: Color(0xFF10B981)),
             SizedBox(width: 6.0),
             Text(
               '当前已是最新纯音发烧版本，运行代码与 GitHub 官方源完全一致',
@@ -878,12 +968,14 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
         const SizedBox(height: 8.0),
         Row(
           children: [
-            const Icon(Icons.error_outline, size: 14.0, color: Color(0xFFEF4444)),
+            const Icon(Icons.error_outline,
+                size: 14.0, color: Color(0xFFEF4444)),
             const SizedBox(width: 6.0),
             Expanded(
               child: Text(
                 ota.errorMessage,
-                style: const TextStyle(fontSize: 11.0, color: Color(0xFFEF4444)),
+                style:
+                    const TextStyle(fontSize: 11.0, color: Color(0xFFEF4444)),
               ),
             ),
           ],
@@ -937,14 +1029,15 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                         ),
                       ),
                       const SizedBox(width: 8.0),
-                      Text(
-                        isRunning
-                            ? '无线传歌服务正在运行中 (端口: $port)'
-                            : '无线传歌服务已停止',
-                        style: const TextStyle(
-                          fontSize: UIConfig.fontRegular,
-                          fontWeight: FontWeight.w600,
-                          color: UIConfig.textActive,
+                      Expanded(
+                        child: Text(
+                          isRunning ? '无线传歌服务正在运行中 (端口: $port)' : '无线传歌服务已停止',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: UIConfig.fontRegular,
+                            fontWeight: FontWeight.w600,
+                            color: UIConfig.textActive,
+                          ),
                         ),
                       ),
                     ],
@@ -960,14 +1053,17 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            '传歌网址: $wifiUrl',
-                            style: const TextStyle(
-                              fontSize: UIConfig.fontSmall,
-                              color: Color(0xFF64B5F6),
-                              fontFamily: 'monospace',
-                              decoration: TextDecoration.underline,
-                              decorationColor: Color(0xFF64B5F6),
+                          Flexible(
+                            child: Text(
+                              '传歌网址: $wifiUrl',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: UIConfig.fontSmall,
+                                color: Color(0xFF64B5F6),
+                                fontFamily: 'monospace',
+                                decoration: TextDecoration.underline,
+                                decorationColor: Color(0xFF64B5F6),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 6.0),
@@ -983,7 +1079,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
 
                   const SizedBox(height: 4.0),
                   Text(
-                    '局域网在线 · 存储路径: $targetDir',
+                    '${isRunning ? '传歌服务已开启' : '传歌服务未开启'} · 存储路径: $targetDir',
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 11.5,
                       color: UIConfig.textMuted,
@@ -1003,7 +1100,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
               },
               borderRadius: BorderRadius.circular(6.0),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 10.0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 22.0, vertical: 10.0),
                 decoration: BoxDecoration(
                   color: isRunning
                       ? const Color.fromRGBO(239, 68, 68, 0.2)
@@ -1083,7 +1181,8 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                     onTap: () => wifiService.clearTransferHistory(),
                     child: const Text(
                       '清空清单',
-                      style: TextStyle(fontSize: 11.0, color: UIConfig.textMuted),
+                      style:
+                          TextStyle(fontSize: 11.0, color: UIConfig.textMuted),
                     ),
                   ),
               ],
@@ -1100,29 +1199,34 @@ class _MacWebServiceViewState extends State<MacWebServiceView> {
                   padding: const EdgeInsets.symmetric(vertical: 4.0),
                   child: Row(
                     children: [
-                      const Icon(Icons.music_note, size: 16.0, color: Color(0xFF10B981)),
+                      const Icon(Icons.music_note,
+                          size: 16.0, color: Color(0xFF10B981)),
                       const SizedBox(width: 8.0),
                       Expanded(
                         child: Text(
                           file.name,
-                          style: const TextStyle(fontSize: 12.0, color: UIConfig.textActive),
+                          style: const TextStyle(
+                              fontSize: 12.0, color: UIConfig.textActive),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Text(
                         '${file.formattedSize} · ${file.formattedTime}',
-                        style: const TextStyle(fontSize: 11.0, color: UIConfig.textMuted),
+                        style: const TextStyle(
+                            fontSize: 11.0, color: UIConfig.textMuted),
                       ),
                       const SizedBox(width: 8.0),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6.0, vertical: 2.0),
                         decoration: BoxDecoration(
                           color: const Color.fromRGBO(16, 185, 129, 0.2),
                           borderRadius: BorderRadius.circular(4.0),
                         ),
                         child: const Text(
                           '已入库 ✓',
-                          style: TextStyle(fontSize: 10.0, color: Color(0xFF10B981)),
+                          style: TextStyle(
+                              fontSize: 10.0, color: Color(0xFF10B981)),
                         ),
                       ),
                     ],

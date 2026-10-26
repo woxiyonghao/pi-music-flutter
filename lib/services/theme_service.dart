@@ -109,6 +109,16 @@ class ThemeService extends ChangeNotifier {
       peakColor: Color.fromRGBO(252, 165, 165, 240 / 255),
       defaultVisualMode: 1,
     ),
+    ThemePreset(
+      id: 9,
+      name: 'Android 硬件大师',
+      englishName: 'Android Hardware Master',
+      soundStyle: '赛博极客 · 实时系统与音频链路',
+      accentColor: Color(0xFF00E5FF),
+      litColor: Color.fromRGBO(0, 229, 255, 150 / 255),
+      peakColor: Color.fromRGBO(255, 110, 180, 240 / 255),
+      defaultVisualMode: 11,
+    ),
   ];
 
   static const List<String> visualModeLabels = [
@@ -123,6 +133,7 @@ class ThemeService extends ChangeNotifier {
     '电光霓虹声波',
     '赛博粒子网格',
     '液态玻璃时钟',
+    'Android 硬件大师',
   ];
 
   int _currentThemeId = 0;
@@ -155,9 +166,12 @@ class ThemeService extends ChangeNotifier {
     if (savedThemeId == 4) {
       // 4: Custom 自定义调色
       _currentThemeId = 4;
-      final cr = double.tryParse(db.getSetting('theme_custom_r', '0.98')) ?? 0.98;
-      final cg = double.tryParse(db.getSetting('theme_custom_g', '0.18')) ?? 0.18;
-      final cb = double.tryParse(db.getSetting('theme_custom_b', '0.28')) ?? 0.28;
+      final cr =
+          double.tryParse(db.getSetting('theme_custom_r', '0.98')) ?? 0.98;
+      final cg =
+          double.tryParse(db.getSetting('theme_custom_g', '0.18')) ?? 0.18;
+      final cb =
+          double.tryParse(db.getSetting('theme_custom_b', '0.28')) ?? 0.28;
       _accentColor = Color.fromRGBO(
         (cr * 255).round().clamp(0, 255),
         (cg * 255).round().clamp(0, 255),
@@ -169,7 +183,8 @@ class ThemeService extends ChangeNotifier {
       _customSat = hsv.saturation;
       _customVal = hsv.value;
     } else {
-      final preset = presets.firstWhere((p) => p.id == savedThemeId, orElse: () => presets.first);
+      final preset = presets.firstWhere((p) => p.id == savedThemeId,
+          orElse: () => presets.first);
       _currentThemeId = preset.id;
       _accentColor = preset.accentColor;
       final hsv = HSVColor.fromColor(_accentColor);
@@ -180,7 +195,8 @@ class ThemeService extends ChangeNotifier {
   }
 
   void setTheme(int id) {
-    final preset = presets.firstWhere((p) => p.id == id, orElse: () => presets.first);
+    final preset =
+        presets.firstWhere((p) => p.id == id, orElse: () => presets.first);
     _currentThemeId = preset.id;
     _accentColor = preset.accentColor;
     _backgroundVisualMode = preset.defaultVisualMode;
@@ -200,8 +216,26 @@ class ThemeService extends ChangeNotifier {
     _customHue = h.clamp(0.0, 360.0);
     _customSat = s.clamp(0.0, 1.0);
     _customVal = v.clamp(0.05, 1.0);
-    _accentColor = HSVColor.fromAHSV(1.0, _customHue, _customSat, _customVal).toColor();
+    _accentColor =
+        HSVColor.fromAHSV(1.0, _customHue, _customSat, _customVal).toColor();
     _currentThemeId = 4; // 标记为自定义 (ThemeId::Custom = 4)
+
+    final db = MusicDatabaseService.instance;
+    db.setSetting('theme_id', '4');
+    db.setSetting('theme_custom_r', _accentColor.r.toStringAsFixed(4));
+    db.setSetting('theme_custom_g', _accentColor.g.toStringAsFixed(4));
+    db.setSetting('theme_custom_b', _accentColor.b.toStringAsFixed(4));
+
+    notifyListeners();
+  }
+
+  void setAccentColor(Color color) {
+    _accentColor = color;
+    _currentThemeId = 4;
+    final hsv = HSVColor.fromColor(color);
+    _customHue = hsv.hue;
+    _customSat = hsv.saturation;
+    _customVal = hsv.value;
 
     final db = MusicDatabaseService.instance;
     db.setSetting('theme_id', '4');
@@ -215,7 +249,8 @@ class ThemeService extends ChangeNotifier {
   void setBackgroundVisualMode(int mode) {
     if (mode >= 0 && mode < visualModeLabels.length) {
       _backgroundVisualMode = mode;
-      MusicDatabaseService.instance.setSetting('bg_visual_mode', mode.toString());
+      MusicDatabaseService.instance
+          .setSetting('bg_visual_mode', mode.toString());
       notifyListeners();
     }
   }

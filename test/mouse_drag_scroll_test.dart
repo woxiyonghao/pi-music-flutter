@@ -2,20 +2,46 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
+import 'package:hide_player_flutter/models/track.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:hide_player_flutter/theme/ui_config.dart';
 import 'package:hide_player_flutter/ui/mac/views/mac_scan_music_view.dart';
 
 void main() {
+  final scanTracks = List<Track>.generate(
+    6,
+    (index) => Track(
+      id: 201 + index,
+      title: '鼠标拖动曲目 ${index + 1}',
+      artist: '测试音乐家',
+      album: '横向滚动测试',
+      filepath: '/Music/mouse-scroll-${index + 1}.dsf',
+      format: AudioFormat.dsdDsf,
+      sampleRate: 5644800,
+      bitDepth: 1,
+      durationSec: 180,
+    ),
+  );
+  late List<Track> previousTracks;
   setUp(() {
-    MusicDatabaseService.instance.loadLibrary();
+    final library = MusicDatabaseService.instance;
+    previousTracks = List<Track>.of(library.tracks);
+    library.tracks
+      ..clear()
+      ..addAll(scanTracks);
   });
 
   tearDown(() {
-    HifiAudioService.instance.pause();
+    HifiAudioService.instance
+      ..pause()
+      ..stopTicker();
+    MusicDatabaseService.instance.tracks
+      ..clear()
+      ..addAll(previousTracks);
   });
 
-  testWidgets('Default ScrollBehavior fails on mouse drag, MouseDraggableScrollBehavior succeeds',
+  testWidgets(
+      'Default ScrollBehavior fails on mouse drag, MouseDraggableScrollBehavior succeeds',
       (WidgetTester tester) async {
     final defaultController = ScrollController();
     await tester.pumpWidget(
@@ -88,7 +114,8 @@ void main() {
     expect(customController.offset, greaterThan(50.0));
   });
 
-  testWidgets('Mouse click triggers onTap, mouse drag scrolls without triggering onTap',
+  testWidgets(
+      'Mouse click triggers onTap, mouse drag scrolls without triggering onTap',
       (WidgetTester tester) async {
     final controller = ScrollController();
     int tappedIndex = -1;
@@ -118,10 +145,12 @@ void main() {
     );
 
     // 1. Mouse Drag starting on Item 1
-    await tester.drag(find.text('Item 1'), const Offset(-120, 0), kind: PointerDeviceKind.mouse);
+    await tester.drag(find.text('Item 1'), const Offset(-120, 0),
+        kind: PointerDeviceKind.mouse);
     await tester.pump();
 
-    expect(controller.offset, greaterThan(50.0), reason: 'Dragging must scroll list');
+    expect(controller.offset, greaterThan(50.0),
+        reason: 'Dragging must scroll list');
     expect(tappedIndex, -1, reason: 'Dragging must not trigger onTap');
   });
 
@@ -129,7 +158,8 @@ void main() {
       (WidgetTester tester) async {
     tester.view.physicalSize = const Size(500, 800);
     tester.view.devicePixelRatio = 1.0;
-
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
       const MaterialApp(
@@ -142,20 +172,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     // Find first track card under DSD-DSF
-    final cardFinder = find.text('decaud-goldberg-var5-dsd128');
+    final cardFinder = find.text(scanTracks.first.title);
     expect(cardFinder, findsOneWidget);
 
     final initialCenter = tester.getCenter(cardFinder);
 
     // Drag left by 60 pixels using mouse
-    await tester.drag(cardFinder, const Offset(-60, 0), kind: PointerDeviceKind.mouse);
+    await tester.drag(cardFinder, const Offset(-60, 0),
+        kind: PointerDeviceKind.mouse);
     await tester.pump(const Duration(milliseconds: 100));
 
     final scrolledCenter = tester.getCenter(cardFinder);
     expect(scrolledCenter.dx, lessThan(initialCenter.dx - 30),
-        reason: 'Horizontal card position must move left when dragged with mouse');
+        reason:
+            'Horizontal card position must move left when dragged with mouse');
   });
 }
-
-
-

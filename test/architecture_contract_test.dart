@@ -18,7 +18,8 @@ void main() {
     final entry = File('lib/main.dart').readAsStringSync();
     expect(RegExp("import 'ui/[^']+_main_view.dart';").allMatches(entry),
         hasLength(1));
-    expect(entry, contains('PlatformAudioRuntime.instance.configure()'));
+    expect(entry.replaceAll(RegExp(r'\s+'), ''),
+        contains('PlatformAudioRuntime.instance.configure()'));
   });
   test(
       'interruption resumes only a previously playing track and respects user pause',

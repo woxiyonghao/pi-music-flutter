@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../common/hifi_slider.dart';
 import '../../core/hifi_audio_service.dart';
 import '../../theme/hifi_theme.dart';
 
@@ -31,7 +32,7 @@ class PlaybackControlsWidget extends StatelessWidget {
                   inactiveTrackColor: HifiTheme.cardBorder,
                   thumbColor: HifiTheme.textPrimary,
                 ),
-                child: Slider(
+                child: HifiSlider(
                   value: state.progress.clamp(0.0, 1.0),
                   onChanged: (val) {
                     if (state.duration > 0) {
@@ -55,7 +56,7 @@ class PlaybackControlsWidget extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.skip_previous_rounded, size: 32),
               color: HifiTheme.textPrimary,
-              onPressed: () {},
+              onPressed: () => service.previous(),
             ),
             const SizedBox(width: 16),
             Container(
@@ -84,7 +85,7 @@ class PlaybackControlsWidget extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.skip_next_rounded, size: 32),
               color: HifiTheme.textPrimary,
-              onPressed: () {},
+              onPressed: () => service.next(),
             ),
           ],
         ),

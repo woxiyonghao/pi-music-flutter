@@ -1,84 +1,140 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../core/hifi_audio_service.dart';
-import '../../theme/hifi_theme.dart';
-import '../shared/vu_meter_widget.dart';
-import '../shared/spectrum_analyzer_widget.dart';
-import '../shared/playback_controls_widget.dart';
-import '../shared/glass_container.dart';
+import 'package:flutter/services.dart';
+import 'android_player_view.dart';
+import 'widgets/android_orientation_dialog.dart';
 
-/// Android 移动端 Material 3 风格 HiFi UI
-class AndroidMainView extends StatelessWidget {
-  const AndroidMainView({super.key});
+/// Display mode belongs to this process: resuming keeps the choice, while a
+/// fresh launch asks again. Never write the direction into persistent settings.
+class AndroidMainView extends StatefulWidget {
+  const AndroidMainView({super.key, this.initialize, this.onReady});
+
+  final Future<void> Function()? initialize;
+  final VoidCallback? onReady;
+
+  @override
+  State<AndroidMainView> createState() => _AndroidMainViewState();
+}
+
+class _AndroidMainViewState extends State<AndroidMainView> {
+  bool? _landscape;
+  late bool _ready;
+  bool _initializing = false;
+  bool _locking = false;
+  Object? _startupError;
+  Object? _orientationError;
+
+  @override
+  void initState() {
+    super.initState();
+    _ready = widget.initialize == null;
+    unawaited(_prepareChooser());
+    if (!_ready) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_initialize());
+      });
+    }
+  }
+
+  Future<void> _prepareChooser() async {
+    try {
+      await SystemChrome.setPreferredOrientations(const [
+        DeviceOrientation.portraitUp,
+      ]);
+    } catch (error) {
+      // The choice still works in multi-window and on hosts without rotation.
+      debugPrint('[Android] Cannot rotate the startup screen: $error');
+    }
+  }
+
+  Future<void> _initialize() async {
+    if (_initializing) return;
+    setState(() {
+      _initializing = true;
+      _startupError = null;
+    });
+    try {
+      await widget.initialize!();
+      if (!mounted) return;
+      setState(() => _ready = true);
+      widget.onReady?.call();
+    } catch (error) {
+      if (mounted) setState(() => _startupError = error);
+    } finally {
+      if (mounted) setState(() => _initializing = false);
+    }
+  }
+
+  Future<void> _confirmOrientation(bool landscape) async {
+    if (_landscape != null || _locking) return;
+    setState(() {
+      _locking = true;
+      _orientationError = null;
+    });
+    try {
+      await SystemChrome.setPreferredOrientations(landscape
+          ? const [DeviceOrientation.landscapeLeft]
+          : const [DeviceOrientation.portraitUp]);
+      try {
+        await SystemChrome.setEnabledSystemUIMode(
+          landscape ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+        );
+      } catch (_) {}
+      if (mounted) setState(() => _landscape = landscape);
+    } catch (error) {
+      if (mounted) setState(() => _orientationError = error);
+    } finally {
+      if (mounted) setState(() => _locking = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: HifiAudioService.instance,
-      builder: (context, _) {
-        final service = HifiAudioService.instance;
-        final state = service.state;
-        final track = service.currentTrack;
-
-        final leftLevel = state.spectrumLevels.isNotEmpty ? state.spectrumLevels[0] : 0.0;
-        final rightLevel = state.spectrumLevels.length > 1 ? state.spectrumLevels[1] : 0.0;
-
-        return Scaffold(
-          backgroundColor: HifiTheme.background,
-          appBar: AppBar(
-            title: const Text('Android HiFi Player (AAudio)'),
-            actions: [
-              IconButton(
-                icon: Icon(
-                  state.isMuted ? Icons.volume_off : Icons.volume_up,
-                  color: HifiTheme.textPrimary,
-                ),
-                onPressed: () => service.toggleMute(),
-              ),
-            ],
+    if (_landscape == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF080C12),
+        body: SafeArea(
+          child: AndroidOrientationDialog(
+            initialIsLandscape: true,
+            confirming: _locking,
+            error: _orientationError == null ? null : '屏幕方向设置失败，请重试',
+            onConfirmed: _confirmOrientation,
           ),
-          body: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                VuMeterWidget(
-                  leftLevel: leftLevel,
-                  rightLevel: rightLevel,
-                  height: 150,
-                ),
-                const SizedBox(height: 12),
-                SpectrumAnalyzerWidget(
-                  levels: state.spectrumLevels,
-                  height: 80,
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: GlassContainer(
-                    width: double.infinity,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.album_rounded, size: 64, color: HifiTheme.mcIntoshGlow),
-                        const SizedBox(height: 12),
-                        Text(
-                          track?.title ?? '暂无播放歌曲',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          track?.artist ?? '本地音频解码引擎就绪',
-                          style: const TextStyle(color: HifiTheme.textMuted),
-                        ),
-                      ],
+        ),
+      );
+    }
+    if (!_ready) {
+      return Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_startupError == null) ...[
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    const Text('正在启动播放器'),
+                  ] else ...[
+                    const Text('播放器启动失败'),
+                    const SizedBox(height: 12),
+                    Text('$_startupError', textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _initializing ? null : _initialize,
+                      child: const Text('重试'),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const PlaybackControlsWidget(),
-              ],
+                  ],
+                ],
+              ),
             ),
           ),
-        );
-      },
-    );
+        ),
+      );
+    }
+    // Android may ignore rotation locks on tablets and in multi-window. Render
+    // the selected mode responsively instead of waiting forever for a resize.
+    return AndroidPlayerView(landscape: _landscape!);
   }
 }
