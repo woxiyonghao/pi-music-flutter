@@ -485,6 +485,13 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void togglePlayPause() {
+    if (_currentTrack == null && _playlistQueue.isEmpty) {
+      final libraryTracks = MusicDatabaseService.instance.tracks;
+      if (libraryTracks.isNotEmpty) {
+        playTracks(libraryTracks, 0);
+        return;
+      }
+    }
     if (_currentTrack == null && _playlistQueue.isNotEmpty) {
       playTrack(_playlistQueue.first);
     } else if (_state.isPlaying || (_isPreparingTrack && _playWhenPrepared)) {
@@ -593,7 +600,12 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void previous() {
-    if (_playlistQueue.isEmpty) return;
+    if (_playlistQueue.isEmpty) {
+      final libraryTracks = MusicDatabaseService.instance.tracks;
+      if (libraryTracks.isEmpty) return;
+      _playlistQueue = List.from(libraryTracks);
+      _currentIndex = 0;
+    }
     _completion.reset();
     if (_state.currentTime > 3.0) {
       seek(0.0);
@@ -608,7 +620,12 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void next({bool isAutomatic = false}) {
-    if (_playlistQueue.isEmpty) return;
+    if (_playlistQueue.isEmpty) {
+      final libraryTracks = MusicDatabaseService.instance.tracks;
+      if (libraryTracks.isEmpty) return;
+      _playlistQueue = List.from(libraryTracks);
+      _currentIndex = -1;
+    }
     if (_consecutiveErrors >= _playlistQueue.length) {
       _consecutiveErrors = 0;
       _completion.reset();
