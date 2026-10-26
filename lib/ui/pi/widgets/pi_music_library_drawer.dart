@@ -51,6 +51,10 @@ class _PiMusicLibraryDrawerState extends State<PiMusicLibraryDrawer> {
         setState(() {
           _isScanning = false;
           _scanMessage = '扫描完成！已入库 $count 首曲目';
+          final warnings = MusicDatabaseService.instance.scanWarnings;
+          if (warnings.isNotEmpty) {
+            _scanMessage = '已入库 $count 首曲目；${warnings.length} 个目录无法读取，已保留原曲目';
+          }
         });
         Future.delayed(const Duration(seconds: 4), () {
           if (mounted) {

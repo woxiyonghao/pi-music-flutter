@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../core/hifi_audio_service.dart';
@@ -19,11 +18,13 @@ enum ScanUIState {
 class MacScanMusicView extends StatefulWidget {
   final int scannedCount;
   final VoidCallback? onScanComplete;
+  final MusicDatabaseService? database;
 
   const MacScanMusicView({
     super.key,
     this.scannedCount = 0,
     this.onScanComplete,
+    this.database,
   });
 
   @override
@@ -36,6 +37,9 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
   bool _isEditMode = false;
   final Set<int> _selectedTrackIds = {};
   late final AnimationController _animController;
+  String? _scanMessage;
+  MusicDatabaseService get _database =>
+      widget.database ?? MusicDatabaseService.instance;
 
   static const List<AudioFormat> formatOrder = [
     AudioFormat.dsdDsf,
@@ -87,7 +91,7 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
       duration: const Duration(seconds: 10),
     )..repeat();
 
-    final tracks = MusicDatabaseService.instance.tracks;
+    final tracks = _database.tracks;
     if (tracks.isEmpty) {
       _state = ScanUIState.idle;
     } else {
@@ -101,23 +105,34 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
     super.dispose();
   }
 
-  void _triggerScan() {
+  Future<void> _triggerScan() async {
+    if (_state == ScanUIState.scanning) return;
     setState(() {
       _state = ScanUIState.scanning;
       _isEditMode = false;
       _selectedTrackIds.clear();
+      _scanMessage = null;
     });
 
-    // 异步扫描音乐文件
-    Timer(const Duration(milliseconds: 2200), () {
-      if (mounted) {
-        MusicDatabaseService.instance.loadLibrary();
-        widget.onScanComplete?.call();
-        setState(() {
-          _state = ScanUIState.completed;
-        });
-      }
-    });
+    try {
+      final count = await _database.scanLibrary();
+      if (!mounted) return;
+      setState(() {
+        _state = count == 0 ? ScanUIState.idle : ScanUIState.completed;
+        _scanMessage = _database.scanWarnings.isEmpty
+            ? '扫描完成，已入库 $count 首曲目'
+            : '已入库 $count 首；${_database.scanWarnings.length} 个目录无法读取，已保留原曲目';
+      });
+      widget.onScanComplete?.call();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _state = _database.tracks.isEmpty
+            ? ScanUIState.idle
+            : ScanUIState.completed;
+        _scanMessage = '扫描失败：$error';
+      });
+    }
   }
 
   @override
@@ -127,6 +142,7 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
         ThemeService.instance,
         HifiAudioService.instance.currentTrackNotifier,
         HifiAudioService.instance.isPlayingNotifier,
+        _database,
       ]),
       builder: (context, _) {
 
@@ -136,13 +152,26 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
         return GlassCard(
           borderRadius: UIConfig.containerRounding,
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-          child: Stack(
-            fit: StackFit.expand,
+          child: Column(
             children: [
-              // 状态机分发渲染
-              if (_state == ScanUIState.idle) _buildIdleState(accent),
-              if (_state == ScanUIState.scanning) _buildScanningState(accent),
-              if (_state == ScanUIState.completed) _buildCompletedState(accent),
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (_state == ScanUIState.idle) _buildIdleState(accent),
+                    if (_state == ScanUIState.scanning) _buildScanningState(accent),
+                    if (_state == ScanUIState.completed) _buildCompletedState(accent),
+                  ],
+                ),
+              ),
+              if (_scanMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(_scanMessage!,
+                      style: const TextStyle(
+                          color: UIConfig.textNormal,
+                          fontSize: UIConfig.fontSmall)),
+                ),
             ],
           ),
         );
@@ -239,7 +268,7 @@ class _MacScanMusicViewState extends State<MacScanMusicView>
   // 3. 已完成展示态：格式分组卡片网格 (对齐 ScanMusicWidget::renderCompletedState)
   // ===========================================================================
   Widget _buildCompletedState(Color accent) {
-    final allTracks = MusicDatabaseService.instance.tracks;
+    final allTracks = _database.tracks;
     final currentPlayingTrack = HifiAudioService.instance.currentTrack;
     final isEnginePlaying = HifiAudioService.instance.isPlayingNotifier.value;
 
