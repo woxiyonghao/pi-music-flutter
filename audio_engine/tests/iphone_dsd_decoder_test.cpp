@@ -133,10 +133,9 @@ int main() {
             require(context.configure(platform,0),"Factory integration platform setup failed");
             auto selected=createDsdDecoderForClient(context.platformName());
             require(selected->open(lsbf.string()),"Playback DSD factory cannot open the source");
-            const bool fir_dsd=std::string_view(platform)=="iphone" || std::string_view(platform)=="android";
-            require((dynamic_cast<IphoneDsdDecoder*>(selected.get())!=nullptr)==fir_dsd,
+            require(dynamic_cast<IphoneDsdDecoder*>(selected.get())!=nullptr,
                 "Playback DSD factory selected the wrong decoder for client");
-            require(selected->getSpec().sample_rate==(fir_dsd?176400u:44100u),
+            require(selected->getSpec().sample_rate==176400u,
                 "Playback factory changed an accepted platform's DSD clock");
         }
         IphoneDsdDecoder decoder;
