@@ -398,6 +398,7 @@ class MusicDatabaseService extends ChangeNotifier {
       final loaded = <Track>[];
       final isTest = Platform.environment.containsKey('FLUTTER_TEST');
       final pathsToHeal = <int, String>{};
+      final metaToHeal = <int, AudioMetadata>{};
 
       for (final row in results) {
         final rawPath = (row['file_path'] as String?) ?? '';
@@ -413,6 +414,23 @@ class MusicDatabaseService extends ChangeNotifier {
         }
 
         final formatInt = row['format'] as int? ?? 1;
+        final format = Track.formatFromInt(formatInt);
+        int sampleRate = row['sample_rate'] as int? ?? 44100;
+        int bitDepth = row['bit_depth'] as int? ?? 16;
+        int durationSec = row['duration_sec'] as int? ?? 0;
+        final isCueTrack = (row['is_cue_track'] as int? ?? 0) == 1;
+        if (!isCueTrack &&
+            durationSec <= 0 &&
+            filepath.isNotEmpty &&
+            File(filepath).existsSync()) {
+          final parsed = AudioMetadataHelper.parse(File(filepath), format);
+          if (parsed.durationSec > 0) {
+            sampleRate = parsed.sampleRate;
+            bitDepth = parsed.bitDepth;
+            durationSec = parsed.durationSec;
+            metaToHeal[id] = parsed;
+          }
+        }
         final track = Track(
           id: id,
           title: (row['title'] as String?)?.isNotEmpty == true
@@ -421,11 +439,11 @@ class MusicDatabaseService extends ChangeNotifier {
           artist: (row['artist'] as String?) ?? '',
           album: (row['album'] as String?) ?? '',
           filepath: filepath,
-          format: Track.formatFromInt(formatInt),
-          sampleRate: row['sample_rate'] as int? ?? 44100,
-          bitDepth: row['bit_depth'] as int? ?? 16,
-          durationSec: row['duration_sec'] as int? ?? 0,
-          isCueTrack: (row['is_cue_track'] as int? ?? 0) == 1,
+          format: format,
+          sampleRate: sampleRate,
+          bitDepth: bitDepth,
+          durationSec: durationSec,
+          isCueTrack: isCueTrack,
           startTimeSec: (row['start_time_sec'] as num?)?.toDouble() ?? 0.0,
           endTimeSec: (row['end_time_sec'] as num?)?.toDouble() ?? 0.0,
           cuePath: resolveTrackPath((row['cue_path'] as String?) ?? ''),
@@ -447,6 +465,25 @@ class MusicDatabaseService extends ChangeNotifier {
               '[MusicDatabaseService] 成功自愈 ${pathsToHeal.length} 条沙盒变更音频记录！');
         } catch (e) {
           debugPrint('[MusicDatabaseService] 路径自愈失败: $e');
+        }
+      }
+      if (metaToHeal.isNotEmpty) {
+        try {
+          final metaStmt = db.prepare(
+              'UPDATE scanned_tracks SET sample_rate = ?, bit_depth = ?, duration_sec = ? WHERE id = ?;');
+          for (final entry in metaToHeal.entries) {
+            metaStmt.execute([
+              entry.value.sampleRate,
+              entry.value.bitDepth,
+              entry.value.durationSec,
+              entry.key,
+            ]);
+          }
+          metaStmt.close();
+          debugPrint(
+              '[MusicDatabaseService] 成功自愈 ${metaToHeal.length} 条零时长/音频元数据记录！');
+        } catch (e) {
+          debugPrint('[MusicDatabaseService] 元数据自愈失败: $e');
         }
       }
 
