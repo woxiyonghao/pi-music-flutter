@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import '../../models/sidebar_tab.dart';
 import '../../models/track.dart';
 import '../../services/theme_service.dart';
@@ -232,13 +233,38 @@ class MacSidebarWidget extends StatelessWidget {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 0.5),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
+    return Builder(
+      builder: (navContext) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 0.5),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              onTap();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!navContext.mounted) return;
+                final ro = navContext.findRenderObject();
+                if (ro is RenderBox) {
+                  final scrollable = Scrollable.maybeOf(navContext);
+                  final viewport = RenderAbstractViewport.maybeOf(ro);
+                  if (scrollable != null && viewport != null) {
+                    final target = viewport.getOffsetToReveal(ro, 0.5);
+                    final cur = scrollable.position.pixels;
+                    if ((target.offset - cur).abs() > 4.0) {
+                      scrollable.position.animateTo(
+                        target.offset.clamp(
+                          scrollable.position.minScrollExtent,
+                          scrollable.position.maxScrollExtent,
+                        ),
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  }
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(UIConfig.navItemRounding),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             height: 30.0,
@@ -295,6 +321,7 @@ class MacSidebarWidget extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

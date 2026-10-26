@@ -9,6 +9,7 @@ import '../models/track.dart';
 import 'audio_metadata_helper.dart';
 import 'cue_parser.dart';
 import 'mobile_system_service.dart';
+import 'wifi_transfer_service.dart';
 
 /// 发烧曲库数据库服务 (读取 C++ 纯音数播持久化 SQLite 数据库)
 class MusicDatabaseService extends ChangeNotifier {
@@ -495,11 +496,16 @@ class MusicDatabaseService extends ChangeNotifier {
       for (final t in loaded) {
         if (t.isCueTrack && t.filepath.isNotEmpty) {
           cueAudioFiles.add(t.filepath.toLowerCase());
+          cueAudioFiles.add(p.canonicalize(t.filepath).toLowerCase());
+          cueAudioFiles.add(_normalizeAndroidScanPath(t.filepath).toLowerCase());
         }
       }
       if (cueAudioFiles.isNotEmpty) {
         loaded.removeWhere((t) =>
-            !t.isCueTrack && cueAudioFiles.contains(t.filepath.toLowerCase()));
+            !t.isCueTrack &&
+            (cueAudioFiles.contains(t.filepath.toLowerCase()) ||
+                cueAudioFiles.contains(p.canonicalize(t.filepath).toLowerCase()) ||
+                cueAudioFiles.contains(_normalizeAndroidScanPath(t.filepath).toLowerCase())));
       }
 
       // 读取用户播放列表
@@ -665,6 +671,11 @@ class MusicDatabaseService extends ChangeNotifier {
         throw FileSystemException('扫描目录不存在，原曲库已保留', path);
       }
       addScanDir(path);
+      if (Platform.isAndroid) {
+        addScanDir(AppPaths.musicDirectory);
+        final wifiDir = WifiTransferService.instance.targetDir;
+        if (wifiDir.isNotEmpty) addScanDir(wifiDir);
+      }
     } else if (directory != null || _musicDirectoryOverride != null) {
       final overrideDir = _musicDirectoryOverride;
       if (overrideDir != null) {
@@ -674,6 +685,8 @@ class MusicDatabaseService extends ChangeNotifier {
         await Directory(AppPaths.musicDirectory).create(recursive: true);
         addScanDir(AppPaths.musicDirectory);
         if (Platform.isAndroid) {
+          final wifiDir = WifiTransferService.instance.targetDir;
+          if (wifiDir.isNotEmpty) addScanDir(wifiDir);
           for (final androidDir in androidSharedMusicDirectories) {
             addScanDir(androidDir);
           }
@@ -691,6 +704,8 @@ class MusicDatabaseService extends ChangeNotifier {
         await MobileSystemService.instance.ensureStoragePermission();
         await Directory(AppPaths.musicDirectory).create(recursive: true);
         addScanDir(AppPaths.musicDirectory);
+        final wifiDir = WifiTransferService.instance.targetDir;
+        if (wifiDir.isNotEmpty) addScanDir(wifiDir);
         for (final androidDir in androidSharedMusicDirectories) {
           addScanDir(androidDir);
         }
@@ -847,10 +862,19 @@ class MusicDatabaseService extends ChangeNotifier {
               }
             }
           }
+          if (resolvedFile == null && referencedFile.existsSync()) {
+            resolvedFile = referencedFile;
+          }
           if (resolvedFile == null) continue;
           final canonicalAudio = p.canonicalize(resolvedFile.absolute.path);
+          final rawAudioPath = resolvedFile.path;
+          final normAudioPath = _normalizeAndroidScanPath(rawAudioPath);
           cueHandledAudioPathsLower.add(canonicalAudio.toLowerCase());
+          cueHandledAudioPathsLower.add(rawAudioPath.toLowerCase());
+          cueHandledAudioPathsLower.add(normAudioPath.toLowerCase());
           cueHandledAudioPathsLower.add(cueTrk.resolvedAudioPath.toLowerCase());
+          cueHandledAudioPathsLower.add(referencedFile.absolute.path.toLowerCase());
+          cueHandledAudioPathsLower.add(p.canonicalize(_normalizeAndroidScanPath(referencedFile.absolute.path)).toLowerCase());
 
           final trackKey =
               'cue:${canonicalAudio.toLowerCase()}:${cueTrk.trackNumber}:${cueTrk.startTimeSec}';
@@ -903,8 +927,10 @@ class MusicDatabaseService extends ChangeNotifier {
     for (final file in foundAudioFiles.values) {
       final path = file.path;
       final canonicalPath = p.canonicalize(path);
+      final normPath = _normalizeAndroidScanPath(path);
       if (cueHandledAudioPathsLower.contains(canonicalPath.toLowerCase()) ||
-          cueHandledAudioPathsLower.contains(path.toLowerCase())) {
+          cueHandledAudioPathsLower.contains(path.toLowerCase()) ||
+          cueHandledAudioPathsLower.contains(normPath.toLowerCase())) {
         debugPrint('[MusicDatabaseService] 屏蔽已被 CUE 拆解的整轨音频: $path');
         continue;
       }

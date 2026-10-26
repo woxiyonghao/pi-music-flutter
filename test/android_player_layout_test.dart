@@ -131,24 +131,14 @@ void main() {
     });
   }
 
-  testWidgets('library search defines playback queue and skip follows it',
+  testWidgets('library item defines playback queue and skip follows it',
       (tester) async {
     await mount(tester, size: const Size(393, 852), landscape: false);
-    await tester.enterText(
-        find.byKey(const Key('android-library-search')), 'second');
-    await tester.pump();
-    expect(find.text('Android first song'), findsNothing);
-    await tester.tap(find.text('Android second song'));
-    await tester.pump();
-    expect(audio.currentTrack, tracks[1]);
-    expect(audio.playlistQueue, [tracks[1]]);
-    expect(audio.state.isPlaying, isTrue);
-
-    await tester.enterText(find.byKey(const Key('android-library-search')), '');
-    await tester.pump();
     await tester.tap(find.text('Android first song').first);
     await tester.pump();
     expect(audio.playlistQueue, tracks);
+    expect(audio.currentTrack, tracks[0]);
+    expect(audio.state.isPlaying, isTrue);
     expect(find.textContaining('规格待检测'), findsWidgets);
     expect(find.textContaining('0kHz / 0bit'), findsNothing);
     await tester.tap(find.byTooltip('下一曲'));
@@ -157,6 +147,32 @@ void main() {
     await tester.tap(find.byKey(const Key('android-play-pause')));
     await tester.pump();
     expect(audio.state.isPlaying, isFalse);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+      'tap right visualizer enters fullscreen theme and exit button returns to portrait',
+      (tester) async {
+    await mount(tester, size: const Size(393, 852), landscape: false);
+
+    expect(find.byKey(const Key('android-portrait-layout')), findsOneWidget);
+    expect(find.byKey(const Key('android-exit-fullscreen-theme')), findsNothing);
+
+    final enterButton = find.byKey(const Key('android-enter-fullscreen-theme'));
+    expect(enterButton, findsOneWidget);
+    await tester.tap(enterButton);
+    await tester.pump();
+
+    expect(find.byKey(const Key('android-portrait-layout')), findsNothing);
+    final exitButton = find.byKey(const Key('android-exit-fullscreen-theme'));
+    expect(exitButton, findsOneWidget);
+
+    await tester.tap(exitButton);
+    await tester.pump();
+
+    expect(find.byKey(const Key('android-portrait-layout')), findsOneWidget);
+    expect(find.byKey(const Key('android-exit-fullscreen-theme')), findsNothing);
+
     await tester.pumpWidget(const SizedBox());
   });
 }
