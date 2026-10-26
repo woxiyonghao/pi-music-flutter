@@ -19,58 +19,80 @@ import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import java.io.File
 
 class MainActivity : FlutterActivity() {
+    private var storagePermissionResult: MethodChannel.Result? = null
+    private var audioDevices: AndroidAudioDevices? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        audioDevices = AndroidAudioDevices(this, MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger, "hifi/platform_audio"))
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "hifi/system",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getSystemInfo" -> result.success(readSystemInfo())
-                "ensureStoragePermission" -> result.success(ensureStoragePermission())
+                "ensureStoragePermission" -> ensureStoragePermission(result)
                 else -> result.notImplemented()
             }
         }
     }
 
-    private fun ensureStoragePermission(): Boolean {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                if (checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(arrayOf(Manifest.permission.READ_MEDIA_AUDIO), 1001)
-                }
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 1001)
-                }
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-                val pimusicDir = File("/storage/emulated/0/Music/pimusic")
-                val musicDir = File("/storage/emulated/0/Music")
-                val canListAll = (pimusicDir.exists() && pimusicDir.listFiles() != null) ||
-                    (!pimusicDir.exists() && musicDir.exists() && musicDir.listFiles() != null)
-                if (!canListAll) {
-                    try {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                            Uri.parse("package:$packageName"),
-                        )
-                        startActivity(intent)
-                    } catch (_: Exception) {
-                        try {
-                            startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
-                        } catch (_: Exception) {}
-                    }
-                }
-            }
-            return true
-        } catch (_: Exception) {
-            return false
+    private fun hasStoragePermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // CUE is a non-media sidecar. READ_MEDIA_AUDIO alone cannot see it.
+            Environment.isExternalStorageManager()
+        } else {
+            checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         }
+
+    private fun ensureStoragePermission(result: MethodChannel.Result) {
+        if (hasStoragePermission()) { result.success(true); return }
+        if (storagePermissionResult != null) {
+            result.error("permission_pending", "请先完成当前存储授权", null)
+            return
+        }
+        storagePermissionResult = result
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                try {
+                    startActivityForResult(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:$packageName")), 1002)
+                } catch (_: Exception) {
+                    startActivityForResult(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION), 1002)
+                }
+            } else {
+                requestPermissions(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), 1001)
+            }
+        } catch (_: Exception) {
+            finishStoragePermission()
+        }
+    }
+
+    private fun finishStoragePermission() {
+        val result = storagePermissionResult ?: return
+        storagePermissionResult = null
+        result.success(hasStoragePermission())
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 1002) finishStoragePermission()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1001) finishStoragePermission()
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        audioDevices?.close()
+        audioDevices = null
+        storagePermissionResult?.success(false)
+        storagePermissionResult = null
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     private fun readSystemInfo(): Map<String, Any?> {

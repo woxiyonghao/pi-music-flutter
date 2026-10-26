@@ -35,6 +35,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
   DacSettingService get _dac => widget.service ?? DacSettingService.instance;
   HifiPlatformType get _currentPlatform =>
       widget.platform ?? PlatformHelper.currentPlatform;
+  bool get _isAndroid => _currentPlatform == HifiPlatformType.android;
   bool get _isMobilePhone =>
       _currentPlatform == HifiPlatformType.iphone ||
       _currentPlatform == HifiPlatformType.android;
@@ -47,20 +48,20 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
       ? 'Android'
       : (_isMobilePhone ? 'iOS' : 'iPadOS');
   bool get _isPi => _currentPlatform == HifiPlatformType.pi;
-  bool get _usesIphoneSession => _isMobilePhone && _dac.audioRuntime.isIOS;
+  bool get _usesMobileSession => _isIpad && _dac.audioRuntime.usesHostOutput;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (_usesIphoneSession) {
+      if (_usesMobileSession) {
         _probeOutputs(showFeedback: false);
       } else {
         _dac.refreshDevices();
       }
     });
-    if (_usesIphoneSession || HifiAudioBindings.instance.isLoaded) {
+    if (_usesMobileSession || HifiAudioBindings.instance.isLoaded) {
       _devicePoll = Timer.periodic(const Duration(seconds: 2), (_) {
         _refreshSystemOutput();
       });
@@ -77,7 +78,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     if (_refreshingOutputs || _probingOutputs) return;
     _refreshingOutputs = true;
     try {
-      if (_usesIphoneSession) {
+      if (_usesMobileSession) {
         await _dac.audioRuntime.refreshOutput();
       } else {
         _dac.refreshDevices();
@@ -90,7 +91,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
   }
 
   Future<void> _probeOutputs({bool showFeedback = true}) async {
-    if (!_usesIphoneSession) {
+    if (!_usesMobileSession) {
       _dac.refreshDevices();
       if (showFeedback) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -167,6 +168,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                         await Clipboard.setData(ClipboardData(
                           text: const JsonEncoder.withIndent('  ').convert({
                             'route': runtime.output,
+                            'devices': runtime.outputDevices,
                             'sessionActive': runtime.isSessionActive,
                             'sessionError': runtime.lastSessionError,
                             'probeError': runtime.lastProbeError,
@@ -181,18 +183,28 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                       icon: const Icon(Icons.copy_rounded, size: 16),
                       label: const Text('复制音频诊断'),
                     ),
-                    const IosAudioRoutePicker(),
+                    if (!_isAndroid) const IosAudioRoutePicker(),
                   ],
                 ),
-                const Text(
-                  '点击系统输出按钮查看系统当前提供的播放设备。以实际输出路由为准。',
-                  style: TextStyle(color: UIConfig.textMuted, fontSize: 11),
+                Text(
+                  _isAndroid
+                      ? '点击下方设备卡切换实际音频输出；AAudio 是播放接口，设备名称来自 Android 音频总线。'
+                      : '点击系统输出按钮查看系统当前提供的播放设备。以实际输出路由为准。',
+                  style:
+                      const TextStyle(color: UIConfig.textMuted, fontSize: 11),
                 ),
               ],
               const SizedBox(height: 12),
 
               // 2. 实际连接的解码器选项卡 (如: 本机解码器、外接解码器 TOPPING DX12)
               _buildConnectedDeviceTabs(devices, dac, accent),
+              if (_isAndroid && dac.audioRuntime.outputPreferenceError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(dac.audioRuntime.outputPreferenceError!,
+                      style: const TextStyle(
+                          color: Colors.amberAccent, fontSize: 12)),
+                ),
               if (dac.followsSystemOutput) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -214,7 +226,9 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               else ...[
                 _buildHardwareBadgeCard(currentDev, accent),
                 const SizedBox(height: 14),
-                if (_isIpad)
+                if (_isAndroid)
+                  _buildAndroidOutputSettings(currentDev, dac, accent)
+                else if (_isIpad)
                   _buildIpadOutputSettings(currentDev, dac, accent)
                 else if (currentDev.isSystemManagedOutput)
                   _buildSystemOutputSettings(currentDev, accent)
@@ -307,7 +321,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
           ),
         ),
         // 模拟/物理外接设备调试开关 (方便用户在买到真机前调校)
-        if (!_isIpad && !dac.hasExternalDac)
+        if (!_isIpad && !_isAndroid && !dac.hasExternalDac)
           TextButton.icon(
             style: TextButton.styleFrom(
               backgroundColor: Colors.white.withValues(alpha: 0.05),
@@ -323,7 +337,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
               dac.toggleMockExternal(true);
             },
           )
-        else if (!_isIpad)
+        else if (!_isIpad && !_isAndroid)
           TextButton.icon(
             style: TextButton.styleFrom(
               backgroundColor: Colors.white.withValues(alpha: 0.05),
@@ -362,151 +376,160 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
       return const SizedBox.shrink();
     }
 
-    return Row(
-      children: List.generate(devices.length, (idx) {
-        final dev = devices[idx];
-        final isSelected = (idx == dac.selectedDeviceIndex);
-        final canSelect = dac.canSelectDevice(idx);
-        final isInactive = dac.followsSystemOutput && !isSelected;
+    return LayoutBuilder(builder: (context, constraints) {
+      final columns = _isAndroid
+          ? (constraints.maxWidth >= 620 && devices.length > 1 ? 2 : 1)
+          : devices.length;
+      return Wrap(
+        children: List.generate(devices.length, (idx) {
+          final dev = devices[idx];
+          final isSelected = (idx == dac.selectedDeviceIndex);
+          final canSelect = dac.canSelectDevice(idx);
+          final isInactive = dac.followsSystemOutput && !isSelected;
 
-        return Expanded(
-          child: Padding(
-            padding:
-                EdgeInsets.only(right: idx < devices.length - 1 ? 12.0 : 0.0),
-            child: Semantics(
-              selected: isSelected,
-              enabled: canSelect || isSelected,
-              child: Tooltip(
-                message: isInactive
-                    ? (_isIpad
-                        ? '请在 $_iosDeviceName 系统音频输出中切换设备'
-                        : '未启用：请在系统声音设置中切换输出')
-                    : dev.name,
-                child: Opacity(
-                  opacity: isInactive ? 0.4 : 1,
-                  child: GestureDetector(
-                    key: ValueKey('dac-device-${dev.id}'),
-                    onTap: canSelect ? () => dac.selectDevice(idx) : null,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? accent.withValues(alpha: 0.16)
-                            : Colors.white.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
+          return SizedBox(
+            width: constraints.maxWidth / columns,
+            child: Padding(
+              padding: EdgeInsets.only(
+                  right: (idx + 1) % columns != 0 ? 12.0 : 0.0,
+                  bottom: _isAndroid ? 10 : 0),
+              child: Semantics(
+                selected: isSelected,
+                enabled: canSelect || isSelected,
+                child: Tooltip(
+                  message: isInactive
+                      ? (_isIpad
+                          ? '请在 $_iosDeviceName 系统音频输出中切换设备'
+                          : '未启用：请在系统声音设置中切换输出')
+                      : dev.name,
+                  child: Opacity(
+                    opacity: isInactive ? 0.4 : 1,
+                    child: GestureDetector(
+                      key: ValueKey('dac-device-${dev.id}'),
+                      onTap: canSelect ? () => dac.selectDevice(idx) : null,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
                           color: isSelected
-                              ? accent
-                              : Colors.white.withValues(alpha: 0.1),
-                          width: isSelected ? 1.5 : 1.0,
-                        ),
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color: accent.withValues(alpha: 0.25),
-                                  blurRadius: 12,
-                                  spreadRadius: 1,
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? accent.withValues(alpha: 0.25)
-                                  : Colors.white.withValues(alpha: 0.06),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              dev.isBuiltIn
-                                  ? (_isIpad
-                                      ? (_isMobilePhone
-                                          ? (_currentPlatform ==
-                                                  HifiPlatformType.android
-                                              ? Icons.phone_android_rounded
-                                              : Icons.phone_iphone_rounded)
-                                          : Icons.tablet_mac_rounded)
-                                      : (_isPi
-                                          ? Icons.memory_rounded
-                                          : Icons.laptop_mac_rounded))
-                                  : Icons.usb_rounded,
-                              color: isSelected ? accent : Colors.white70,
-                              size: 20,
-                            ),
+                              ? accent.withValues(alpha: 0.16)
+                              : Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSelected
+                                ? accent
+                                : Colors.white.withValues(alpha: 0.1),
+                            width: isSelected ? 1.5 : 1.0,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      dev.isBuiltIn ? '本机解码器' : '外接解码器',
-                                      style: TextStyle(
-                                        color: isSelected
-                                            ? Colors.white
-                                            : Colors.white70,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 5, vertical: 1.5),
-                                      decoration: BoxDecoration(
-                                        color: (dev.isBuiltIn
-                                                ? Colors.blue
-                                                : Colors.amber)
-                                            .withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        dev.transport,
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: accent.withValues(alpha: 0.25),
+                                    blurRadius: 12,
+                                    spreadRadius: 1,
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? accent.withValues(alpha: 0.25)
+                                    : Colors.white.withValues(alpha: 0.06),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                dev.isBuiltIn
+                                    ? (_isIpad
+                                        ? (_isMobilePhone
+                                            ? (_currentPlatform ==
+                                                    HifiPlatformType.android
+                                                ? Icons.phone_android_rounded
+                                                : Icons.phone_iphone_rounded)
+                                            : Icons.tablet_mac_rounded)
+                                        : (_isPi
+                                            ? Icons.memory_rounded
+                                            : Icons.laptop_mac_rounded))
+                                    : Icons.usb_rounded,
+                                color: isSelected ? accent : Colors.white70,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        dev.isBuiltIn ? '本机解码器' : '外接解码器',
                                         style: TextStyle(
-                                          color: dev.isBuiltIn
-                                              ? Colors.lightBlueAccent
-                                              : Colors.amberAccent,
-                                          fontSize: 9.5,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : Colors.white70,
+                                          fontSize: 13,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  dev.name,
-                                  style: TextStyle(
-                                    color: isSelected ? accent : Colors.white60,
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w600,
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 5, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: (dev.isBuiltIn
+                                                  ? Colors.blue
+                                                  : Colors.amber)
+                                              .withValues(alpha: 0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          dev.transport,
+                                          style: TextStyle(
+                                            color: dev.isBuiltIn
+                                                ? Colors.lightBlueAccent
+                                                : Colors.amberAccent,
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    dev.name,
+                                    style: TextStyle(
+                                      color:
+                                          isSelected ? accent : Colors.white60,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          if (isSelected)
-                            Icon(Icons.check_circle_rounded,
-                                color: accent, size: 18),
-                        ],
+                            if (isSelected)
+                              Icon(Icons.check_circle_rounded,
+                                  color: accent, size: 18),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
-      }),
-    );
+          );
+        }),
+      );
+    });
   }
 
   /// 硬件规格全景名片
@@ -585,21 +608,115 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
           const SizedBox(height: 10),
           Row(
             children: [
-              _buildBadgeInfo('核心 DAC', dev.chipModel, Icons.memory_rounded),
+              _buildBadgeInfo(_isAndroid ? '播放接口' : '核心 DAC', dev.chipModel,
+                  Icons.memory_rounded),
               _buildBadgeInfo(
                   '传输界面',
                   dev.usbInterface.isNotEmpty ? dev.usbInterface : '原生总线',
                   Icons.sync_alt_rounded),
               _buildBadgeInfo(
                   'DSD 模式', dev.maxDsdRate, Icons.graphic_eq_rounded),
-              _buildBadgeInfo(
-                  '协商速率',
-                  '${(dev.currentSampleRate / 1000).round()} kHz',
+              _buildBadgeInfo('协商速率', _formatSampleRate(dev.currentSampleRate),
                   Icons.speed_rounded),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  String _formatSampleRate(int rate) => rate <= 0
+      ? '等待播放协商'
+      : '${(rate / 1000).toStringAsFixed(1).replaceFirst(RegExp(r'\.0$'), '')} kHz';
+
+  Widget _buildAndroidOutputSettings(
+      DacDeviceInfo dev, DacSettingService dac, Color accent) {
+    final runtime = dac.audioRuntime;
+    final isUsb = dev.transport.toUpperCase() == 'USB';
+    const buffers = [128, 256, 512, 1024, 2048];
+    final bufferIndex = buffers.indexOf(runtime.preferredBufferFrames);
+    final disabledRates = <int>{};
+    if (dev.sampleRates.isNotEmpty) {
+      for (var index = 1;
+          index < PlatformAudioRuntime.sampleRates.length;
+          index++) {
+        if (!dev.sampleRates
+            .contains(PlatformAudioRuntime.sampleRates[index])) {
+          disabledRates.add(index);
+        }
+      }
+    }
+    final actualFormat = dev.isOpen
+        ? '${_formatSampleRate(dev.currentSampleRate)} · '
+            '${dev.currentBitDepth} bit Float · ${dev.currentChannels} 声道\n'
+            '实际访问模式：${dev.isExclusive ? '独占' : '共享'} · '
+            '实际缓冲：${dev.bufferFrames} 帧'
+        : '等待播放协商；下方参数会在打开音频流时应用。';
+    final supportedRates = dev.sampleRates.isEmpty
+        ? 'Android 未报告固定采样率列表，以播放时实际协商结果为准。'
+        : '设备报告采样率：${dev.sampleRates.map(_formatSampleRate).join(' / ')}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(
+            '${dev.model} · Android 音频输出与缓冲区控制', Icons.tune_rounded, accent),
+        const SizedBox(height: 12),
+        Text('当前输出：${dev.name}\n$actualFormat',
+            key: const ValueKey('android-actual-output-format'),
+            style: const TextStyle(
+                color: UIConfig.textNormal, fontSize: 13, height: 1.8)),
+        const SizedBox(height: 8),
+        Text(supportedRates,
+            style: const TextStyle(
+                color: UIConfig.textMuted, fontSize: 11, height: 1.6)),
+        const SizedBox(height: 12),
+        _buildCapsuleSelector(
+          title: '输出采样率策略',
+          subtitle: '自动模式跟随 PCM 音源；DSD 转为 PCM。更改后重新协商输出，以实际格式为准。',
+          options: const [
+            '自动跟随音源',
+            '44.1 kHz',
+            '48 kHz',
+            '96 kHz',
+            '192 kHz',
+            '384 kHz'
+          ],
+          selectedIndex: dac.sampleRateMode,
+          disabledOptions: disabledRates,
+          accent: accent,
+          onSelected: dac.setSampleRateMode,
+        ),
+        const SizedBox(height: 8),
+        Text(runtime.sampleRateStatus,
+            style: const TextStyle(color: UIConfig.textMuted, fontSize: 12)),
+        const SizedBox(height: 12),
+        _buildCapsuleSelector(
+          title: '独占输出偏好',
+          subtitle: '优先请求 AAudio 独占，设备或系统不支持时自动回退共享；实际模式显示在上方。',
+          options: const ['独占优先（自动回退共享）', '系统共享'],
+          selectedIndex: runtime.prefersExclusiveOutput ? 0 : 1,
+          accent: accent,
+          onSelected: (index) => dac.setParam('android_exclusive', index),
+        ),
+        const SizedBox(height: 12),
+        _buildCapsuleSelector(
+          title: '声卡硬件缓冲区深度',
+          subtitle: '较大缓冲可减少高采样率播放断流；实际帧数由设备和 Android 协商。',
+          options: buffers.map((frames) => '$frames 帧').toList(),
+          selectedIndex: bufferIndex,
+          accent: accent,
+          onSelected: (index) =>
+              dac.setParam('android_buffer_frames', buffers[index]),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          isUsb
+              ? 'USB 解码器的 UAC 档位、芯片滤波器、耳放增益和前级模式由设备自身控制。App 仅显示可验证的音频输出设置。'
+              : '系统负责当前设备的数字音频传输；播放接口使用 Float PCM，实际音频格式与访问模式以上方结果为准。',
+          style: const TextStyle(
+              color: UIConfig.textMuted, fontSize: 12, height: 1.6),
+        ),
+      ],
     );
   }
 
@@ -1176,6 +1293,7 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
     required int selectedIndex,
     required Color accent,
     required ValueChanged<int> onSelected,
+    Set<int> disabledOptions = const {},
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1206,9 +1324,10 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
             runSpacing: 8,
             children: List.generate(options.length, (idx) {
               final isSel = (idx == selectedIndex);
+              final enabled = !disabledOptions.contains(idx);
               return InkWell(
                 borderRadius: BorderRadius.circular(20),
-                onTap: () => onSelected(idx),
+                onTap: enabled ? () => onSelected(idx) : null,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   padding:
@@ -1226,7 +1345,9 @@ class _MacDACSettingViewState extends State<MacDACSettingView> {
                   child: Text(
                     options[idx],
                     style: TextStyle(
-                      color: isSel ? Colors.white : Colors.white70,
+                      color: !enabled
+                          ? Colors.white24
+                          : (isSel ? Colors.white : Colors.white70),
                       fontSize: 11,
                       fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
                     ),

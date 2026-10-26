@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
+import 'package:hide_player_flutter/core/platform_helper.dart';
 import 'package:hide_player_flutter/models/sidebar_tab.dart';
+import 'package:hide_player_flutter/platform/platform_audio_runtime.dart';
+import 'package:hide_player_flutter/services/dac_setting_service.dart';
 import 'package:hide_player_flutter/services/mobile_system_service.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:hide_player_flutter/services/theme_service.dart';
 import 'package:hide_player_flutter/theme/hifi_theme.dart';
 import 'package:hide_player_flutter/ui/android/android_player_view.dart';
 import 'package:hide_player_flutter/ui/android/widgets/android_orientation_dialog.dart';
+import 'package:hide_player_flutter/ui/mac/views/mac_dac_setting_view.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -85,29 +89,101 @@ void main() {
     );
   });
 
-  testWidgets('Golden: Android Landscape DAC View matches iPhone 1:1',
+  testWidgets('Golden: Android Landscape DAC shows real USB output controls',
       (tester) async {
-    tester.view.physicalSize = const Size(844, 390);
+    tester.view.physicalSize = const Size(1024, 600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    MusicDatabaseService.instance.setSetting(
-        'active_sidebar_tab', SidebarTab.dacSettings.index.toString());
+    const channel = MethodChannel('test/android-golden-dac');
+    const devices = [
+      {
+        'id': '1',
+        'name': 'Android 扬声器',
+        'transport': 'BuiltIn',
+        'isBuiltIn': true,
+        'sampleRates': [48000],
+        'maxSampleRate': 48000,
+        'maxBitDepth': 24,
+      },
+      {
+        'id': '42',
+        'name': 'TOPPING DX1 II',
+        'transport': 'USB',
+        'sampleRates': [44100, 48000, 96000, 192000, 384000],
+        'channelCounts': [2],
+        'bitDepths': [16, 24, 32],
+        'maxSampleRate': 384000,
+        'maxBitDepth': 32,
+      },
+    ];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      return call.method == 'getOutputDevices' ? devices : devices.last;
+    });
+    final runtime = PlatformAudioRuntime.forTesting(
+      channel: channel,
+      isIOS: false,
+      isAndroid: true,
+      reportOutput: (_) {},
+      configureAndroidOutput: (_, __, ___) => true,
+      setAndroidBufferFrames: (_) => true,
+      readAndroidOutput: () => {
+        'deviceId': 42,
+        'isOpen': true,
+        'sampleRate': 96000,
+        'channels': 2,
+        'bitDepth': 32,
+        'bufferFrames': 512,
+        'exclusive': false,
+      },
+    );
+    await tester.runAsync(() => runtime.refreshOutput());
+    final dac = DacSettingService.forTesting(
+      readDevices: () => '[]',
+      selectOutput: (_) => false,
+      followsSystemOutput: false,
+      runtime: runtime,
+    );
+    addTearDown(() {
+      dac.dispose();
+      runtime.dispose();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
 
     await tester.pumpWidget(
       MaterialApp(
         theme: HifiTheme.darkTheme,
-        home: const AndroidPlayerView(landscape: true),
+        home: Scaffold(
+          body: MacDACSettingView(
+            platform: HifiPlatformType.android,
+            service: dac,
+          ),
+        ),
       ),
     );
     await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
     await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.takeException(), isNull);
+    expect(find.text('输出采样率策略'), findsOneWidget);
+    expect(find.text('独占输出偏好'), findsOneWidget);
 
     await expectLater(
-      find.byType(AndroidPlayerView),
-      matchesGoldenFile('goldens/iphone_landscape_dac.png'),
+      find.byType(MacDACSettingView),
+      matchesGoldenFile('goldens/android_landscape_dac.png'),
     );
+    await tester.drag(find.byType(MacDACSettingView), const Offset(0, -450));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('系统共享').hitTestable(), findsOneWidget);
+    expect(find.text('1024 帧').hitTestable(), findsOneWidget);
+    await expectLater(
+      find.byType(MacDACSettingView),
+      matchesGoldenFile('goldens/android_landscape_dac_settings.png'),
+    );
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('Golden: Android Landscape Theme View matches iPhone 1:1',

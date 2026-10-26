@@ -26,7 +26,9 @@ class DacSettingService extends ChangeNotifier {
         _selectedDeviceIndex < _connectedDevices.length) {
       return _connectedDevices[_selectedDeviceIndex];
     }
-    return followsSystemOutput ? null : _connectedDevices.first;
+    return followsSystemOutput || _runtime.isAndroid
+        ? null
+        : _connectedDevices.first;
   }
 
   DacDeviceInfo? get builtinDevice {
@@ -75,6 +77,7 @@ class DacSettingService extends ChangeNotifier {
         _runtime = PlatformAudioRuntime.instance {
     _loadFromDatabase();
     _runtime.restoreSampleRateMode(sampleRateMode);
+    _restoreAndroidPreferences();
     _runtime.addListener(refreshDevices);
     refreshDevices();
   }
@@ -148,6 +151,7 @@ class DacSettingService extends ChangeNotifier {
       'apple_exclusive', 'apple_sample_rate', 'apple_drive', 'apple_bit_depth',
       'selected_device',
       'builtin_buffer_size', 'builtin_bypass_volume',
+      'android_exclusive', 'android_buffer_frames',
       // ESS 老参数兼容
       'pcm_filter', 'dsd_bypass', 'dsd_cutoff', 'pcm_dpll', 'thd_comp',
       'mono_mode', 'output_mode', 'phase',
@@ -171,9 +175,21 @@ class DacSettingService extends ChangeNotifier {
             0;
   }
 
+  void _restoreAndroidPreferences() {
+    if (!_runtime.isAndroid) return;
+    _runtime.restoreAndroidPreferences(
+      // AudioDeviceInfo IDs can be reassigned after reconnecting or rebooting.
+      deviceId: 0,
+      exclusive: getParam('android_exclusive', 0) == 0,
+      bufferFrames: getParam('android_buffer_frames', 0) > 0
+          ? getParam('android_buffer_frames')
+          : 256,
+    );
+  }
+
   /// 从底层 C++ 实时刷新所连接的全部音频硬件设备列表 (JSON 反序列化)
   Future<void> probeOutputs() async {
-    if (_runtime.isIOS) {
+    if (_runtime.usesHostOutput) {
       await _runtime.probeOutputs();
     } else {
       refreshDevices();
@@ -182,6 +198,39 @@ class DacSettingService extends ChangeNotifier {
 
   void refreshDevices() {
     final output = _runtime.output;
+    if (_runtime.isAndroid) {
+      _connectedDevices = _runtime.outputDevices.map((info) {
+        final name = info['name'] as String? ?? 'Android 音频输出';
+        final transport = info['transport'] as String? ?? 'System';
+        final isDx1ii =
+            transport == 'USB' && PlatformAudioRuntime.isDx1iiName(name);
+        return DacDeviceInfo.fromJson({
+          ...info,
+          'id': info['id'].toString(),
+          'name': name,
+          'isBuiltIn': info['isBuiltIn'] == true || transport == 'BuiltIn',
+          'isHostManaged': true,
+          'brand': isDx1ii ? 'TOPPING' : 'Android',
+          'model': isDx1ii ? 'DX1 II' : name,
+          'chipModel': 'AAudio PCM',
+          'usbInterface': transport,
+          'maxDsdRate': 'DSD 转 PCM',
+          'supportsDsd': false,
+          'supportsHogMode': false,
+          'supportsUacMode': false,
+          'supportsDpll': false,
+          'supportsGainControl': false,
+          'supportsLineOutBypass': false,
+          'maxSampleRate': info['maxSampleRate'] ?? 0,
+          'maxBitDepth': info['maxBitDepth'] ?? 0,
+        });
+      }).toList(growable: false);
+      _selectedDeviceIndex =
+          _connectedDevices.indexWhere((device) => device.isDefault);
+      notifyListeners();
+      onBroadcastNeeded?.call();
+      return;
+    }
     if (_runtime.isIOS) {
       final id = output?['id'] as String? ?? '';
       final name = output?['name'] as String? ?? '';
@@ -257,10 +306,15 @@ class DacSettingService extends ChangeNotifier {
     refreshDevices();
   }
 
-  void selectDevice(int index) {
+  Future<void> selectDevice(int index) async {
     // 同时保护本机界面、HTTP 和 WebSocket，禁止绕过置灰卡片切换系统输出。
     if (!canSelectDevice(index)) return;
     final dev = _connectedDevices[index];
+    if (_runtime.isAndroid) {
+      await _runtime.selectOutputDevice(dev.id);
+      refreshDevices();
+      return;
+    }
     final bindings = HifiAudioBindings.instance;
     final selected = _selectOutput?.call(dev.id) ??
         (!bindings.isLoaded || bindings.selectOutputDevice(dev.id));
@@ -300,6 +354,20 @@ class DacSettingService extends ChangeNotifier {
       setSampleRateMode(val);
       return;
     }
+    if (cleanKey == 'android_exclusive') {
+      _saveParam(cleanKey, val);
+      _runtime.setExclusiveOutput(val == 0);
+      return;
+    }
+    if (cleanKey == 'android_buffer_frames') {
+      _saveParam(cleanKey, val);
+      _runtime.setBufferFrames(val);
+      return;
+    }
+    _saveParam(cleanKey, val);
+  }
+
+  void _saveParam(String cleanKey, int val) {
     if (_params[cleanKey] == val) return;
     _params[cleanKey] = val;
     MusicDatabaseService.instance

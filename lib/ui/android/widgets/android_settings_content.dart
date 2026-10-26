@@ -217,6 +217,10 @@ class _AndroidSettingsContentState extends State<AndroidSettingsContent> {
         setState(() => _scanMessage =
             '扫描完成，音乐库共有 ${MusicDatabaseService.instance.tracks.length} 首歌曲。');
       }
+    } on MusicLibraryScanException catch (error) {
+      if (mounted) {
+        setState(() => _scanMessage = error.message);
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _scanMessage = '扫描失败，请检查音乐目录和文件访问权限。');

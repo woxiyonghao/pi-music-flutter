@@ -9,6 +9,14 @@ class DacDeviceInfo {
   final int maxSampleRate;
   final int maxBitDepth;
   final bool isHostManaged;
+  final List<int> sampleRates;
+  final List<int> channelCounts;
+  final List<int> bitDepths;
+  final int currentBitDepth;
+  final int currentChannels;
+  final int bufferFrames;
+  final bool isExclusive;
+  final bool isOpen;
 
   // 硬件芯片画像
   final String brand;
@@ -35,6 +43,14 @@ class DacDeviceInfo {
     this.maxSampleRate = 384000,
     this.maxBitDepth = 32,
     this.isHostManaged = false,
+    this.sampleRates = const [],
+    this.channelCounts = const [],
+    this.bitDepths = const [],
+    this.currentBitDepth = 0,
+    this.currentChannels = 0,
+    this.bufferFrames = 0,
+    this.isExclusive = false,
+    this.isOpen = false,
     required this.brand,
     required this.model,
     required this.chipModel,
@@ -61,6 +77,14 @@ class DacDeviceInfo {
       maxSampleRate: json['maxSampleRate'] as int? ?? 384000,
       maxBitDepth: json['maxBitDepth'] as int? ?? 32,
       isHostManaged: json['isHostManaged'] as bool? ?? false,
+      sampleRates: _intList(json['sampleRates']),
+      channelCounts: _intList(json['channelCounts']),
+      bitDepths: _intList(json['bitDepths']),
+      currentBitDepth: (json['bitDepth'] as num?)?.toInt() ?? 0,
+      currentChannels: (json['channels'] as num?)?.toInt() ?? 0,
+      bufferFrames: (json['bufferFrames'] as num?)?.toInt() ?? 0,
+      isExclusive: json['exclusive'] == true,
+      isOpen: json['isOpen'] == true,
       brand: json['brand'] as String? ?? '',
       model: json['model'] as String? ?? '',
       chipModel: json['chipModel'] as String? ?? '',
@@ -82,6 +106,13 @@ class DacDeviceInfo {
           [],
     );
   }
+
+  static List<int> _intList(dynamic value) => value is List
+      ? value
+          .whereType<num>()
+          .map((item) => item.toInt())
+          .toList(growable: false)
+      : const [];
 
   /// 规格角标徽章 (如 "384kHz / 32Bit · DSD256")
   String get specBadge {
@@ -125,6 +156,14 @@ class DacDeviceInfo {
         'maxSampleRate': maxSampleRate,
         'maxBitDepth': maxBitDepth,
         'isHostManaged': isHostManaged,
+        'sampleRates': sampleRates,
+        'channelCounts': channelCounts,
+        'bitDepths': bitDepths,
+        'bitDepth': currentBitDepth,
+        'channels': currentChannels,
+        'bufferFrames': bufferFrames,
+        'exclusive': isExclusive,
+        'isOpen': isOpen,
         'brand': brand,
         'model': model,
         'chipModel': chipModel,

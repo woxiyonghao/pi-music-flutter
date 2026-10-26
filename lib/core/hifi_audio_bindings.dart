@@ -332,6 +332,42 @@ class HifiAudioBindings {
     }
   }
 
+  /// Android AAudio preferences. The backend reports what it negotiated.
+  bool configureAndroidOutput(
+      {int deviceId = 0, int sampleRate = 0, bool exclusive = true}) {
+    if (!_isLoaded || !Platform.isAndroid) return false;
+    try {
+      return _lib.lookupFunction<Bool Function(Int32, Uint32, Bool),
+          bool Function(int, int, bool)>('hifi_audio_configure_android_output')(
+          deviceId, sampleRate, exclusive);
+    } catch (error) {
+      debugPrint('[HifiAudioBindings] Android output configuration failed: $error');
+      return false;
+    }
+  }
+
+  Map<String, dynamic> get androidOutputState {
+    if (!_isLoaded || !Platform.isAndroid) return {};
+    try {
+      final value = _lib.lookupFunction<Pointer<Utf8> Function(),
+          Pointer<Utf8> Function()>('hifi_audio_get_android_output_state_json')();
+      return jsonDecode(value.toDartString()) as Map<String, dynamic>;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  bool setHardwareBufferFrames(int frames) {
+    if (!_isLoaded || frames < 64 || frames > 16384) return false;
+    try {
+      _lib.lookupFunction<Void Function(Uint32), void Function(int)>(
+          'hifi_audio_set_hardware_buffer_frames')(frames);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   bool openAndPlay(String path) {
     if (!_isLoaded) return false;
     final nativePath = path.toNativeUtf8();

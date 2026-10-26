@@ -6,6 +6,7 @@ import 'core/hifi_audio_bindings.dart';
 import 'core/hifi_audio_service.dart';
 import 'platform/platform_audio_runtime.dart';
 import 'services/mseb_service.dart';
+import 'services/dac_setting_service.dart';
 import 'services/music_database_service.dart';
 import 'services/web_remote_service.dart';
 import 'theme/hifi_theme.dart';
@@ -31,6 +32,7 @@ Future<void> initializePlayer() async {
         'audio_engine initialization failed: ${HifiAudioBindings.instance.loadError}');
   }
   MusicDatabaseService.instance.loadLibrary();
+  DacSettingService.instance.refreshDevices();
   MsebService.instance.reloadFromDatabase();
   HifiAudioService.instance.reloadEqSettings();
 }

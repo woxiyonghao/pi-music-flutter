@@ -228,7 +228,7 @@ class MobileSystemService extends ChangeNotifier {
     try {
       final result =
           await channel.invokeMethod<bool>('ensureStoragePermission');
-      return result ?? true;
+      return result == true;
     } catch (_) {
       return false;
     }

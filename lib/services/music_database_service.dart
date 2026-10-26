@@ -11,6 +11,15 @@ import 'cue_parser.dart';
 import 'mobile_system_service.dart';
 import 'wifi_transfer_service.dart';
 
+class MusicLibraryScanException implements Exception {
+  const MusicLibraryScanException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// 发烧曲库数据库服务 (读取 C++ 纯音数播持久化 SQLite 数据库)
 class MusicDatabaseService extends ChangeNotifier {
   static final MusicDatabaseService instance = MusicDatabaseService._();
@@ -21,7 +30,9 @@ class MusicDatabaseService extends ChangeNotifier {
   List<Playlist> _playlists = [];
   List<Playlist> get playlists => _playlists;
 
-  MusicDatabaseService._() : _musicDirectoryOverride = null {
+  MusicDatabaseService._()
+      : _musicDirectoryOverride = null,
+        _requestStoragePermissionOverride = null {
     deleteSetting('setting_idle_screensaver_theme');
     loadLibrary();
   }
@@ -30,8 +41,10 @@ class MusicDatabaseService extends ChangeNotifier {
   MusicDatabaseService.forTesting(
     String databasePath, {
     String? musicDirectory,
+    Future<bool> Function()? requestStoragePermission,
   })  : _customDatabasePathForTesting = databasePath,
-        _musicDirectoryOverride = musicDirectory;
+        _musicDirectoryOverride = musicDirectory,
+        _requestStoragePermissionOverride = requestStoragePermission;
 
   Future<void> initializeLibrary() async {
     if (Platform.isIOS || Platform.isAndroid) await syncPublicMusicFolder();
@@ -56,6 +69,7 @@ class MusicDatabaseService extends ChangeNotifier {
 
   String? _customDatabasePathForTesting;
   final String? _musicDirectoryOverride;
+  final Future<bool> Function()? _requestStoragePermissionOverride;
 
   @visibleForTesting
   set customDatabasePathForTesting(String? path) {
@@ -497,15 +511,18 @@ class MusicDatabaseService extends ChangeNotifier {
         if (t.isCueTrack && t.filepath.isNotEmpty) {
           cueAudioFiles.add(t.filepath.toLowerCase());
           cueAudioFiles.add(p.canonicalize(t.filepath).toLowerCase());
-          cueAudioFiles.add(_normalizeAndroidScanPath(t.filepath).toLowerCase());
+          cueAudioFiles
+              .add(_normalizeAndroidScanPath(t.filepath).toLowerCase());
         }
       }
       if (cueAudioFiles.isNotEmpty) {
         loaded.removeWhere((t) =>
             !t.isCueTrack &&
             (cueAudioFiles.contains(t.filepath.toLowerCase()) ||
-                cueAudioFiles.contains(p.canonicalize(t.filepath).toLowerCase()) ||
-                cueAudioFiles.contains(_normalizeAndroidScanPath(t.filepath).toLowerCase())));
+                cueAudioFiles
+                    .contains(p.canonicalize(t.filepath).toLowerCase()) ||
+                cueAudioFiles.contains(
+                    _normalizeAndroidScanPath(t.filepath).toLowerCase())));
       }
 
       // 读取用户播放列表
@@ -653,6 +670,21 @@ class MusicDatabaseService extends ChangeNotifier {
   }
 
   Future<int> _scanLibrary({String? customPath, String? directory}) async {
+    // Audio-only permission can expose WAV files while hiding their CUE
+    // sidecars. Wait for complete shared-storage access before replacing the
+    // library, including scans of an explicitly selected shared directory.
+    final requestStoragePermission = _requestStoragePermissionOverride;
+    if (requestStoragePermission != null ||
+        (Platform.isAndroid &&
+            (customPath == null || _isAndroidSharedStoragePath(customPath)))) {
+      final granted = await (requestStoragePermission?.call() ??
+          MobileSystemService.instance.ensureStoragePermission());
+      if (!granted) {
+        throw const MusicLibraryScanException(
+            '请允许“所有文件访问权限”后重新扫描，才能读取共享目录中的 CUE 分轨文件。原曲库已保留。');
+      }
+    }
+
     final home = Platform.environment['HOME'] ?? '';
     final scanDirs = <String>{};
 
@@ -701,7 +733,6 @@ class MusicDatabaseService extends ChangeNotifier {
         await Directory(AppPaths.musicDirectory).create(recursive: true);
         addScanDir(AppPaths.musicDirectory);
       } else if (Platform.isAndroid) {
-        await MobileSystemService.instance.ensureStoragePermission();
         await Directory(AppPaths.musicDirectory).create(recursive: true);
         addScanDir(AppPaths.musicDirectory);
         final wifiDir = WifiTransferService.instance.targetDir;
@@ -772,7 +803,8 @@ class MusicDatabaseService extends ChangeNotifier {
       }
 
       final ext = p.extension(filename).toLowerCase();
-      final canonical = p.canonicalize(_normalizeAndroidScanPath(entity.absolute.path));
+      final canonical =
+          p.canonicalize(_normalizeAndroidScanPath(entity.absolute.path));
       if (ext == '.cue') {
         foundCueFiles[canonical] = entity;
       } else if (audioExtensions.contains(ext)) {
@@ -873,8 +905,12 @@ class MusicDatabaseService extends ChangeNotifier {
           cueHandledAudioPathsLower.add(rawAudioPath.toLowerCase());
           cueHandledAudioPathsLower.add(normAudioPath.toLowerCase());
           cueHandledAudioPathsLower.add(cueTrk.resolvedAudioPath.toLowerCase());
-          cueHandledAudioPathsLower.add(referencedFile.absolute.path.toLowerCase());
-          cueHandledAudioPathsLower.add(p.canonicalize(_normalizeAndroidScanPath(referencedFile.absolute.path)).toLowerCase());
+          cueHandledAudioPathsLower
+              .add(referencedFile.absolute.path.toLowerCase());
+          cueHandledAudioPathsLower.add(p
+              .canonicalize(
+                  _normalizeAndroidScanPath(referencedFile.absolute.path))
+              .toLowerCase());
 
           final trackKey =
               'cue:${canonicalAudio.toLowerCase()}:${cueTrk.trackNumber}:${cueTrk.startTimeSec}';
