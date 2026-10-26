@@ -283,7 +283,7 @@ void IphoneDsdDecoder::close() {
 }
 
 std::unique_ptr<IAudioDecoder> createDsdDecoderForClient(std::string_view platform) {
-    if (platform == "iphone") return std::make_unique<IphoneDsdDecoder>();
+    if (platform == "iphone" || platform == "android") return std::make_unique<IphoneDsdDecoder>();
     return std::make_unique<DsfParser>();
 }
 } // namespace audio_engine
