@@ -85,6 +85,8 @@ public:
     void setExternalDeviceMock(bool enable);
     bool isExternalDeviceMock() const;
     std::string getDiagnosticsJson() const;
+    bool configureAndroidOutput(int32_t device_id, uint32_t sample_rate, bool exclusive);
+    std::string getAndroidOutputStateJson() const;
 
     // 状态查询
     bool isPlaying() const;

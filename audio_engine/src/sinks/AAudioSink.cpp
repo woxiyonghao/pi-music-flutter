@@ -1,5 +1,6 @@
 #include "audio_engine/sinks/AAudioSink.hpp"
 #include <cstring>
+#include "audio_engine/RuntimeContext.hpp"
 #include <iostream>
 
 namespace audio_engine {
@@ -50,6 +51,8 @@ bool AAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback callb
         return false;
     }
 
+    const auto preferences = runtimeContext().androidOutputPreferences();
+    AAudioStreamBuilder_setDeviceId(builder, preferences.device_id);
     AAudioStreamBuilder_setDirection(builder, AAUDIO_DIRECTION_OUTPUT);
     AAudioStreamBuilder_setSampleRate(builder, requested_spec.sample_rate > 0 ? requested_spec.sample_rate : 44100);
     AAudioStreamBuilder_setChannelCount(builder, requested_spec.channels > 0 ? requested_spec.channels : 2);
@@ -57,12 +60,12 @@ bool AAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback callb
     AAudioStreamBuilder_setPerformanceMode(builder, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
 
     // 优先尝试 EXCLUSIVE 独占流 (Bit-Perfect 直通)
-    AAudioStreamBuilder_setSharingMode(builder, AAUDIO_SHARING_MODE_EXCLUSIVE);
+    AAudioStreamBuilder_setSharingMode(builder, preferences.exclusive ? AAUDIO_SHARING_MODE_EXCLUSIVE : AAUDIO_SHARING_MODE_SHARED);
     AAudioStreamBuilder_setDataCallback(builder, dataCallbackThunk, this);
     AAudioStreamBuilder_setErrorCallback(builder, errorCallbackThunk, this);
 
     result = AAudioStreamBuilder_openStream(builder, &stream_);
-    if (result != AAUDIO_OK || !stream_) {
+    if ((result != AAUDIO_OK || !stream_) && preferences.exclusive) {
         std::cout << "[AAudioSink] EXCLUSIVE 独占流不可用，尝试降级为 SHARED 共享流: "
                   << AAudio_convertResultToText(result) << std::endl;
         AAudioStreamBuilder_setSharingMode(builder, AAUDIO_SHARING_MODE_SHARED);
@@ -85,8 +88,8 @@ bool AAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback callb
 
     int32_t burst = AAudioStream_getFramesPerBurst(stream_);
     if (burst > 0) {
-        AAudioStream_setBufferSizeInFrames(stream_, burst * 2);
-        buffer_size_samples_ = burst * 2;
+        const auto actual = AAudioStream_setBufferSizeInFrames(stream_, static_cast<int32_t>(buffer_size_samples_));
+        if (actual > 0) buffer_size_samples_ = actual;
     }
 
     aaudio_sharing_mode_t sharing = AAudioStream_getSharingMode(stream_);
@@ -158,7 +161,7 @@ double AAudioSink::getHardwareLatencySec() const {
 }
 
 bool AAudioSink::isOpen() const {
-    return stream_ != nullptr;
+    return stream_ != nullptr && !is_disconnected_.load(std::memory_order_acquire);
 }
 
 AudioFormatSpec AAudioSink::getActualSpec() const {
@@ -168,7 +171,8 @@ AudioFormatSpec AAudioSink::getActualSpec() const {
 void AAudioSink::setBufferSize(uint32_t samples) {
     buffer_size_samples_ = samples;
     if (stream_ && samples > 0) {
-        AAudioStream_setBufferSizeInFrames(stream_, static_cast<int32_t>(samples));
+        const auto actual = AAudioStream_setBufferSizeInFrames(stream_, static_cast<int32_t>(samples));
+        if (actual > 0) buffer_size_samples_ = actual;
     }
 }
 

@@ -24,10 +24,13 @@ public:
 
     double getHardwareLatencySec() const override;
     bool isOpen() const override;
+    bool hasError() const override { return is_disconnected_.load(std::memory_order_acquire); }
     AudioFormatSpec getActualSpec() const override;
     void setBufferSize(uint32_t samples) override;
     uint32_t getBufferSize() const override { return buffer_size_samples_; }
     std::string getDeviceName() const override { return active_device_name_; }
+    int32_t getDeviceId() const { return stream_ ? AAudioStream_getDeviceId(stream_) : 0; }
+    bool isExclusive() const { return stream_ && AAudioStream_getSharingMode(stream_) == AAUDIO_SHARING_MODE_EXCLUSIVE; }
 
 private:
     AAudioStream* stream_ = nullptr;

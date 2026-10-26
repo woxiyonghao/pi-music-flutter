@@ -14,6 +14,7 @@
 
 #if defined(__ANDROID__)
 #include "audio_engine/sinks/AAudioSink.hpp"
+#include "audio_engine/decoders/PcmRateDecoder.hpp"
 #elif defined(__APPLE__)
 #include "audio_engine/sinks/AudioQueueSink.hpp"
 #if TARGET_OS_IPHONE
@@ -287,6 +288,24 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
     }
 #endif
 
+#if defined(__ANDROID__)
+    // Open first: AAudio may negotiate a different rate. Convert on the decode
+    // thread so choosing 96 kHz never changes a 44.1 kHz recording's pitch.
+    auto android_spec = new_decoder->getSpec();
+    const auto preferences = runtimeContext().androidOutputPreferences();
+    if (preferences.sample_rate) android_spec.sample_rate = preferences.sample_rate;
+    sink_->close();
+    if (!sink_->open(android_spec, [this](float* output, size_t frames) {
+            onSinkDataNeeded(output, frames);
+        })) return false;
+    const auto actual = sink_->getActualSpec();
+    if (actual.channels != new_decoder->getSpec().channels) return false;
+    is_resampling_.store(actual.sample_rate != new_decoder->getSpec().sample_rate);
+    if (is_resampling_.load()) {
+        new_decoder = std::make_unique<PcmRateDecoder>(std::move(new_decoder), actual.sample_rate);
+    }
+#endif
+
     {
         std::lock_guard lock(decoder_mutex_);
         decoder_ = std::move(new_decoder);
@@ -331,6 +350,8 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
     releaseHogMode();
 #endif
 
+    // Android already opened the stream to negotiate its decode format above.
+#if !defined(__ANDROID__)
     // 2. 打开硬件输出设备 (根据用户设置的目标采样率与母带采样率协商)
     sink_->close();
     if (!sink_->open(current_spec_, [this](float* output, size_t frame_count) {
@@ -340,6 +361,7 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
         return false;
     }
 
+#endif
     is_playing_.store(true, std::memory_order_release);
     is_paused_.store(false, std::memory_order_release);
     is_decoding_.store(true, std::memory_order_release);
@@ -532,6 +554,11 @@ bool AudioEngine::isBitPerfectDirect() const {
 #if defined(__APPLE__) && TARGET_OS_OSX
     return soft_clean && !is_resampling_.load() && !isCurrentDeviceBluetooth();
 #endif
+#if defined(__ANDROID__)
+    // AAudio exposes the application stream, not the USB DAC's final format
+    // or the system mixer's complete processing chain.
+    return false;
+#endif
     return soft_clean;
 }
 
@@ -639,6 +666,72 @@ void AudioEngine::unregisterDeviceListener() {
         kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
     AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &address, onDefaultDeviceChangedThunk, this);
 #endif
+#endif
+}
+
+bool AudioEngine::configureAndroidOutput(int32_t id, uint32_t rate, bool exclusive) {
+#if defined(__ANDROID__)
+    std::lock_guard lock(device_mutex_);
+    const auto previous = runtimeContext().androidOutputPreferences();
+    const AndroidOutputPreferences requested{id, rate, exclusive};
+    if (requested == previous && sink_->isOpen()) {
+        const auto* android_sink = static_cast<AAudioSink*>(sink_.get());
+        if (id == 0 || android_sink->getDeviceId() == id) return true;
+    }
+    if (!runtimeContext().setAndroidOutputPreferences(requested)) return false;
+    const bool playing = isPlaying();
+    const auto file = decoder_ && (isPlaying() || isPaused()) ? current_filepath_ : std::string{};
+    const auto position = getCurrentTimeSec();
+    const auto start = section_start_sec_.load();
+    const auto end = section_end_sec_.load();
+    auto reopen = [&]() {
+        if (!file.empty()) {
+            // Bypass same-file CUE fast switching: its existing stream and
+            // converter use the old preferences.
+            stop();
+            sink_->close();
+            if (!openAndPlaySection(file, start, end)) return false;
+            seek(position);
+            if (!playing) pause();
+        } else {
+            sink_->close();
+            AudioFormatSpec spec{runtimeContext().androidOutputPreferences().sample_rate, 2, 32, SampleFormat::Float32};
+            if (!sink_->open(spec, [](float* output, size_t frames) { std::memset(output, 0, frames * 2 * sizeof(float)); })) return false;
+        }
+        return true;
+    };
+    // Reopening starts the backend before seek can prebuffer the saved position.
+    // Keep that transition silent, including when restoring a paused track.
+    const bool muted = is_muted_.exchange(true);
+    const bool opened = reopen();
+    if (!opened) {
+        runtimeContext().setAndroidOutputPreferences(previous);
+        reopen();
+    }
+    is_muted_.store(muted);
+    return opened;
+#else
+    return false;
+#endif
+}
+
+std::string AudioEngine::getAndroidOutputStateJson() const {
+#if defined(__ANDROID__)
+    std::lock_guard lock(const_cast<AudioEngine*>(this)->device_mutex_);
+    const auto* android_sink = static_cast<const AAudioSink*>(sink_.get());
+    const bool open = android_sink && android_sink->isOpen();
+    const auto spec = open ? android_sink->getActualSpec() : AudioFormatSpec{};
+    std::ostringstream out;
+    out << "{\"isOpen\":" << (open ? "true" : "false")
+        << ",\"deviceId\":" << (open ? android_sink->getDeviceId() : 0)
+        << ",\"sampleRate\":" << (open ? spec.sample_rate : 0)
+        << ",\"channels\":" << (open ? spec.channels : 0)
+        << ",\"bitDepth\":" << (open ? spec.bit_depth : 0)
+        << ",\"bufferFrames\":" << (open ? android_sink->getBufferSize() : 0)
+        << ",\"exclusive\":" << (open && android_sink->isExclusive() ? "true" : "false") << "}";
+    return out.str();
+#else
+    return "{}";
 #endif
 }
 
@@ -766,7 +859,7 @@ std::string AudioEngine::getActiveHardwareDeviceName() const {
         }
     }
     return "系统默认音频输出";
-#elif defined(__APPLE__) && TARGET_OS_IPHONE
+#elif (defined(__APPLE__) && TARGET_OS_IPHONE) || defined(__ANDROID__)
     return runtimeContext().hostOutput().name;
 #else
     if (sink_ && sink_->isOpen()) {

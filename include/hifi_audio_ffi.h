@@ -79,6 +79,10 @@ HIFI_EXPORT void hifi_audio_set_eof_callback(HifiEofCallback callback);
 // 9. 动态 DAC 外设与芯片画像识别 (返回 JSON 字符串数组)
 HIFI_EXPORT const char* hifi_audio_get_connected_devices_json();
 HIFI_EXPORT bool hifi_audio_select_output_device(const char* device_id);
+// Android: preferences reopen the AAudio stream, preserving playback position.
+// State reports negotiated application stream format, not USB hardware encoding.
+HIFI_EXPORT bool hifi_audio_configure_android_output(int32_t device_id, uint32_t sample_rate, bool exclusive);
+HIFI_EXPORT const char* hifi_audio_get_android_output_state_json();
 HIFI_EXPORT void hifi_audio_set_external_device_mock(bool enable);
 HIFI_EXPORT bool hifi_audio_is_external_device_mock();
 HIFI_EXPORT const char* hifi_audio_get_diagnostics_json();

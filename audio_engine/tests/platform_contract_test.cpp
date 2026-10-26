@@ -35,6 +35,11 @@ int main() {
         require(context.updateHostOutput({16000, 1, "airpods-id", "AirPods Pro", "Bluetooth"}), "Voice route rejected");
         require(context.hostOutput().channels == 1, "Route update was lost");
 
+        require(context.setAndroidOutputPreferences({23, 96000, false}), "Android preferences rejected");
+        require(context.androidOutputPreferences() == AndroidOutputPreferences{23, 96000, false}, "Android preferences were not preserved");
+        require(!context.setAndroidOutputPreferences({-1, 48000, true}), "Invalid Android id accepted");
+        require(!context.setAndroidOutputPreferences({0, 7999, true}), "Invalid Android sample rate accepted");
+        require(context.setAndroidOutputPreferences({0, 0, true}), "Android automatic preferences rejected");
         require(hifi_audio_get_abi_version() == 2, "C ABI version mismatch");
         require(!hifi_audio_init(), "C ABI silently guessed its platform");
         require(!hifi_audio_init_for_platform(nullptr, 0), "Null platform accepted");

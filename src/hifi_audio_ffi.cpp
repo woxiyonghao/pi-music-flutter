@@ -22,7 +22,9 @@ bool hifi_audio_update_host_output(uint32_t rate, uint32_t channels,
         const char* id, const char* name, const char* transport) {
     if (!id || !name || !transport || !audio_engine::runtimeContext().configured()) return false;
     if (!audio_engine::runtimeContext().updateHostOutput({rate, channels, id, name, transport})) return false;
+#if !defined(__ANDROID__)
     audio_engine::AudioEngine::getInstance().notifyOutputDeviceChanged();
+#endif
     return true;
 }
 
@@ -201,6 +203,17 @@ static thread_local std::string g_devices_json_cache;
 const char* hifi_audio_get_connected_devices_json() {
     g_devices_json_cache = audio_engine::AudioEngine::getInstance().getConnectedDevicesJson();
     return g_devices_json_cache.c_str();
+}
+
+bool hifi_audio_configure_android_output(int32_t id, uint32_t rate, bool exclusive) {
+    if (!audio_engine::runtimeContext().configured()) return false;
+    return audio_engine::AudioEngine::getInstance().configureAndroidOutput(id, rate, exclusive);
+}
+
+const char* hifi_audio_get_android_output_state_json() {
+    static thread_local std::string state;
+    state = audio_engine::AudioEngine::getInstance().getAndroidOutputStateJson();
+    return state.c_str();
 }
 
 bool hifi_audio_select_output_device(const char* device_id) {

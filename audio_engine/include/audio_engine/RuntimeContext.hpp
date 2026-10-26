@@ -16,6 +16,13 @@ enum OutputPolicy : uint32_t {
     prefer_external_output = 8,
 };
 
+struct AndroidOutputPreferences {
+    int32_t device_id = 0; // 0 follows Android's media route
+    uint32_t sample_rate = 0; // 0 follows the source
+    bool exclusive = true; // preference; the stream reports the actual mode
+    bool operator==(const AndroidOutputPreferences&) const = default;
+};
+
 struct HostOutput {
     uint32_t sample_rate = 0;
     uint32_t channels = 0;
@@ -66,6 +73,17 @@ public:
         host_output_ = std::move(output);
         return true;
     }
+    bool setAndroidOutputPreferences(AndroidOutputPreferences preferences) {
+        if (preferences.device_id < 0 || (preferences.sample_rate != 0 &&
+            (preferences.sample_rate < 8000 || preferences.sample_rate > 768000))) return false;
+        std::lock_guard lock(mutex_);
+        android_output_ = preferences;
+        return true;
+    }
+    AndroidOutputPreferences androidOutputPreferences() const {
+        std::lock_guard lock(mutex_);
+        return android_output_;
+    }
     HostOutput hostOutput() const {
         std::lock_guard lock(mutex_);
         return host_output_;
@@ -76,6 +94,7 @@ private:
     std::atomic<ClientPlatform> platform_{ClientPlatform::unknown};
     std::atomic<uint32_t> policies_{0};
     HostOutput host_output_;
+    AndroidOutputPreferences android_output_;
 };
 
 inline RuntimeContext& runtimeContext() {
