@@ -462,14 +462,17 @@ class HifiAudioService extends ChangeNotifier {
     _consecutiveErrors = 0;
     _completion.reset();
     isPlayingNotifier.value = _playWhenPrepared;
+    final nativeDuration = _bindings.getDuration();
+    final effectiveDuration =
+        nativeDuration > 0 ? nativeDuration : track.durationSec.toDouble();
     _state = PlaybackState(
       isPlaying: _playWhenPrepared,
       isPaused: !_playWhenPrepared,
       isBitPerfect: _bindings.isBitPerfect() && !isDspEnabled,
       currentTime: position,
-      duration: track.durationSec.toDouble(),
-      progress: track.durationSec > 0
-          ? (position / track.durationSec).clamp(0.0, 1.0)
+      duration: effectiveDuration,
+      progress: effectiveDuration > 0
+          ? (position / effectiveDuration).clamp(0.0, 1.0)
           : 0.0,
       volume: _state.volume,
       isMuted: _state.isMuted,
