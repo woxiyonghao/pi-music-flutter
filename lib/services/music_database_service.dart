@@ -424,7 +424,10 @@ class MusicDatabaseService extends ChangeNotifier {
         int bitDepth = row['bit_depth'] as int? ?? 16;
         int durationSec = row['duration_sec'] as int? ?? 0;
         final isCueTrack = (row['is_cue_track'] as int? ?? 0) == 1;
-        if (!isTest && !isCueTrack && durationSec <= 0 && filepath.isNotEmpty) {
+        if (!isCueTrack &&
+            durationSec <= 0 &&
+            filepath.isNotEmpty &&
+            File(filepath).existsSync()) {
           final parsed = AudioMetadataHelper.parse(File(filepath), format);
           if (parsed.durationSec > 0) {
             sampleRate = parsed.sampleRate;
@@ -469,7 +472,7 @@ class MusicDatabaseService extends ChangeNotifier {
           debugPrint('[MusicDatabaseService] 路径自愈失败: $e');
         }
       }
-      if (metaToHeal.isNotEmpty && !isTest) {
+      if (metaToHeal.isNotEmpty) {
         try {
           final metaStmt = db.prepare(
               'UPDATE scanned_tracks SET sample_rate = ?, bit_depth = ?, duration_sec = ? WHERE id = ?;');

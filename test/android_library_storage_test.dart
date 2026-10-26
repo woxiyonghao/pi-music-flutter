@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/app_paths.dart';
@@ -6,6 +7,7 @@ import 'package:hide_player_flutter/models/track.dart';
 import 'package:hide_player_flutter/services/audio_metadata_helper.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 void main() {
   test('Android music and database paths remain in Documents without HOME', () {
@@ -130,6 +132,52 @@ void main() {
       expect(meta.sampleRate, 44100);
       expect(meta.bitDepth, 16);
       expect(meta.durationSec, 100);
+    });
+
+    test('auto-heals zero-duration DSD (DSF/DFF) tracks from SQLite on load', () async {
+      music.createSync();
+      final dsfFile = File(p.join(music.path, 'test_dsd.dsf'));
+      final builder = BytesBuilder();
+      builder.add([0x44, 0x53, 0x44, 0x20]); // 'DSD '
+      final bdHdr = ByteData(24);
+      bdHdr.setUint64(0, 28, Endian.little);
+      bdHdr.setUint64(8, 28 + 52 + 12 + 100, Endian.little);
+      builder.add(bdHdr.buffer.asUint8List());
+
+      builder.add([0x66, 0x6D, 0x74, 0x20]); // 'fmt '
+      final bdFmtHdr = ByteData(8)..setUint64(0, 52, Endian.little);
+      builder.add(bdFmtHdr.buffer.asUint8List());
+      final bdFmt = ByteData(40);
+      bdFmt.setUint32(0, 1, Endian.little);
+      bdFmt.setUint32(12, 2, Endian.little); // 2 ch
+      bdFmt.setUint32(16, 2822400, Endian.little); // 2.8224 MHz
+      bdFmt.setUint32(20, 1, Endian.little); // 1-bit
+      bdFmt.setUint64(24, 2822400 * 240, Endian.little); // 240 seconds
+      builder.add(bdFmt.buffer.asUint8List());
+      builder.add([0x64, 0x61, 0x74, 0x61]); // 'data'
+      final bdDataHdr = ByteData(8)..setUint64(0, 12 + 100, Endian.little);
+      builder.add(bdDataHdr.buffer.asUint8List());
+      dsfFile.writeAsBytesSync(builder.toBytes());
+
+      final library = openLibrary();
+      addTearDown(library.dispose);
+      library.setSetting('init', '1');
+      library.loadLibrary();
+
+      // Insert zero-duration DSD track into database directly
+      final rawDb = sqlite.sqlite3.open(database);
+      rawDb.execute('''
+        INSERT INTO scanned_tracks (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec)
+        VALUES (999, 'DSD Symphony', 'Artist', 'Album', ?, 3, 0, 0, 0)
+      ''', [dsfFile.path]);
+      rawDb.dispose();
+
+      // Reload library - should auto-heal to 240s!
+      library.loadLibrary();
+      final healed = library.tracks.firstWhere((t) => t.id == 999);
+      expect(healed.durationSec, 240);
+      expect(healed.sampleRate, 2822400);
+      expect(healed.bitDepth, 1);
     });
   });
 }
