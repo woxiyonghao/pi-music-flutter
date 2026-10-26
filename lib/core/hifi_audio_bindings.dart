@@ -1,5 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:convert';
 import '../platform/application_config.dart';
 import 'package:ffi/ffi.dart';
@@ -352,6 +353,21 @@ class HifiAudioBindings {
   void toggle() => _isLoaded ? _toggle() : null;
   void stop() => _isLoaded ? _stop() : null;
   void seek(double sec) => _isLoaded ? _seek(sec) : null;
+
+  Future<void> seekAsync(double sec) async {
+    if (!_isLoaded) return;
+    if (Platform.isAndroid &&
+        !Platform.environment.containsKey('FLUTTER_TEST')) {
+      await Isolate.run(() {
+        final lib = DynamicLibrary.open('libhifi_audio_ffi.so');
+        final fn = lib.lookupFunction<_HifiAudioSeekC, _HifiAudioSeekDart>(
+            'hifi_audio_seek');
+        fn(sec);
+      });
+      return;
+    }
+    _seek(sec);
+  }
   bool isPlaying() => _isLoaded ? _isPlaying() : false;
   bool isPaused() => _isLoaded ? _isPaused() : false;
   bool isIdle() => _isLoaded ? _isIdle() : true;

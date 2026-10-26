@@ -28,6 +28,10 @@ class HifiAudioService extends ChangeNotifier {
   bool get isPreparingTrack => _isPreparingTrack;
   bool _playWhenPrepared = true;
   double? _pendingSeek;
+  bool _isSeeking = false;
+  double? _queuedSeekTarget;
+  Future<void>? _activeSeekDrain;
+  bool _stopAfterSeek = false;
 
   Track? _currentTrack;
   Track? get currentTrack => _currentTrack;
@@ -235,9 +239,10 @@ class HifiAudioService extends ChangeNotifier {
 
       final isPlaying = _bindings.isPlaying();
       final isPaused = _bindings.isPaused();
-      final currentTime = _bindings.getCurrentTime();
+      final currentTime =
+          _isSeeking ? _state.currentTime : _bindings.getCurrentTime();
       final duration = _bindings.getDuration();
-      final progress = _bindings.getProgress();
+      final progress = _isSeeking ? _state.progress : _bindings.getProgress();
       final volume = _bindings.getVolume();
       final isMuted = _bindings.isMuted();
       final isBitPerfect = _bindings.isBitPerfect() && !isDspEnabled;
@@ -319,6 +324,8 @@ class HifiAudioService extends ChangeNotifier {
     _isPreparingTrack = true;
     _playWhenPrepared = true;
     _pendingSeek = null;
+    _queuedSeekTarget = null;
+    _stopAfterSeek = false;
     _currentTrack = track;
     currentTrackIdNotifier.value = track.id;
     currentTrackNotifier.value = track;
@@ -367,6 +374,10 @@ class HifiAudioService extends ChangeNotifier {
     try {
       await (_prepareFileOverride ?? _prepareFile)(resolvedPath);
       if (generation != _loadGeneration) return;
+      if (_activeSeekDrain != null) {
+        await _activeSeekDrain;
+        if (generation != _loadGeneration) return;
+      }
       if (!await _runtime.activate(sourceSampleRate: track.sampleRate)) {
         throw StateError(
             _runtime.lastSessionError ?? 'Audio session activation was denied');
@@ -443,7 +454,7 @@ class HifiAudioService extends ChangeNotifier {
     lastDebugLog = 'SUCCESS_PLAY: $resolvedPath';
     unawaited(_runtime.refreshOutput(stage: 'native_playback_started'));
     final position = _pendingSeek ?? 0.0;
-    if (_pendingSeek != null) _bindings.seek(position);
+    if (_pendingSeek != null) seek(position);
     if (!_playWhenPrepared) {
       (_pauseNativeOverride ?? _bindings.pause)();
       unawaited(_runtime.userPaused());
@@ -550,9 +561,15 @@ class HifiAudioService extends ChangeNotifier {
     _loadGeneration++;
     _isPreparingTrack = false;
     _pendingSeek = null;
+    _queuedSeekTarget = null;
     _playWhenPrepared = false;
     _completion.reset();
-    (_stopNativeOverride ?? _bindings.stop)();
+    if (_isSeeking) {
+      _stopAfterSeek = true;
+      (_pauseNativeOverride ?? _bindings.pause)();
+    } else {
+      (_stopNativeOverride ?? _bindings.stop)();
+    }
     unawaited(_runtime.userPaused());
     isPlayingNotifier.value = false;
     _state = PlaybackState(
@@ -715,8 +732,54 @@ class HifiAudioService extends ChangeNotifier {
       _pendingSeek = targetSec;
       return;
     }
+    if (Platform.isAndroid &&
+        _bindings.isLoaded &&
+        !Platform.environment.containsKey('FLUTTER_TEST')) {
+      final clamped = _state.duration > 0
+          ? targetSec.clamp(0.0, _state.duration)
+          : max(0.0, targetSec);
+      _state = PlaybackState(
+        isPlaying: _state.isPlaying,
+        isPaused: _state.isPaused,
+        isBitPerfect: _state.isBitPerfect,
+        currentTime: clamped,
+        duration: _state.duration,
+        progress: _state.duration > 0
+            ? (clamped / _state.duration).clamp(0.0, 1.0)
+            : 0.0,
+        volume: _state.volume,
+        isMuted: _state.isMuted,
+        playMode: _playMode,
+        activeDeviceName: _state.activeDeviceName,
+        activeSampleRate: _state.activeSampleRate,
+        spectrumLevels: _state.spectrumLevels,
+      );
+      notifyListeners();
+      _queuedSeekTarget = clamped;
+      _stopAfterSeek = false;
+      _activeSeekDrain ??= _drainSeekQueue();
+      return;
+    }
     _bindings.seek(targetSec);
     notifyListeners();
+  }
+
+  Future<void> _drainSeekQueue() async {
+    _isSeeking = true;
+    try {
+      while (_queuedSeekTarget != null && !_stopAfterSeek) {
+        final target = _queuedSeekTarget!;
+        _queuedSeekTarget = null;
+        await _bindings.seekAsync(target);
+      }
+      if (_stopAfterSeek) {
+        _stopAfterSeek = false;
+        (_stopNativeOverride ?? _bindings.stop)();
+      }
+    } finally {
+      _isSeeking = false;
+      _activeSeekDrain = null;
+    }
   }
 
   void setVolume(double vol) {
