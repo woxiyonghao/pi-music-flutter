@@ -91,3 +91,29 @@ Windows 不宣称已实现 WASAPI 独占。USB 芯片画像只提供识别资料
 独立源码从原 `pi-hifi-player` 的 `b6d3c35` 提取；PCM 兼容、EQ 余量、真实 EOF
 及 macOS 路由修复来自 Flutter 集成。原仓库只保留历史来源意义，后续引擎依赖
 应指向当前 Flutter 仓库的 `dev/audio_engine` 及具体提交。
+
+## Shared music library core
+
+`audio_engine/library/MusicLibrary.hpp` owns filesystem enumeration, CUE decoding
+(UTF-8, UTF-16, GBK/GB18030), 75-frame timestamps, metadata, stable track IDs and
+transactional SQLite replacement. The host supplies scan roots and storage
+permission; scanning never initializes or changes an audio output.
+
+The additive ABI-2 functions `hifi_library_scan_json` and
+`hifi_library_metadata_json` return thread-local UTF-8 JSON. Copy the result before
+calling again on the same thread. Scan flag 1 preserves records outside a partial
+upload scan; flag 2 scans a filesystem root, including hidden folders, while
+excluding virtual proc/sys/dev trees. Other scans reject symlink escapes from the
+provided roots. Unreadable directories retain their previous records.
+
+`hifi_library_db_open/close/query_json` own SQLite connections. Query parameters
+are a JSON array and are bound through SQLite; statements on one handle share a
+transaction. Existing `library.db`, settings, playlists and track IDs are reused.
+Old path-unique schemas are migrated so multiple CUE tracks can share one file.
+SQLite 3.50.4 is bundled with hidden symbols on Unix; no platform SQLite runtime
+or separate Dart database implementation is needed. Provenance is recorded in
+`audio_engine/third_party/sqlite/SOURCE.md`.
+
+Build and verify with `cmake -S . -B build && cmake --build build &&
+ctest --test-dir build --output-on-failure`. `music_library_test` uses temporary
+files and databases; it never scans the user's library.

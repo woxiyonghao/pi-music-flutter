@@ -87,6 +87,14 @@ HIFI_EXPORT void hifi_audio_set_external_device_mock(bool enable);
 HIFI_EXPORT bool hifi_audio_is_external_device_mock();
 HIFI_EXPORT const char* hifi_audio_get_diagnostics_json();
 
+// 10. Shared library/database core; independent of audio-session initialization.
+HIFI_EXPORT const char* hifi_library_scan_json(const char* database, const char* const* roots,
+    uint32_t root_count, const char* documents_root, uint32_t flags);
+HIFI_EXPORT const char* hifi_library_metadata_json(const char* file);
+HIFI_EXPORT void* hifi_library_db_open(const char* database);
+HIFI_EXPORT void hifi_library_db_close(void* database);
+HIFI_EXPORT const char* hifi_library_db_query_json(void* database, const char* sql, const char* parameters_json);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,4 +1,5 @@
 #include "hifi_audio_ffi.h"
+#include "audio_engine/library/MusicLibrary.hpp"
 #include "audio_engine/AudioEngine.hpp"
 #include "audio_engine/RuntimeContext.hpp"
 #include <cstring>
@@ -233,6 +234,21 @@ const char* hifi_audio_get_diagnostics_json() {
     static thread_local std::string diagnostics;
     diagnostics = audio_engine::AudioEngine::getInstance().getDiagnosticsJson();
     return diagnostics.c_str();
+}
+
+const char* hifi_library_scan_json(const char* database, const char* const* roots, uint32_t count, const char* documents, uint32_t flags) {
+    static thread_local std::string result;
+    result = audio_engine::library::scanJson(database, roots, count, documents, flags);return result.c_str();
+}
+const char* hifi_library_metadata_json(const char* file) {
+    static thread_local std::string result;
+    result = audio_engine::library::metadataJson(file ? file : "");return result.c_str();
+}
+void* hifi_library_db_open(const char* path) {return audio_engine::library::openDatabase(path);}
+void hifi_library_db_close(void* database) {audio_engine::library::closeDatabase(database);}
+const char* hifi_library_db_query_json(void* database, const char* sql, const char* parameters) {
+    static thread_local std::string result;
+    result = audio_engine::library::queryJson(database, sql, parameters);return result.c_str();
 }
 
 } // extern "C"

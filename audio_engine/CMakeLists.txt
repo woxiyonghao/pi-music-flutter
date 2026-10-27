@@ -7,6 +7,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 set(AUDIO_ENGINE_SOURCES
     src/AudioEngine.cpp src/DacDeviceCatalog.cpp src/DsfParser.cpp src/IphoneDsdDecoder.cpp
+    src/library/MusicLibrary.cpp src/library/LibraryMetadata.cpp src/library/LibraryDatabase.cpp
+    third_party/sqlite/sqlite3.c
     src/decoders/FlacDecoder.cpp src/decoders/WavDecoder.cpp src/decoders/Mp3Decoder.cpp)
 if(ANDROID)
     list(APPEND AUDIO_ENGINE_SOURCES src/sinks/AAudioSink.cpp)
@@ -26,6 +28,11 @@ else()
             pkg_check_modules(ALSA QUIET alsa)
         endif()
     endif()
+endif()
+
+set_source_files_properties(third_party/sqlite/sqlite3.c PROPERTIES COMPILE_DEFINITIONS "SQLITE_THREADSAFE=1;SQLITE_OMIT_LOAD_EXTENSION=1;SQLITE_DEFAULT_FOREIGN_KEYS=0")
+if(NOT WIN32)
+    set_property(SOURCE third_party/sqlite/sqlite3.c APPEND PROPERTY COMPILE_DEFINITIONS "SQLITE_API=__attribute__((visibility(\"hidden\")))")
 endif()
 
 # Object target also supplies a self-contained iOS C ABI archive.
