@@ -6,10 +6,9 @@ import 'dart:typed_data';
 import 'package:fast_gbk/fast_gbk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
-import 'package:hide_player_flutter/services/cue_parser.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqlite3/sqlite3.dart';
+import 'package:hide_player_flutter/core/native_music_library.dart';
 
 const _cueText = r'''
 PERFORMER "测试歌手"
@@ -64,6 +63,7 @@ void main() {
 
   setUp(() {
     sandbox = Directory.systemTemp.createTempSync('cue_library_');
+      sandbox = Directory(sandbox.resolveSymbolicLinksSync());
     music = Directory(p.join(sandbox.path, 'Documents'))..createSync();
     wav = File(p.join(music.path, 'Disc 1', 'CDImage.WAV'));
     cue = File(p.join(music.path, 'Album.CUE'));
@@ -127,19 +127,17 @@ void main() {
     expect(opened[1][2] as double, closeTo(8.4, 1e-9));
   });
 
-  test('UTF-16 CUE preserves Unicode titles and Windows file references', () {
+  test('UTF-16 CUE preserves Unicode titles and Windows file references', () async {
     final bytes = BytesBuilder()..add([0xff, 0xfe]);
     for (final unit in _cueText.codeUnits) {
       bytes.add([unit & 0xff, unit >> 8]);
     }
     cue.writeAsBytesSync(bytes.takeBytes());
-    final sheet = CueSheetParser.parse(cue)!;
-    expect(sheet.albumTitle, '整轨专辑');
-    expect(sheet.tracks.map((t) => t.title), ['第一首', '第二首', '第三首']);
-    expect(
-        sheet.tracks.every((track) =>
-            FileSystemEntity.identicalSync(track.resolvedAudioPath, wav.path)),
-        isTrue);
+    final library = MusicDatabaseService.forTesting(databasePath, musicDirectory: music.path);
+    await library.scanLibrary();
+    expect(library.tracks.map((t) => t.album).toSet(), {'整轨专辑'});
+    expect(library.tracks.map((t) => t.title), ['第一首', '第二首', '第三首']);
+    expect(library.tracks.every((t) => FileSystemEntity.identicalSync(t.filepath, wav.path)), isTrue);
   });
 
   test('scan waits for full storage permission and preserves SQLite on denial',
@@ -164,7 +162,7 @@ void main() {
     );
     await Future<void>.delayed(Duration.zero);
     expect(library.tracks.single.id, originalId);
-    final db = sqlite3.open(databasePath);
+    final db = NativeMusicLibrary.openDatabase(databasePath);
     expect(
         db
             .select('SELECT COUNT(*) AS count FROM scanned_tracks')

@@ -7,7 +7,7 @@ import 'package:hide_player_flutter/models/track.dart';
 import 'package:hide_player_flutter/services/audio_metadata_helper.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqlite3/sqlite3.dart' as sqlite;
+import 'package:hide_player_flutter/core/native_music_library.dart' as sqlite;
 
 void main() {
   test('Android music and database paths remain in Documents without HOME', () {
@@ -50,6 +50,7 @@ void main() {
 
     setUp(() {
       sandbox = Directory.systemTemp.createTempSync('android_library_');
+      sandbox = Directory(sandbox.resolveSymbolicLinksSync());
       music = Directory(p.join(sandbox.path, 'Documents'));
       database = p.join(music.path, 'hifi_player', 'library.db');
     });
@@ -165,7 +166,7 @@ void main() {
       library.loadLibrary();
 
       // Insert zero-duration DSD track into database directly
-      final rawDb = sqlite.sqlite3.open(database);
+      final rawDb = sqlite.NativeMusicLibrary.openDatabase(database);
       rawDb.execute('''
         INSERT INTO scanned_tracks (id, title, artist, album, file_path, format, sample_rate, bit_depth, duration_sec)
         VALUES (999, 'DSD Symphony', 'Artist', 'Album', ?, 3, 0, 0, 0)

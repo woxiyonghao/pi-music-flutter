@@ -420,7 +420,7 @@ class HifiAudioService extends ChangeNotifier {
     if (_openFileOverride != null) {
       success = _openFileOverride!(
           resolvedPath, track.startTimeSec, track.endTimeSec);
-    } else if (track.isCueTrack && track.endTimeSec > track.startTimeSec) {
+    } else if (track.isCueTrack) {
       success = _bindings.openAndPlaySection(
           resolvedPath, track.startTimeSec, track.endTimeSec);
     } else {

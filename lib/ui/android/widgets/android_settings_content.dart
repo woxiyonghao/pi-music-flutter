@@ -112,9 +112,9 @@ class _AndroidSettingsContentState extends State<AndroidSettingsContent> {
     final wifiDir = WifiTransferService.instance.targetDir.isNotEmpty
         ? WifiTransferService.instance.targetDir
         : AppPaths.musicDirectory;
-    final appDir = AppPaths.musicDirectory;
+    const publicDir = '/storage/emulated/0/Music';
     return [
-      _description('扫描应用音乐目录与 WiFi 传歌目录中的本地文件，更新曲库。'),
+      _description('扫描 WiFi 传歌目录和公共 Music 目录，包含子目录与 CUE 分轨文件。'),
       const SizedBox(height: 12),
       _card(
         child: Column(
@@ -152,17 +152,17 @@ class _AndroidSettingsContentState extends State<AndroidSettingsContent> {
               children: [
                 Icon(Icons.folder_special_rounded, size: 16, color: _accent),
                 const SizedBox(width: 6),
-                Expanded(
+                const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('2. 本地沙盒数据目录',
+                      Text('2. 公共音乐目录',
                           style: TextStyle(
                               fontSize: 11.5, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
+                      SizedBox(height: 2),
                       SelectableText(
-                        appDir,
-                        style: const TextStyle(
+                        publicDir,
+                        style: TextStyle(
                             fontSize: 11, color: HifiTheme.textSecondary),
                       ),
                     ],
