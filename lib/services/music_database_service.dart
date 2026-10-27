@@ -3,11 +3,13 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqlite3/sqlite3.dart';
+import '../core/native_music_library.dart';
+import '../core/library_scan_policy.dart';
+import '../platform/application_config.dart';
+import 'wifi_transfer_service.dart';
 import '../core/app_paths.dart';
 import '../models/track.dart';
 import 'audio_metadata_helper.dart';
-import 'cue_parser.dart';
 
 /// 发烧曲库数据库服务 (读取 C++ 纯音数播持久化 SQLite 数据库)
 class MusicDatabaseService extends ChangeNotifier {
@@ -83,7 +85,7 @@ class MusicDatabaseService extends ChangeNotifier {
 
   Database _openDb() {
     File(_databasePath).parent.createSync(recursive: true);
-    final db = sqlite3.open(_databasePath);
+    final db = NativeMusicLibrary.openDatabase(_databasePath);
     try {
       db.execute('PRAGMA busy_timeout = 3000;');
       db.execute('PRAGMA journal_mode = WAL;');
@@ -97,7 +99,7 @@ class MusicDatabaseService extends ChangeNotifier {
 
   /// Keep the theme page as the single source of visualizer preferences.
   @visibleForTesting
-  static void initializeSettings(Database db) {
+  static void initializeSettings(dynamic db) {
     db.execute('''
       CREATE TABLE IF NOT EXISTS app_settings (
         key TEXT PRIMARY KEY,
@@ -605,14 +607,13 @@ class MusicDatabaseService extends ChangeNotifier {
   }
 
   /// 扫描指定或默认音乐目录下的所有发烧音频文件 (深度支持 CUE 分轨表与真实音频母带头解析)
-  static String _trackKey(Track track) {
-    final path = p.canonicalize(resolveTrackPath(track.filepath)).toLowerCase();
-    return track.isCueTrack
-        ? 'cue:$path:${track.trackNumber}:${track.startTimeSec}'
-        : 'audio:$path';
-  }
+
 
   Future<void> _scanQueue = Future<void>.value();
+  List<String> _scanWarnings = [];
+  List<String> get scanWarnings => List.unmodifiable(_scanWarnings);
+  List<String> _lastScanRoots = [];
+  List<String> get lastScanRoots => List.unmodifiable(_lastScanRoots);
 
   Future<int> scanLibrary({String? customPath}) {
     final next = _scanQueue.then((_) => _scanLibrary(customPath: customPath));
@@ -621,268 +622,26 @@ class MusicDatabaseService extends ChangeNotifier {
   }
 
   Future<int> _scanLibrary({String? customPath}) async {
-    final home = Platform.environment['HOME'] ?? '';
-    final scanDirs = <String>{};
-
-    void addScanDir(String? dirPath) {
-      if (dirPath == null || dirPath.isEmpty) return;
-      final dir = Directory(dirPath);
-      if (dir.existsSync()) {
-        scanDirs.add(p.canonicalize(dir.absolute.path));
-      }
+    if (customPath != null && !Directory(customPath).existsSync()) {
+      throw FileSystemException('扫描目录不存在，原曲库已保留', customPath);
     }
-
-    if (customPath != null) {
-      final path = AppPaths.resolveDocumentsPath(customPath);
-      if (!Directory(path).existsSync()) {
-        throw FileSystemException('扫描目录不存在，原曲库已保留', path);
-      }
-      addScanDir(path);
-    } else {
-      if (Platform.isIOS) {
-        await Directory(AppPaths.musicDirectory).create(recursive: true);
-        addScanDir(AppPaths.musicDirectory);
-      } else if (Platform.isMacOS) {
-        addScanDir('$home/Downloads/music');
-        addScanDir('$home/Music');
-        addScanDir('$home/Desktop/music2');
-        final desktop = Directory('$home/Desktop');
-        if (desktop.existsSync()) {
-          try {
-            for (final d in desktop.listSync()) {
-              if (d is Directory) {
-                final base = p.basename(d.path).toLowerCase();
-                if (base.contains('music') || base.contains('hifi')) {
-                  addScanDir(d.path);
-                }
-              }
-            }
-          } catch (_) {}
-        }
-      } else {
-        addScanDir('$home/Music');
-      }
+    final docs = _customDatabasePathForTesting != null && customPath != null
+        ? customPath : AppPaths.musicDirectory;
+    await Directory(docs).create(recursive: true);
+    final path = customPath == null ? null : AppPaths.resolveDocumentsPath(customPath);
+    if (path != null && !Directory(path).existsSync()) {
+      throw FileSystemException('扫描目录不存在，原曲库已保留', path);
     }
-
-    // 过滤掉已被父目录包含的冗余子目录，避免二次递归
-    final sortedDirs = scanDirs.toList()
-      ..sort((a, b) => a.length.compareTo(b.length));
-    final normalizedDirs = <String>[];
-    for (final dir in sortedDirs) {
-      if (!normalizedDirs.any((parent) => p.isWithin(parent, dir))) {
-        normalizedDirs.add(dir);
-      }
-    }
-
-    const audioExtensions = {
-      '.flac',
-      '.wav',
-      '.mp3',
-      '.dsf',
-      '.dff',
-      '.alac',
-      '.m4a',
-      '.aac',
-      '.aiff',
-      '.aif',
-      '.caf',
-      '.ape'
-    };
-
-    final foundAudioFiles = <String, File>{};
-    final foundCueFiles = <String, File>{};
-
-    for (final dirPath in normalizedDirs) {
-      final dir = Directory(dirPath);
-      try {
-        await for (final entity
-            in dir.list(recursive: true, followLinks: false)) {
-          if (entity is! File) continue;
-          final filename = entity.uri.pathSegments.last;
-          if (filename.startsWith('.')) continue; // 跳过隐藏文件
-
-          // 跳过 app 内部配置或数据库
-          if (entity.path.contains('/hifi_player/') ||
-              entity.path.endsWith('.db') ||
-              entity.path.endsWith('.db-wal') ||
-              entity.path.endsWith('.db-shm')) {
-            continue;
-          }
-
-          final ext = p.extension(filename).toLowerCase();
-          final canonical = p.canonicalize(entity.absolute.path);
-          if (ext == '.cue') {
-            foundCueFiles[canonical] = entity;
-          } else if (audioExtensions.contains(ext)) {
-            foundAudioFiles[canonical] = entity;
-          }
-        }
-      } catch (e) {
-        debugPrint('[MusicDatabaseService] 遍历目录 $dirPath 异常: $e');
-        rethrow;
-      }
-    }
-
-    final newTracks = <Track>[];
-    final addedKeys = <String>{};
-    final existingIds = {
-      for (final track in _tracks) _trackKey(track): track.id
-    };
-    int nextId = max(
-        _tracks.fold<int>(0, (value, track) => max(value, track.id)) + 1,
-        int.tryParse(getSetting('library_next_track_id', '1')) ?? 1);
-    int idForKey(String key) => existingIds[key] ?? nextId++;
-    final cueHandledAudioPathsLower = <String>{};
-    final audioMetaCache = <String, AudioMetadata>{};
-
-    // 1. 优先解析 CUE 分轨表，按音轨拆分虚拟单曲 (完美解决 WAV+CUE 整轨无歌名问题)
-    for (final cueFile in foundCueFiles.values) {
-      try {
-        final sheet = CueSheetParser.parse(cueFile);
-        if (sheet == null || sheet.tracks.isEmpty) continue;
-
-        debugPrint(
-            '[MusicDatabaseService] 成功解析 CUE: ${cueFile.path} (专辑: ${sheet.albumTitle}, 艺术家: ${sheet.albumPerformer}, 音轨数: ${sheet.tracks.length})');
-
-        for (final cueTrk in sheet.tracks) {
-          if (cueTrk.resolvedAudioPath.isEmpty) continue;
-
-          final referencedFile = File(cueTrk.resolvedAudioPath);
-          final resolvedPath = p.canonicalize(referencedFile.absolute.path);
-          // Only use files discovered under the scan root. File identity also
-          // handles APFS Unicode normalization and Windows CUE path casing.
-          File? resolvedFile = foundAudioFiles[resolvedPath];
-          if (resolvedFile == null) {
-            for (final entry in foundAudioFiles.entries) {
-              var sameFile =
-                  entry.key.toLowerCase() == resolvedPath.toLowerCase();
-              if (!sameFile) {
-                try {
-                  sameFile = FileSystemEntity.identicalSync(
-                      entry.value.path, referencedFile.path);
-                } catch (_) {}
-              }
-              if (sameFile) {
-                resolvedFile = entry.value;
-                break;
-              }
-            }
-          }
-          if (resolvedFile == null) continue;
-          final canonicalAudio = p.canonicalize(resolvedFile.absolute.path);
-          cueHandledAudioPathsLower.add(canonicalAudio.toLowerCase());
-          cueHandledAudioPathsLower.add(cueTrk.resolvedAudioPath.toLowerCase());
-
-          final trackKey =
-              'cue:${canonicalAudio.toLowerCase()}:${cueTrk.trackNumber}:${cueTrk.startTimeSec}';
-          if (!addedKeys.add(trackKey)) continue;
-
-          // 缓存并读取物理母带音频真实采样率、位深与总时长
-          AudioMetadata? meta = audioMetaCache[canonicalAudio];
-          final ext = p.extension(cueTrk.resolvedAudioPath).toLowerCase();
-          final fmt = Track.formatFromExtension(ext);
-          if (meta == null) {
-            meta = AudioMetadataHelper.parse(resolvedFile, fmt);
-            audioMetaCache[canonicalAudio] = meta;
-          }
-
-          int durationSec = cueTrk.durationSec;
-          double endTimeSec = cueTrk.endTimeSec;
-          if (endTimeSec <= cueTrk.startTimeSec) {
-            if (meta.durationSeconds > cueTrk.startTimeSec) {
-              endTimeSec = meta.durationSeconds;
-              durationSec = max(0, (endTimeSec - cueTrk.startTimeSec).round());
-            } else {
-              durationSec = 0;
-            }
-          }
-
-          newTracks.add(Track(
-            id: idForKey(trackKey),
-            title: cueTrk.title,
-            artist: cueTrk.performer,
-            album: sheet.albumTitle,
-            filepath: resolvedFile.path,
-            format: fmt,
-            sampleRate: meta.sampleRate,
-            bitDepth: meta.bitDepth,
-            durationSec: durationSec,
-            isCueTrack: true,
-            startTimeSec: cueTrk.startTimeSec,
-            endTimeSec: endTimeSec,
-            cuePath: sheet.cuePath,
-            trackNumber: cueTrk.trackNumber,
-          ));
-        }
-      } catch (e) {
-        debugPrint(
-            '[MusicDatabaseService] 解析 CUE 失败: ${cueFile.path}, error: $e');
-      }
-    }
-
-    // 2. 解析普通独立音频文件。精准过滤已被 CUE 拆解的整轨大文件，避免出现重复的大母带记录
-    for (final file in foundAudioFiles.values) {
-      final path = file.path;
-      final canonicalPath = p.canonicalize(path);
-      if (cueHandledAudioPathsLower.contains(canonicalPath.toLowerCase()) ||
-          cueHandledAudioPathsLower.contains(path.toLowerCase())) {
-        debugPrint('[MusicDatabaseService] 屏蔽已被 CUE 拆解的整轨音频: $path');
-        continue;
-      }
-
-      final trackKey = 'audio:${canonicalPath.toLowerCase()}';
-      if (!addedKeys.add(trackKey)) continue;
-
-      final filename = file.uri.pathSegments.last;
-      final dotIdx = filename.lastIndexOf('.');
-      final rawName = dotIdx != -1 ? filename.substring(0, dotIdx) : filename;
-      final ext = dotIdx != -1 ? filename.substring(dotIdx).toLowerCase() : '';
-
-      String title = rawName;
-      String artist = '';
-      String album = '';
-
-      if (rawName.contains(' - ')) {
-        final parts = rawName.split(' - ');
-        if (parts.length >= 2) {
-          artist = parts[0].trim();
-          title = parts.sublist(1).join(' - ').trim();
-        }
-      }
-
-      final segments =
-          file.parent.uri.pathSegments.where((s) => s.isNotEmpty).toList();
-      final parentName = segments.isNotEmpty ? segments.last : '';
-      if (parentName.isNotEmpty &&
-          parentName != 'Documents' &&
-          parentName != 'Music') {
-        album = parentName;
-        if (artist.isEmpty && album.contains(' - ')) {
-          final albParts = album.split(' - ');
-          artist = albParts[0].trim();
-        }
-      }
-
-      final fmt = Track.formatFromExtension(ext);
-      final meta = AudioMetadataHelper.parse(file, fmt);
-
-      newTracks.add(Track(
-        id: idForKey(trackKey),
-        title: title,
-        artist: artist.isNotEmpty ? artist : '未知艺术家',
-        album: album.isNotEmpty ? album : '默认专辑',
-        filepath: path,
-        format: fmt,
-        sampleRate: meta.sampleRate,
-        bitDepth: meta.bitDepth,
-        durationSec: meta.durationSec,
-      ));
-    }
-
-    if (!saveScannedTracks(newTracks)) {
-      throw StateError('无法保存扫描结果，原曲库已保留');
-    }
-    return newTracks.length;
+    final roots = LibraryScanPolicy.roots(platform: applicationPlatform.name,
+        documents: docs, wifiDirectory: WifiTransferService.instance.targetDir,
+        customPath: path);
+    if (roots.isEmpty) throw StateError('未找到可扫描的音乐目录，原曲库已保留');
+    _lastScanRoots = roots;
+    final result = await NativeMusicLibrary.scan(database: _databasePath,
+        roots: roots, documents: Platform.isIOS ? docs : '', partial: customPath != null);
+    _scanWarnings = (result['warnings'] as List).cast<String>();
+    loadLibrary();
+    return result['trackCount'] as int;
   }
 
   void createPlaylist(String name) {

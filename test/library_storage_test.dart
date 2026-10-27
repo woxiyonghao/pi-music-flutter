@@ -4,9 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/app_paths.dart';
 import 'package:hide_player_flutter/models/track.dart';
 import 'package:hide_player_flutter/services/audio_metadata_helper.dart';
-import 'package:hide_player_flutter/services/cue_parser.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
-import 'package:sqlite3/sqlite3.dart';
+import 'package:hide_player_flutter/core/native_music_library.dart';
 
 File writeWav(String path, {double seconds = 6.5}) {
   final file = File(path)..parent.createSync(recursive: true);
@@ -48,6 +47,7 @@ void main() {
 
   setUp(() {
     temp = Directory.systemTemp.createTempSync('hifi_library_');
+    temp = Directory(temp.resolveSymbolicLinksSync());
     dbPath = '${temp.path}/private/library.db';
     library = MusicDatabaseService.forTesting(dbPath);
   });
@@ -101,7 +101,7 @@ FILE "disc 1\\cdimage.wav" WAVE
     writeWav('${temp.path}/b.wav');
     await library.scanLibrary(customPath: temp.path);
     final original = library.tracks.single;
-    final db = sqlite3.open(dbPath);
+    final db = NativeMusicLibrary.openDatabase(dbPath);
     db.execute("INSERT INTO playlists (id, name) VALUES (7, 'My songs');");
     db.execute('INSERT INTO playlist_tracks VALUES (7, ?, 0);', [original.id]);
     db.close();
@@ -135,7 +135,7 @@ FILE "disc 1\\cdimage.wav" WAVE
       'known nonexistent demos are removed without removing real rows or playlists',
       () {
     final dbFile = File(dbPath)..parent.createSync(recursive: true);
-    final db = sqlite3.open(dbFile.path);
+    final db = NativeMusicLibrary.openDatabase(dbFile.path);
     MusicDatabaseService.initializeSettings(db);
     db.execute(
         "DELETE FROM app_settings WHERE key = 'migration_demo_cleanup_v2';");
@@ -298,7 +298,7 @@ TRACK 02 AUDIO
     final target =
         library.tracks.singleWhere((t) => t.filepath == retained.path);
     final other = library.tracks.singleWhere((t) => t.id != target.id);
-    final db = sqlite3.open(dbPath);
+    final db = NativeMusicLibrary.openDatabase(dbPath);
     db.execute("INSERT INTO playlists VALUES (10, 'Keep my playlist');");
     db.execute('INSERT INTO playlist_tracks VALUES (10, ?, 0);', [target.id]);
     db.execute('INSERT INTO playlist_tracks VALUES (10, ?, 1);', [other.id]);
@@ -376,13 +376,17 @@ TRACK 02 AUDIO
     expect(library.tracks.last.endTimeSec, 6.5);
   });
 
-  test('UTF-16 CUE decodes without corrupting song names', () {
-    const cue = 'TITLE "真实专辑"\r\n';
+  test('UTF-16 CUE decodes without corrupting song names', () async {
+    writeWav('${temp.path}/unicode.wav');
+    const cue = 'TITLE "真实专辑"\r\nFILE "unicode.wav" WAVE\r\nTRACK 01 AUDIO\r\nTITLE "真实曲名"\r\nINDEX 01 00:00:00\r\n';
     final bytes = BytesBuilder()..add([0xff, 0xfe]);
     for (final unit in cue.codeUnits) {
       bytes.add([unit & 0xff, unit >> 8]);
     }
-    expect(CueSheetParser.decodeBytes(bytes.toBytes()), cue);
+    File('${temp.path}/unicode.cue').writeAsBytesSync(bytes.toBytes());
+    await library.scanLibrary(customPath: temp.path);
+    expect(library.tracks.single.title, '真实曲名');
+    expect(library.tracks.single.album, '真实专辑');
   });
 
   test(

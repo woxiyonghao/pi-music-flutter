@@ -13,11 +13,10 @@ dependencies:
   ffi: ^2.1.2
   path: ^1.9.0
   path_provider: ^2.1.6
-  sqlite3: ^3.7.1
-  fast_gbk: ^1.0.0
   crypto: ^3.0.7
 
 dev_dependencies:
+  fast_gbk: ^1.0.0
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
