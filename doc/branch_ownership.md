@@ -28,3 +28,8 @@ WiFi 局部扫描会保留其他扫描根目录的曲目；入库失败回滚，
 iOS 的 Documents 通过 `UIFileSharingEnabled` 与 `LSSupportsOpeningDocumentsInPlace` 在“文件”App、Mac Finder 文件共享中可见。
 
 `flutter test` 通过 `test/flutter_test_config.dart` 自动构建锁定引擎的主机库，测试实际 C++ 扫描和数据库；可用 `HIFI_LIBRARY_TEST_DYLIB` 指向已构建库以复用同一产物。
+
+
+## 数据库验证
+
+`flutter test test/native_library_database_test.dart` 通过真实 C++ C ABI 验证旧版唯一文件路径表迁移、CUE 多轨共用母带、稳定 ID、歌单及设置保留、Unicode/SQL 类型持久化、失败扫描事务回滚、WiFi 局部扫描与 WAL 并发快照。每项均使用独立临时库，并检查 SQLite 完整性和歌单关联。
