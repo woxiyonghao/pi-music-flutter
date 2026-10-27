@@ -55,30 +55,13 @@ class AppPaths {
     return Directory.current.path;
   }
 
-  /// Linux users and SD cards do not all use the old /home/pi/Music layout.
-  /// Include the user's home (Downloads, lowercase music and copied folders),
-  /// removable mounts, and the FAT boot partition visible when copying to an
-  /// SD card from another computer. Hidden/cache/build trees are skipped by
-  /// the scanner rather than limiting the whole scan to a few folder names.
+  /// Pi scans all readable files from the filesystem root. The shared C++
+  /// scanner excludes only virtual kernel trees and handles permissions.
   static List<String> linuxMusicScanDirectories({
     required String home,
     String systemRoot = '/',
   }) {
-    final roots = <String>[
-      if (home.isNotEmpty) home,
-      if (home.isNotEmpty) linuxMusicDirectory(home: home),
-      for (final path in [
-        'home/pi/Music',
-        'media',
-        'run/media',
-        'mnt',
-        'boot',
-        'music',
-        'Music'
-      ])
-        p.join(systemRoot, path),
-    ];
-    return roots.where((path) => Directory(path).existsSync()).toSet().toList();
+    return [systemRoot];
   }
 
   @visibleForTesting
