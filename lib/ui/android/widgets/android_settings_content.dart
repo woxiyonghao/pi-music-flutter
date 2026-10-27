@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/app_paths.dart';
-import '../../../core/hifi_audio_bindings.dart';
+import '../../../core/platform_helper.dart';
 import '../../../core/hifi_audio_service.dart';
 import '../../../services/mseb_service.dart';
 import '../../../services/music_database_service.dart';
@@ -11,6 +11,7 @@ import '../../../services/web_remote_service.dart';
 import '../../../services/wifi_transfer_service.dart';
 import '../../../theme/hifi_theme.dart';
 import '../../visualizers/visualizer_type.dart';
+import '../../mac/views/mac_dac_setting_view.dart';
 import '../android_player_view.dart' show AndroidPlayerSection;
 
 /// Touch-friendly settings backed by the services available on Android.
@@ -88,25 +89,29 @@ class _AndroidSettingsContentState extends State<AndroidSettingsContent> {
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        children: [
-          Text(widget.section.label,
-              style:
-                  const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          ...switch (widget.section) {
-            AndroidPlayerSection.scan => _scan(),
-            AndroidPlayerSection.equalizer => _equalizer(),
-            AndroidPlayerSection.mseb => _mseb(),
-            AndroidPlayerSection.theme => _theme(),
-            AndroidPlayerSection.output => _output(),
-            AndroidPlayerSection.network => [_network()],
-            AndroidPlayerSection.settings => _settings(),
-            AndroidPlayerSection.library => <Widget>[],
-          },
-        ],
-      );
+  Widget build(BuildContext context) {
+    if (widget.section == AndroidPlayerSection.output) {
+      return const MacDACSettingView(platform: HifiPlatformType.android);
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      children: [
+        Text(widget.section.label,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        ...switch (widget.section) {
+          AndroidPlayerSection.scan => _scan(),
+          AndroidPlayerSection.equalizer => _equalizer(),
+          AndroidPlayerSection.mseb => _mseb(),
+          AndroidPlayerSection.theme => _theme(),
+          AndroidPlayerSection.output => <Widget>[],
+          AndroidPlayerSection.network => [_network()],
+          AndroidPlayerSection.settings => _settings(),
+          AndroidPlayerSection.library => <Widget>[],
+        },
+      ],
+    );
+  }
 
   List<Widget> _scan() {
     final wifiDir = WifiTransferService.instance.targetDir.isNotEmpty
@@ -612,9 +617,8 @@ class _AndroidSettingsContentState extends State<AndroidSettingsContent> {
                 style: TextStyle(
                   fontSize: 11,
                   color: visualizer == type ? _accent : HifiTheme.textPrimary,
-                  fontWeight: visualizer == type
-                      ? FontWeight.w600
-                      : FontWeight.normal,
+                  fontWeight:
+                      visualizer == type ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
               avatar: Icon(
@@ -668,44 +672,6 @@ class _AndroidSettingsContentState extends State<AndroidSettingsContent> {
       case VisualizerType.ipadTelemetryDashboard:
         return Icons.developer_board_rounded;
     }
-  }
-
-  List<Widget> _output() {
-    final bindings = HifiAudioBindings.instance;
-    final loaded = bindings.isLoaded;
-    final deviceName = loaded ? bindings.getDeviceName() : '';
-    final sampleRate = loaded ? bindings.getSampleRate() : 0;
-    Map<String, dynamic> capabilities = {};
-    if (loaded) {
-      try {
-        capabilities = bindings.capabilities;
-      } catch (_) {
-        // Older engine binaries can still play without a capability report.
-      }
-    }
-    return [
-      _card(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _info('音频引擎', loaded ? '已加载' : '未加载', isHighlight: loaded),
-            if (capabilities['backend'] is String)
-              _info('输出后端', capabilities['backend'] as String),
-            _info('当前输出', deviceName.isEmpty ? '等待设备报告' : deviceName,
-                isHighlight: deviceName.isNotEmpty),
-            _info('输出采样率',
-                sampleRate > 0 ? '${sampleRate / 1000} kHz' : '等待设备报告',
-                isHighlight: sampleRate > 0),
-            _info('均衡器', _audio.eqEnabled ? 'DSP 已启用' : '已关闭',
-                isHighlight: _audio.eqEnabled),
-          ],
-        ),
-      ),
-      const SizedBox(height: 12),
-      _description('耳机、蓝牙和 USB 音频路由由 Android 系统管理。连接或切换设备后，以引擎实际报告的输出为准。'),
-      const SizedBox(height: 8),
-      _description('歌曲标注的采样率是文件规格；实际输出采样率见上方设备信息。'),
-    ];
   }
 
   Widget _network() => ListenableBuilder(
@@ -811,8 +777,7 @@ class _AndroidSettingsContentState extends State<AndroidSettingsContent> {
                     style: TextStyle(
                       fontSize: 11,
                       color: running ? _accent : HifiTheme.textSecondary,
-                      fontWeight:
-                          running ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: running ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                 ),

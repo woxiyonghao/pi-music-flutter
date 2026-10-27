@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
+import 'package:hide_player_flutter/core/platform_helper.dart';
 import 'package:hide_player_flutter/models/sidebar_tab.dart';
 import 'package:hide_player_flutter/models/track.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
@@ -9,6 +10,7 @@ import 'package:hide_player_flutter/ui/android/android_player_view.dart';
 import 'package:hide_player_flutter/ui/iphone/iphone_landscape_view.dart';
 import 'package:hide_player_flutter/ui/iphone/widgets/iphone_bottom_bar_widget.dart';
 import 'package:hide_player_flutter/ui/mac/mac_sidebar_widget.dart';
+import 'package:hide_player_flutter/ui/mac/views/mac_dac_setting_view.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -121,10 +123,16 @@ void main() {
         for (final section in AndroidPlayerSection.values) {
           final navigation = find.byKey(Key('android-nav-${section.name}'));
           await tester.ensureVisible(navigation);
+          await tester.pump(const Duration(milliseconds: 300));
           await tester.tap(navigation);
-          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
           expect(tester.takeException(), isNull,
               reason: '${section.name} at ${config.$1}, scale ${config.$3}');
+          if (section == AndroidPlayerSection.output) {
+            final dacView = tester
+                .widget<MacDACSettingView>(find.byType(MacDACSettingView));
+            expect(dacView.platform, HifiPlatformType.android);
+          }
         }
       }
       await tester.pumpWidget(const SizedBox());
@@ -156,7 +164,8 @@ void main() {
     await mount(tester, size: const Size(393, 852), landscape: false);
 
     expect(find.byKey(const Key('android-portrait-layout')), findsOneWidget);
-    expect(find.byKey(const Key('android-exit-fullscreen-theme')), findsNothing);
+    expect(
+        find.byKey(const Key('android-exit-fullscreen-theme')), findsNothing);
 
     final enterButton = find.byKey(const Key('android-enter-fullscreen-theme'));
     expect(enterButton, findsOneWidget);
@@ -171,7 +180,8 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('android-portrait-layout')), findsOneWidget);
-    expect(find.byKey(const Key('android-exit-fullscreen-theme')), findsNothing);
+    expect(
+        find.byKey(const Key('android-exit-fullscreen-theme')), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
   });

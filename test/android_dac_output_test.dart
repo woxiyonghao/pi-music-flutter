@@ -134,7 +134,8 @@ void main() {
     expect(dac.currentDevice!.bufferFrames, 1024);
   });
 
-  test('an active default route repairs a disconnected AAudio stream', () async {
+  test('an active default route repairs a disconnected AAudio stream',
+      () async {
     openOnConfiguration = true;
     await runtime.activate();
     requests.clear();
@@ -183,33 +184,52 @@ void main() {
     expect(runtime.lastProbeError, isNull);
   });
 
-  testWidgets('Android landscape exposes real DAC controls and output format',
-      (tester) async {
-    tester.view.physicalSize = const Size(1024, 600);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    openOnConfiguration = true;
-    await tester.runAsync(() => dac.selectDevice(1));
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: MacDACSettingView(
-          platform: HifiPlatformType.android,
-          service: dac,
+  for (final size in [const Size(1024, 600), const Size(393, 500)]) {
+    testWidgets('Android DAC controls and output format fit $size',
+        (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      openOnConfiguration = true;
+      await tester.runAsync(() => dac.selectDevice(1));
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: MacDACSettingView(
+            platform: HifiPlatformType.android,
+            service: dac,
+          ),
         ),
-      ),
-    ));
-    await tester.pump();
-    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
-    await tester.pump();
-    expect(find.text('TOPPING DX1 II'), findsOneWidget);
-    expect(find.textContaining('DX1 II · Android 音频输出与缓冲区控制'), findsOneWidget);
-    expect(find.text('输出采样率策略'), findsOneWidget);
-    expect(find.text('独占输出偏好'), findsOneWidget);
-    expect(find.text('声卡硬件缓冲区深度', skipOffstage: false), findsOneWidget);
-    expect(find.textContaining('32 bit Float'), findsOneWidget);
-    expect(find.text('DX1 II 的 UAC 模式说明'), findsNothing);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
+      ));
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      expect(find.text('TOPPING DX1 II'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('输出采样率策略'), 150,
+          scrollable: find.byType(Scrollable).first);
+      expect(
+          find.textContaining('DX1 II · Android 音频输出与缓冲区控制'), findsOneWidget);
+      expect(find.text('输出采样率策略'), findsOneWidget);
+      expect(find.text('独占输出偏好'), findsOneWidget);
+      expect(find.text('声卡硬件缓冲区深度', skipOffstage: false), findsOneWidget);
+      expect(find.textContaining('32 bit Float'), findsOneWidget);
+      expect(find.text('DX1 II 的 UAC 模式说明'), findsNothing);
+      final rate = find.text('48 kHz').last;
+      await tester.ensureVisible(rate);
+      await tester.pump();
+      await tester.tap(rate);
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      expect(requests, contains('configure:42:48000:true'));
+      final buffer = find.text('1024 帧');
+      await tester.ensureVisible(buffer);
+      await tester.pump();
+      await tester.tap(buffer);
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      expect(requests, contains('buffer:1024'));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
 }
