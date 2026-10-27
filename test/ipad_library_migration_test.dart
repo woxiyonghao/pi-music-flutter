@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sqlite3/sqlite3.dart';
+import 'package:hide_player_flutter/core/native_music_library.dart';
 import 'package:hide_player_flutter/models/track.dart';
 import 'package:hide_player_flutter/services/music_database_service.dart';
 
@@ -9,6 +9,7 @@ void main() {
   late MusicDatabaseService service;
   setUp(() {
     temp = Directory.systemTemp.createTempSync('ipad_library_');
+    temp = Directory(temp.resolveSymbolicLinksSync());
     service = MusicDatabaseService.instance;
     service.customDatabasePathForTesting = '${temp.path}/library.db';
     service.loadLibrary();
@@ -22,7 +23,7 @@ void main() {
   test(
       'legacy schema gains CUE columns and removes only missing bundled demo rows',
       () {
-    final db = sqlite3.open('${temp.path}/library.db');
+    final db = NativeMusicLibrary.openDatabase('${temp.path}/library.db');
     db.execute(
         "CREATE TABLE scanned_tracks (id INTEGER PRIMARY KEY, title TEXT, artist TEXT, album TEXT, file_path TEXT, format INTEGER, sample_rate INTEGER, bit_depth INTEGER, duration_sec INTEGER);");
     final real = File('${temp.path}/real.flac')..writeAsStringSync('fixture');
@@ -102,7 +103,7 @@ void main() {
           filepath: song.path,
           durationSec: 20)
     ]);
-    final db = sqlite3.open('${temp.path}/library.db');
+    final db = NativeMusicLibrary.openDatabase('${temp.path}/library.db');
     db.execute("INSERT INTO playlists VALUES (7, 'My music');");
     db.execute('INSERT INTO playlist_tracks VALUES (7, 42, 0);');
     db.close();

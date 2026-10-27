@@ -37,3 +37,9 @@ _hifi_audio_select_output_device
 _hifi_audio_set_external_device_mock
 _hifi_audio_is_external_device_mock
 _hifi_audio_get_diagnostics_json
+
+_hifi_library_scan_json
+_hifi_library_metadata_json
+_hifi_library_db_open
+_hifi_library_db_close
+_hifi_library_db_query_json
