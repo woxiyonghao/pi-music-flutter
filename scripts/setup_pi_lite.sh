@@ -20,8 +20,16 @@ sudo apt install -y cage libgtk-3-0 libgl1-mesa-dri libasound2-dev libsdl2-dev u
 echo "🔑 [2/3] 配置硬件触屏与 ALSA 声卡访问权限..."
 sudo usermod -aG audio,video,input,render "$USER"
 
-# 3. 安装开机自启 Systemd 服务 (无桌面秒启)
-echo "⚙️ [3/3] 配置开机自启 systemd 纯净 Kiosk 服务..."
+# 3. 配置 FAT32 (vfat) 分区 UTF-8 挂载，彻底防止歌曲中文歌名乱码
+echo "🌐 [3/4] 检查并配置 /boot/firmware 分区 UTF-8 中文字符集..."
+if grep -q '/boot/firmware.*vfat.*defaults' /etc/fstab && ! grep -q '/boot/firmware.*utf8' /etc/fstab; then
+    sudo sed -i 's|/boot/firmware  vfat    defaults|/boot/firmware  vfat    defaults,utf8|' /etc/fstab
+    sudo mount -o remount,utf8 /boot/firmware 2>/dev/null || true
+    echo "✅ 已启用 /boot/firmware utf8 挂载支持"
+fi
+
+# 4. 安装开机自启 Systemd 服务 (无桌面秒启)
+echo "⚙️ [4/4] 配置开机自启 systemd 纯净 Kiosk 服务..."
 sudo cp -f "${SCRIPT_DIR}/myhifi.service" /etc/systemd/system/myhifi.service
 sudo systemctl daemon-reload
 sudo systemctl enable myhifi.service
