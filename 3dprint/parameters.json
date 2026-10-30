@@ -1,0 +1,152 @@
+{
+  "revision": "v0.3.2-dtx-rear-shift-shop-trial",
+  "rack": {
+    "width": 260,
+    "depth": 244,
+    "shelf_thickness": 8,
+    "post_size": 24,
+    "bay_heights_bottom_to_top": [
+      90,
+      85,
+      150,
+      90
+    ]
+  },
+  "front_columns": {
+    "face_width": 32,
+    "front_projection": 11,
+    "corner_chamfer": 4,
+    "seam_gap": 0.4,
+    "joint_cover_clearance": 0.6,
+    "rear_enabled": true,
+    "status": "SAME_REMOVABLE_CHAMFERED_SHELL_ON_ALL_FOUR_CORNERS"
+  },
+  "fasteners": {
+    "structural_clearance": 4.5,
+    "head_diameter": 9.4,
+    "head_recess": 3.0,
+    "nut_across_flats": 7.5,
+    "nut_depth": 3.4,
+    "status": "USER_KIT_M3_M4_MACHINE_AND_SELF_TAPPING_USE_MACHINE_WITH_NUTS_M4_HEAD_NOMINAL_8.5_VERIFY_HEIGHT"
+  },
+  "screen": {
+    "variant": "70H-1024600-CT",
+    "glass_width": 173,
+    "glass_height": 103,
+    "assembly_max_depth": 4.2,
+    "cover_glass_thickness": 0.7,
+    "lcd_body_width": 164,
+    "lcd_body_height": 97,
+    "lcd_metal_thickness": 2.6,
+    "lcd_body_offset_x": -1.7,
+    "lcd_body_depth_envelope": 3.5,
+    "glass_clearance_per_side": 0.4,
+    "window_width": 168.0,
+    "window_height": 98.0,
+    "window_offset_up": 0,
+    "active_offset_up": 2.35,
+    "bezel_width": 190,
+    "bezel_height": 120,
+    "bezel_depth": 8,
+    "front_lip": 1.4,
+    "front_pad_thickness": 0.4,
+    "rear_pad_thickness": 2.0,
+    "rear_contact_x": 85.2,
+    "rear_contact_pad_width": 1.0,
+    "rear_contact_toe_width": 1.5,
+    "rear_nut_anchor_x": 91,
+    "rear_nut_anchor_y": 25,
+    "status": "0.7MM_COVER_GLASS_PLUS_LCD_COMPONENT_ENVELOPE_NOT_A_UNIFORM_4.2MM_SHEET;_LCD_X_OFFSET_IS_DRAWING_ALIGNMENT_INFERENCE",
+    "confirmation": "USER_CONFIRMED_TOUCH_173x103;_IPS_OR_QLED_NOT_SPECIFIED_SAME_OFFICIAL_MECHANICAL_OUTLINE"
+  },
+  "controller": {
+    "width": 50,
+    "depth": 25.5,
+    "pcb_thickness": 1.6,
+    "hole_pitch_x": 44.7,
+    "hole_pitch_y": 20.2,
+    "mount_hole": 2.75,
+    "status": "WAVESHARE_DRAWING"
+  },
+  "pi_case": {
+    "length_front_to_back": 100,
+    "height_when_vertical": 70,
+    "thickness": 35,
+    "front_y": 105,
+    "bottom_above_shelf": 27,
+    "lower_hook_y": [
+      115,
+      195
+    ],
+    "upper_hook_y": [
+      115,
+      165
+    ],
+    "power_keepout_y_start": 180,
+    "power_keepout_length": 30,
+    "status": "USER_DEFERRED_MEASUREMENT;_COMPACT_BLACK_ABS_CASE;_100x70x35_IS_A_CONSERVATIVE_REFERENCE_NOT_CONFIRMED_FIT",
+    "rear_shift_from_v031": 40
+  },
+  "hdd_case": {
+    "height_when_vertical": 125,
+    "length_front_to_back": 80,
+    "thickness": 20,
+    "front_y": 75,
+    "bottom_above_shelf": 12,
+    "status": "PLACEHOLDER_MEASURE_WITH_PROTECTIVE_CASE"
+  },
+  "za3": {
+    "envelope_width": 184,
+    "envelope_depth": 184,
+    "height": 51,
+    "status": "CONSERVATIVE_DESIGN_ENVELOPE_184x184x51;_ACTUAL_OUTLINE_AND_PLUG_BEND_NOT_CONFIRMED"
+  },
+  "dac": {
+    "model": "TOPPING DX1 II",
+    "width": 100,
+    "depth": 100,
+    "height": 32,
+    "front_y": 28,
+    "bottom_above_shelf": 0,
+    "includes_protrusions": true,
+    "visual_knob_depth": 12,
+    "power_voltage_v": 5,
+    "rated_input_current_a": 1.0,
+    "typical_power_w": 2.5,
+    "source": "https://dl.topping.audio/um/DX1_II_V1.1_CN.pdf",
+    "source_page": 26,
+    "status": "USER_MODEL_CONFIRMED_OFFICIAL_OVERALL_ENVELOPE_INCLUDES_PROTRUSIONS;_FACADE_AND_BODY_SPLIT_ARE_VISUAL_APPROXIMATION"
+  },
+  "cd": {
+    "enabled": false,
+    "width": 200,
+    "depth": 210,
+    "height": 65,
+    "status": "EMPTY_RESERVED_TRAY_USER_SONY_D131_PORTABLE_NOT_MODELED"
+  },
+  "printer": {
+    "model": "P1S (photo inference)",
+    "nozzle_mm": null,
+    "filament": null,
+    "max_part_target_xy": 250,
+    "status": "P1S_REFERENCE_0.4_PETG_PROFILE_IS_ASSUMED_NOT_CONFIRMED"
+  },
+  "button": {
+    "confirmed_case": false,
+    "hole_width": null,
+    "hole_height": null,
+    "retaining_flange": null,
+    "plunger_length": null,
+    "status": "NO_FIT_CLAIM_NO_BUTTON_STL_WITHOUT_MEASUREMENT"
+  },
+  "usb_flash": {
+    "model": "Kingston DataTraveler Exodia DTX/128GB",
+    "length": 67.3,
+    "width": 21.04,
+    "thickness": 10.14,
+    "unplug_travel": 10,
+    "reference_usb_index": 3,
+    "source": "https://www.kingston.com/datasheets/dtx_en.pdf",
+    "status": "MANUFACTURER_TOTAL_DIMENSIONS_RESERVED_IN_FULL_WITHOUT_DEDUCTING_CAP_OR_INSERTION;_REAL_PORT_LOCATIONS_AND_ADJACENT_PLUG_FIT_UNMEASURED"
+  }
+}

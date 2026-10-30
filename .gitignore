@@ -59,3 +59,8 @@ compile_commands.json
 /native/build*/
 /android/.cxx/
 /android/app/.cxx/
+
+# Local compiler and test diagnostics
+/build-ios/
+/test/failures/
+/result.json

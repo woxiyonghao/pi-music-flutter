@@ -1,0 +1,37 @@
+# CAD exports, release archives and extracted delivery copies
+/3mf/
+/stl/
+/step/
+/calibration/
+/bambu_reference/
+/audio-rack-*
+/makerworld_upload/
+/makerworld-upload-*.zip
+
+# Generated previews, reports and parts lists
+/preview.html
+/parameter-audit.html
+/print-handoff.html
+/START_HERE.txt
+/hardware.csv
+/parts.csv
+/print-order.csv
+/*-manifest.json
+/source/model-data.json
+/source/*.bundle.js
+/source/bambu_profiles/
+**/node_modules/
+
+# Keep validation scripts; regenerate their logs, meshes and screenshots
+/validation/*
+!/validation/*.py
+!/validation/*.mjs
+/renders/*.png
+/renders/*.jpg
+/renders/makerworld-*.html
+
+# Downloaded reference media and historical output backups stay local
+/reference/*.pdf
+/reference/*.png
+/reference/*.webp
+/reference/history/

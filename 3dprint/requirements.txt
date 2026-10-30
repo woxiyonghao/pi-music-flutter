@@ -1,0 +1,5 @@
+cadquery==2.7.0
+trimesh==5.1.1
+numpy==2.2.6
+scipy==1.13.1
+networkx==3.4.2

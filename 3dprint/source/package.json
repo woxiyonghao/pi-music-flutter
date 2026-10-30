@@ -1,0 +1,1 @@
+{"private":true,"scripts":{"build":"esbuild viewer.js --bundle --format=iife --minify --outfile=viewer.bundle.js"},"dependencies":{"three":"0.180.0"},"devDependencies":{"esbuild":"0.28.2"}}
