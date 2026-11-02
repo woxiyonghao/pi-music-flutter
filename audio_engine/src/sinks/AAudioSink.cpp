@@ -1,5 +1,6 @@
 #include "audio_engine/sinks/AAudioSink.hpp"
 #include <cstring>
+#include <dlfcn.h>
 #include "audio_engine/RuntimeContext.hpp"
 #include <iostream>
 
@@ -58,6 +59,14 @@ bool AAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback callb
     AAudioStreamBuilder_setChannelCount(builder, requested_spec.channels > 0 ? requested_spec.channels : 2);
     AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_FLOAT);
     AAudioStreamBuilder_setPerformanceMode(builder, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
+    using SetUsageFn = void (*)(AAudioStreamBuilder*, int32_t);
+    using SetContentTypeFn = void (*)(AAudioStreamBuilder*, int32_t);
+    if (auto set_usage = reinterpret_cast<SetUsageFn>(dlsym(RTLD_DEFAULT, "AAudioStreamBuilder_setUsage"))) {
+        set_usage(builder, 1 /* AAUDIO_USAGE_MEDIA */);
+    }
+    if (auto set_content = reinterpret_cast<SetContentTypeFn>(dlsym(RTLD_DEFAULT, "AAudioStreamBuilder_setContentType"))) {
+        set_content(builder, 2 /* AAUDIO_CONTENT_TYPE_MUSIC */);
+    }
 
     // 优先尝试 EXCLUSIVE 独占流 (Bit-Perfect 直通)
     AAudioStreamBuilder_setSharingMode(builder, preferences.exclusive ? AAUDIO_SHARING_MODE_EXCLUSIVE : AAUDIO_SHARING_MODE_SHARED);

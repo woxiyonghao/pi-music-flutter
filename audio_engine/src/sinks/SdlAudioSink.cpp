@@ -2,6 +2,7 @@
 #include "audio_engine/RuntimeContext.hpp"
 #include <iostream>
 #include <cstring>
+#include <mutex>
 
 namespace audio_engine {
 
@@ -95,13 +96,17 @@ bool SdlAudioSink::open(const AudioFormatSpec& requested_spec, AudioCallback cal
 #if defined(__linux__) && !defined(HIFI_PLATFORM_MAC)
     // 自动重置 ALSA 硬件混音器：解除静音并将 Master/PCM/Headphone/Speaker 增益推至 100% (0dB)，
     // 输出标准的 Line-Out 线路电平 (1.0~2.0Vrms)，彻底解决外接后级功放时音量极微弱或无声的问题！
-    std::system("(for c in 0 1 2 3; do "
-                "amixer -c $c sset Master 100% unmute 2>/dev/null; "
-                "amixer -c $c sset PCM 100% unmute 2>/dev/null; "
-                "amixer -c $c sset Headphone 100% unmute 2>/dev/null; "
-                "amixer -c $c sset Speaker 100% unmute 2>/dev/null; "
-                "amixer -c $c sset 'Line Out' 100% unmute 2>/dev/null; "
-                "done) >/dev/null 2>&1 &");
+    // 仅在进程生命周期内执行一次，避免每次切歌高频 fork 子进程引发实时音频线程抖动或句柄耗尽。
+    static std::once_flag alsa_mixer_init_once;
+    std::call_once(alsa_mixer_init_once, []() {
+        std::system("(for c in 0 1 2 3; do "
+                    "amixer -c $c sset Master 100% unmute 2>/dev/null; "
+                    "amixer -c $c sset PCM 100% unmute 2>/dev/null; "
+                    "amixer -c $c sset Headphone 100% unmute 2>/dev/null; "
+                    "amixer -c $c sset Speaker 100% unmute 2>/dev/null; "
+                    "amixer -c $c sset 'Line Out' 100% unmute 2>/dev/null; "
+                    "done) >/dev/null 2>&1 &");
+    });
 #endif
 
     actual_spec_.sample_rate = static_cast<uint32_t>(obtained.freq);
@@ -213,11 +218,13 @@ void SdlAudioSink::sdlCallbackThunk(void* userdata, Uint8* stream, int len) {
 
         while (SDL_AudioStreamAvailable(self->resample_stream_) < len &&
                self->is_running_.load(std::memory_order_acquire)) {
-            if (self->callback_) {
+            if (self->callback_ && chunk_frames > 0) {
                 self->callback_(self->resample_input_buf_.data(), chunk_frames);
-                SDL_AudioStreamPut(self->resample_stream_,
-                                   self->resample_input_buf_.data(),
-                                   static_cast<int>(chunk_frames * in_channels * sizeof(float)));
+                if (SDL_AudioStreamPut(self->resample_stream_,
+                                       self->resample_input_buf_.data(),
+                                       static_cast<int>(chunk_frames * in_channels * sizeof(float))) < 0) {
+                    break;
+                }
             } else {
                 break;
             }

@@ -1542,16 +1542,16 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
     }
 
     // 播放完毕检测 (单曲仅触发一次 EOF 回调，防止高频重复调用)
+    // 严禁在实时音频回调线程内调用 sink_->pause()（AAudio/CoreAudio/SDL/ALSA 均禁止在回调内停流，
+    // 且会与主线程切歌/close 产生竞态）。环形缓冲耗尽后当前回调已输出全零静音帧，交由主线程安全切歌或停止。
     if (is_eof_.load(std::memory_order_acquire) && ring_buffer_.available_read() == 0) {
-        if (!eof_reported_.exchange(true, std::memory_order_acq_rel)) {
+        if (!eof_reported_.load(std::memory_order_acquire)) {
             std::cout << "[AudioEngine] onSinkDataNeeded: EOF and buffer drained, triggering eof_callback" << std::endl;
-            is_playing_.store(false, std::memory_order_release);
-            if (sink_) {
-                sink_->pause();
-            }
             if (eof_callback_) {
                 eof_callback_();
             }
+            is_playing_.store(false, std::memory_order_release);
+            eof_reported_.store(true, std::memory_order_release);
         }
     }
 }
