@@ -206,16 +206,23 @@ class PlatformAudioRuntime extends ChangeNotifier {
     session.interruptionEventStream.listen((event) {
       if (event.begin) {
         _active = false;
-        resumePolicy.begin(isPlaying: isPlaying());
+        final wasPlaying = isPlaying();
+        resumePolicy.begin(isPlaying: wasPlaying);
+        if (!wasPlaying) {
+          unawaited(_setAndroidPlaybackActive(false));
+        }
         pauseForSystem();
       } else if (resumePolicy.end(
           allowed: event.type != AudioInterruptionType.unknown)) {
         resumeAfterSystem();
+      } else {
+        unawaited(_setAndroidPlaybackActive(false));
       }
     });
     session.becomingNoisyEventStream.listen((_) {
       _active = false;
       resumePolicy.cancel();
+      unawaited(_setAndroidPlaybackActive(false));
       pauseForSystem();
     });
     if (usesHostOutput) {
@@ -224,6 +231,7 @@ class PlatformAudioRuntime extends ChangeNotifier {
           final args = call.arguments;
           if (args is Map && args['reason'] == 2) {
             resumePolicy.cancel();
+            unawaited(_setAndroidPlaybackActive(false));
             pauseForSystem();
           }
           await refreshOutput();
@@ -289,8 +297,10 @@ class PlatformAudioRuntime extends ChangeNotifier {
         if (!_active) {
           final sys = isIOS ? 'iOS' : 'Android';
           _sessionError = '$sys 未允许激活音频会话，请结束其他占用音频的操作后重试';
+          await _setAndroidPlaybackActive(false);
           return false;
         }
+        await _setAndroidPlaybackActive(true);
         // Keep the negotiated I/O buffer. Forcing a tiny buffer after activation
         // restarts active I/O and can disrupt an external USB route.
       }
@@ -468,6 +478,15 @@ class PlatformAudioRuntime extends ChangeNotifier {
     }
   }
 
+  Future<void> _setAndroidPlaybackActive(bool active) async {
+    if (!isAndroid || _testing) return;
+    try {
+      await _channel.invokeMethod<void>('setPlaybackActive', {'active': active});
+    } catch (error) {
+      debugPrint('[PlatformAudioRuntime] setPlaybackActive($active) failed: $error');
+    }
+  }
+
   /// The caller must stop/pause native audio before requesting deactivation.
   /// Never fire setActive(false) outside the session queue: a delayed false
   /// could otherwise overtake a subsequent play/probe's setActive(true).
@@ -475,6 +494,7 @@ class PlatformAudioRuntime extends ChangeNotifier {
     resumePolicy.cancel();
     if (!_mobileHost) return Future<void>.value();
     return _serialize(() async {
+      await _setAndroidPlaybackActive(false);
       if (!_active) return;
       _active = false;
       try {
