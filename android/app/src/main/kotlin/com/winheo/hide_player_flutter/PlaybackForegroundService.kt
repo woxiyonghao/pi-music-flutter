@@ -80,7 +80,7 @@ class PlaybackForegroundService : Service() {
 
             val iconRes = applicationInfo.icon.takeIf { it != 0 } ?: android.R.drawable.ic_media_play
             val notification = builder
-                .setContentTitle("MyHiFi Player")
+                .setContentTitle("PhonoraMusic")
                 .setContentText("正在后台高保真播放音频")
                 .setSmallIcon(iconRes)
                 .setContentIntent(contentIntent)
