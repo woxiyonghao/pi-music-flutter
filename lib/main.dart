@@ -121,7 +121,7 @@ class HiFiPlayerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'MyHiFi Player',
+        title: 'PhonoraMusic',
         debugShowCheckedModeBanner: false,
         theme: HifiTheme.darkTheme,
         scrollBehavior: const MouseDraggableScrollBehavior(),
