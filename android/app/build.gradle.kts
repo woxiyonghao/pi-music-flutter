@@ -1,7 +1,14 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val hifiKeyProperties = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -29,11 +36,22 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        // Release signing comes from android/key.properties (git-ignored).
+        if (hifiKeyProperties.isNotEmpty()) {
+            create("release") {
+                storeFile = file(hifiKeyProperties.getProperty("storeFile"))
+                storePassword = hifiKeyProperties.getProperty("storePassword")
+                keyAlias = hifiKeyProperties.getProperty("keyAlias")
+                keyPassword = hifiKeyProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Falls back to debug keys when key.properties is missing (e.g. CI / other machines).
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 }
