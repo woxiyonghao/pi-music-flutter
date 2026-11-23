@@ -1,4 +1,4 @@
-package com.example.hide_player_flutter
+package com.winheo.hide_player_flutter
 
 import io.flutter.embedding.android.FlutterActivity
 
