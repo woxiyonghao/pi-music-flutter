@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.winheo" "\0"
-            VALUE "FileDescription", "hide_player_flutter" "\0"
+            VALUE "FileDescription", "PhonoraMusic" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "hide_player_flutter" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.winheo. All rights reserved." "\0"
             VALUE "OriginalFilename", "hide_player_flutter.exe" "\0"
-            VALUE "ProductName", "hide_player_flutter" "\0"
+            VALUE "ProductName", "PhonoraMusic" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

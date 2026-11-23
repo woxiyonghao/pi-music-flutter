@@ -14,6 +14,6 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()
-    self.title = "PiHifiPlayer - High Fidelity Music Player"
+    self.title = "PhonoraMusic - High Fidelity Music Player"
   }
 }

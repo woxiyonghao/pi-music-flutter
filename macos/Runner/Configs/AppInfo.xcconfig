@@ -4,7 +4,7 @@
 // future. If not, the values below would default to using the project name when this becomes a
 // 'flutter create' template.
 
-PRODUCT_NAME = PiHifiPlayer
+PRODUCT_NAME = PhonoraMusic
 
 // The application's bundle identifier
 PRODUCT_BUNDLE_IDENTIFIER = com.winheo.hidePlayerFlutter
