@@ -678,18 +678,16 @@ class _PiTelemetryDashboardWidgetState extends State<PiTelemetryDashboardWidget>
   }
 
   // --------------------------------------------------------------------------
-  // 中央下半：实时声学与系统遥测波形卡片 (平滑发光贝塞尔曲线)
+  // 中央下半：实时频谱分析卡片 (对齐 Android 48频段发烧频谱)
   // --------------------------------------------------------------------------
   Widget _buildAcousticWaveformCard(Color accent, HifiAudioService audio, double t) {
     return _TechBorderCard(
-      title: '实时时域声学与系统遥测波形',
+      title: '实时频谱 / AUDIO SPECTRUM',
       accentColor: accent,
       child: CustomPaint(
-        painter: _AcousticWaveformPainter(
-          spectrum: audio.state.spectrumLevels,
-          isPlaying: audio.state.isPlaying,
-          animTime: t,
-          accentColor: accent,
+        painter: _TelemetrySpectrum(
+          accent: accent,
+          levels: audio.state.isPlaying ? audio.state.spectrumLevels : const [],
         ),
       ),
     );
@@ -1120,80 +1118,53 @@ class _HoloCoreRadarPainter extends CustomPainter {
 }
 
 // ============================================================================
-// 实时声学与系统遥测波形绘制 (平滑发光贝塞尔曲线)
+// 实时频谱绘制 (对齐 Android 硬件大师 48频段柱状频谱仪)
 // ============================================================================
-class _AcousticWaveformPainter extends CustomPainter {
-  final List<double> spectrum;
-  final bool isPlaying;
-  final double animTime;
-  final Color accentColor;
+class _TelemetrySpectrum extends CustomPainter {
+  final Color accent;
+  final List<double> levels;
 
-  _AcousticWaveformPainter({
-    required this.spectrum,
-    required this.isPlaying,
-    required this.animTime,
-    required this.accentColor,
-  });
+  _TelemetrySpectrum({required this.accent, required this.levels});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final baseY = h * 0.85;
+    const bands = 48;
+    final width = size.width / bands;
+    final barW = max(1.0, width - 3.0);
 
-    final path = Path()..moveTo(0, baseY);
-    const numPoints = 16;
-    final dx = w / (numPoints - 1);
+    for (var i = 0; i < bands; i++) {
+      final level = levels.isEmpty
+          ? 0.0
+          : levels[i * levels.length ~/ bands].clamp(0.0, 1.0);
+      final barH = max(1.0, size.height * level);
+      final top = size.height * (1.0 - level);
+      final x = i * width;
 
-    final points = <Offset>[];
-    for (int i = 0; i < numPoints; i++) {
-      double energy = 0.0;
-      if (isPlaying && spectrum.isNotEmpty) {
-        final specIdx = (i * spectrum.length ~/ numPoints).clamp(0, spectrum.length - 1);
-        energy = spectrum[specIdx];
+      // 48列频谱条形渐变
+      final rect = Rect.fromLTWH(x, top, barW, barH);
+      final pen = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            accent,
+            accent.withValues(alpha: 0.35),
+          ],
+        ).createShader(rect);
+
+      canvas.drawRect(rect, pen);
+
+      // 顶端发光峰值帽
+      if (level > 0.02) {
+        final capRect = Rect.fromLTWH(x, top, barW, 2.0);
+        final capPen = Paint()..color = Colors.white.withValues(alpha: 0.9);
+        canvas.drawRect(capRect, capPen);
       }
-      // 叠加上正弦呼吸律动
-      final wave = sin((i * 0.6) + (animTime * 2 * pi * 2)) * 0.15;
-      final y = baseY - (energy * h * 0.65) - (wave * h * 0.15);
-      points.add(Offset(i * dx, y.clamp(h * 0.1, baseY)));
-    }
-
-    for (int i = 0; i < points.length - 1; i++) {
-      final p0 = points[i];
-      final p1 = points[i + 1];
-      final midX = (p0.dx + p1.dx) / 2;
-      path.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
-    }
-
-    final fillPath = Path.from(path)
-      ..lineTo(w, baseY)
-      ..lineTo(0, baseY)
-      ..close();
-
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [accentColor.withValues(alpha: 0.35), accentColor.withValues(alpha: 0.0)],
-      ).createShader(Offset.zero & size);
-
-    final linePaint = Paint()
-      ..color = accentColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-
-    canvas.drawPath(fillPath, fillPaint);
-    canvas.drawPath(path, linePaint);
-
-    // 绘制高亮节点圆点
-    final dotPaint = Paint()..color = Colors.white;
-    for (final p in points) {
-      canvas.drawCircle(p, 2.5, dotPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _AcousticWaveformPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _TelemetrySpectrum oldDelegate) => true;
 }
 
 // ============================================================================

@@ -413,6 +413,13 @@ class MusicDatabaseService extends ChangeNotifier {
           pathsToHeal[id] = filepath;
         }
 
+        // 过滤 AppleDouble (._) 资源分叉及隐藏文件，自动标记孤立记录进行物理清理
+        final filename = p.basename(filepath);
+        if (filename.startsWith('._') || (filename.startsWith('.') && !filename.endsWith('.cue'))) {
+          hasOrphanRecords = true;
+          continue;
+        }
+
         // 只有在路径动态自愈后依然物理不存在，才视为真正孤立失效数据
         if (!isTest &&
             !_isInFailedScanDirectory(filepath) &&

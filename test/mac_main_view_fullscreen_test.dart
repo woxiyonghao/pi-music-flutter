@@ -2,10 +2,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hide_player_flutter/core/hifi_audio_service.dart';
+import 'package:hide_player_flutter/models/track.dart';
 import 'package:hide_player_flutter/ui/mac/mac_main_view.dart';
 import 'package:hide_player_flutter/ui/mac/mac_background_widget.dart';
 import 'package:hide_player_flutter/ui/mac/mac_sidebar_widget.dart';
 import 'package:hide_player_flutter/ui/mac/mac_bottom_bar_widget.dart';
+import 'package:hide_player_flutter/ui/mac/views/mac_all_music_view.dart';
 import 'package:hide_player_flutter/ui/visualizers/visualizer_type.dart';
 import 'package:hide_player_flutter/ui/visualizers/visualizer_stage_widget.dart';
 import 'package:hide_player_flutter/services/theme_service.dart';
@@ -20,6 +22,172 @@ void main() {
   });
 
   group('MacMainView Idle Fullscreen Immersive Mode Tests', () {
+    testWidgets('Sidebar scroll offset is preserved after entering and exiting fullscreen', (tester) async {
+      tester.view.physicalSize = const Size(1024, 500); // Shorter height so sidebar scrolls
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 1024,
+              height: 500,
+              child: MacMainView(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final sidebarFinder = find.byType(MacSidebarWidget);
+      expect(sidebarFinder, findsOneWidget);
+
+      final scrollableInSidebar = find.descendant(
+        of: sidebarFinder,
+        matching: find.byType(Scrollable),
+      );
+      expect(scrollableInSidebar, findsOneWidget);
+
+      // Scroll sidebar down
+      await tester.drag(scrollableInSidebar, const Offset(0, -150));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final scrollOffsetBefore = tester.state<ScrollableState>(scrollableInSidebar).position.pixels;
+      expect(scrollOffsetBefore, greaterThan(50));
+
+      // Enter fullscreen
+      final fullscreenBtn = find.byIcon(Icons.fullscreen_rounded);
+      expect(fullscreenBtn, findsOneWidget);
+      await tester.tap(fullscreenBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Exit fullscreen
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: const Offset(500, 400));
+      await tester.pump();
+      await gesture.moveTo(const Offset(520, 420));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final exitBtn = find.byIcon(Icons.fullscreen_exit_rounded);
+      expect(exitBtn, findsOneWidget);
+      await tester.tap(exitBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Verify sidebar scroll offset after exiting fullscreen
+      final scrollableAfter = find.descendant(
+        of: find.byType(MacSidebarWidget),
+        matching: find.byType(Scrollable),
+      );
+      expect(scrollableAfter, findsOneWidget);
+      final scrollOffsetAfter = tester.state<ScrollableState>(scrollableAfter).position.pixels;
+      expect(scrollOffsetAfter, equals(scrollOffsetBefore));
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('Scroll offset is preserved after entering and exiting fullscreen', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final dummyTracks = List.generate(
+        60,
+        (i) => Track(
+          id: i + 1,
+          title: 'Track ${i + 1}',
+          artist: 'Artist ${i % 5}',
+          album: 'Album ${i % 3}',
+          filepath: '/music/track_${i + 1}.flac',
+          format: AudioFormat.flac,
+          sampleRate: 44100,
+          bitDepth: 16,
+          durationSec: 180,
+        ),
+      );
+      MusicDatabaseService.instance.setTracksForTesting(dummyTracks);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 1280,
+              height: 800,
+              child: MacMainView(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final allMusicFinder = find.byType(MacAllMusicView);
+      expect(allMusicFinder, findsOneWidget);
+
+      final scrollableInAllMusic = find.descendant(
+        of: allMusicFinder,
+        matching: find.byType(Scrollable),
+      );
+      expect(scrollableInAllMusic, findsOneWidget);
+
+      // Scroll down by 400 pixels
+      await tester.drag(scrollableInAllMusic, const Offset(0, -400));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final scrollOffsetBefore = tester.state<ScrollableState>(scrollableInAllMusic).position.pixels;
+      expect(scrollOffsetBefore, greaterThan(200));
+
+      // Enter fullscreen
+      final fullscreenBtn = find.byIcon(Icons.fullscreen_rounded);
+      expect(fullscreenBtn, findsOneWidget);
+      await tester.tap(fullscreenBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Simulate PiSystemService or ThemeService or MusicDatabaseService notifying while in fullscreen
+      ThemeService.instance.notifyListeners();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Moving pointer reveals floating overlay with exit button
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: const Offset(500, 400));
+      await tester.pump();
+      await gesture.moveTo(const Offset(520, 420));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // In fullscreen, find exit button
+      final exitBtn = find.byIcon(Icons.fullscreen_exit_rounded);
+      expect(exitBtn, findsOneWidget);
+
+      // Exit fullscreen
+      await tester.tap(exitBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Check scroll offset after exiting fullscreen
+      final scrollableAfter = find.descendant(
+        of: find.byType(MacAllMusicView),
+        matching: find.byType(Scrollable),
+      );
+      expect(scrollableAfter, findsOneWidget);
+      final scrollOffsetAfter = tester.state<ScrollableState>(scrollableAfter).position.pixels;
+      expect(scrollOffsetAfter, equals(scrollOffsetBefore));
+
+      await tester.pumpWidget(const SizedBox());
+    });
     testWidgets('MacMainView renders all 4 corner components and background', (tester) async {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1.0;

@@ -110,6 +110,16 @@ class ThemeService extends ChangeNotifier {
       peakColor: Color.fromRGBO(252, 165, 165, 240 / 255),
       defaultVisualMode: 1,
     ),
+    ThemePreset(
+      id: 9,
+      name: '树莓派硬件大师',
+      englishName: 'Raspberry Pi Hardware Master',
+      soundStyle: '赛博极客 · 实时系统与音频链路',
+      accentColor: Color(0xFF00E5FF),
+      litColor: Color.fromRGBO(0, 229, 255, 150 / 255),
+      peakColor: Color.fromRGBO(255, 110, 180, 240 / 255),
+      defaultVisualMode: 11,
+    ),
   ];
 
   static List<String> getVisualModeLabels([HifiPlatformType? platform]) {

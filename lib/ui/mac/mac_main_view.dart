@@ -263,12 +263,13 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                             ),
 
                             // 2. 左侧：导航与歌单侧边栏 (230px 固定总宽度，向左上方移出，独立 GPU 图层隔离)
-                            if (!isFullyFullscreen)
-                              Positioned(
-                                left: 0,
-                                top: 0,
-                                bottom: 0,
-                                width: UIConfig.sidebarWidth,
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: UIConfig.sidebarWidth,
+                              child: Offstage(
+                                offstage: isFullyFullscreen,
                                 child: RepaintBoundary(
                                   child: Transform.translate(
                                     offset: Offset(topNavDx, topNavDy),
@@ -319,14 +320,16 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                   ),
                                 ),
                               ),
+                            ),
 
                             // 3. 右上方：中央主舞台区域 (向右上方移出，独立 GPU 图层隔离)
-                            if (!isFullyFullscreen)
-                              Positioned(
-                                left: UIConfig.sidebarWidth,
-                                top: UIConfig.containerMarginY,
-                                right: UIConfig.containerMarginX,
-                                bottom: UIConfig.bottomBarOffset,
+                            Positioned(
+                              left: UIConfig.sidebarWidth,
+                              top: UIConfig.containerMarginY,
+                              right: UIConfig.containerMarginX,
+                              bottom: UIConfig.bottomBarOffset,
+                              child: Offstage(
+                                offstage: isFullyFullscreen,
                                 child: RepaintBoundary(
                                   child: Transform.translate(
                                     offset: Offset(mainDx, mainDy),
@@ -340,14 +343,16 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                   ),
                                 ),
                               ),
+                            ),
 
                             // 4. 右下方：底部液态玻璃播放控制胶囊栏 (向右下方移出，独立 GPU 图层隔离)
-                            if (!isFullyFullscreen)
-                              Positioned(
-                                left: UIConfig.sidebarWidth + UIConfig.containerMarginX,
-                                right: UIConfig.containerMarginX,
-                                bottom: UIConfig.containerMarginY,
-                                height: UIConfig.bottomBarHeight,
+                            Positioned(
+                              left: UIConfig.sidebarWidth + UIConfig.containerMarginX,
+                              right: UIConfig.containerMarginX,
+                              bottom: UIConfig.containerMarginY,
+                              height: UIConfig.bottomBarHeight,
+                              child: Offstage(
+                                offstage: isFullyFullscreen,
                                 child: RepaintBoundary(
                                   child: Transform.translate(
                                     offset: Offset(bottomDx, bottomDy),
@@ -363,6 +368,7 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
                                   ),
                                 ),
                               ),
+                            ),
 
                             // 5. 全屏模式双击任意区域退出全屏 (对齐发烧播放器人机工效: 触控双击/鼠标双击瞬时退出全屏)
                             if (progress > 0.3)
