@@ -36,4 +36,16 @@ void main() {
     policy.begin(isPlaying: true);
     expect(policy.end(allowed: false), isFalse);
   });
+  test('Android manifest declares media playback foreground service and wake lock', () {
+    final manifest =
+        File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+    expect(manifest, contains('android.permission.WAKE_LOCK'));
+    expect(manifest, contains('android.permission.FOREGROUND_SERVICE'));
+    expect(
+      manifest,
+      contains('android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK'),
+    );
+    expect(manifest, contains('android:name=".PlaybackForegroundService"'));
+    expect(manifest, contains('android:foregroundServiceType="mediaPlayback"'));
+  });
 }

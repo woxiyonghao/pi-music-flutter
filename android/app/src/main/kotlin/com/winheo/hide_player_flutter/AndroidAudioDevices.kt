@@ -13,6 +13,7 @@ import io.flutter.plugin.common.MethodChannel
 
 /** System device inventory; the C++ AAudio sink owns streams and reports their actual format. */
 class AndroidAudioDevices(context: Context, private val channel: MethodChannel) {
+    private val appContext = context.applicationContext
     private val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val callback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(devices: Array<out AudioDeviceInfo>) {
@@ -30,6 +31,11 @@ class AndroidAudioDevices(context: Context, private val channel: MethodChannel) 
                     "getOutputFormat" -> {
                         val devices = readDevices()
                         result.success(devices.firstOrNull { it["isDefault"] == true })
+                    }
+                    "setPlaybackActive" -> {
+                        val active = (call.arguments as? Map<*, *>)?.get("active") == true || call.arguments == true
+                        PlaybackForegroundService.setPlaybackActive(appContext, active)
+                        result.success(null)
                     }
                     else -> result.notImplemented()
                 }
@@ -94,6 +100,7 @@ class AndroidAudioDevices(context: Context, private val channel: MethodChannel) 
     }
 
     fun close() {
+        PlaybackForegroundService.setPlaybackActive(appContext, false)
         manager.unregisterAudioDeviceCallback(callback)
         channel.setMethodCallHandler(null)
     }
