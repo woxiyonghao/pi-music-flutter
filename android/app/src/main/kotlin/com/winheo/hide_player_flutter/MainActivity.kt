@@ -1,4 +1,4 @@
-package com.example.hide_player_flutter
+package com.winheo.hide_player_flutter
 
 import android.Manifest
 import android.app.ActivityManager
