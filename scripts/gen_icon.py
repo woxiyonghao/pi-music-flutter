@@ -33,8 +33,19 @@ for r, w in [(0.86, 0.010), (0.72, 0.010), (0.58, 0.010)]:  # grooves
     ring(R * r, S * w, (150, 205, 255, 255))
 lab = R * 0.40
 d.ellipse([cx - lab, cy - lab, cx + lab, cy + lab], fill=BLUE)  # label
-hole = R * 0.07
-d.ellipse([cx - hole, cy - hole, cx + hole, cy + hole], fill=W)
+# Brand mark: a clean bold "P" on the label (stem + open bowl)
+t = lab * 0.19                     # stroke width
+H = lab * 1.30                     # letter height
+top, bottom = cy - H / 2, cy + H / 2
+left = cx - lab * 0.34
+bo = H * 0.30                      # bowl outer radius
+bcx, bcy = left + t / 2 + bo - t / 2 + lab * 0.04, top + bo
+d.rounded_rectangle([left, top, left + t, bottom], radius=t / 2, fill=W)
+d.pieslice([bcx - bo, bcy - bo, bcx + bo, bcy + bo], -90, 90, fill=W)
+d.rectangle([left + t / 2, top, bcx, bcy + bo], fill=W)
+bi = bo - t
+d.pieslice([bcx - bi, bcy - bi, bcx + bi, bcy + bi], -90, 90, fill=BLUE)
+d.rectangle([left + t, bcy - bi, bcx, bcy + bi], fill=BLUE)
 
 # tonearm: pivot top-right, needle onto record
 px_, py_ = c + S * 0.27, c - S * 0.28
