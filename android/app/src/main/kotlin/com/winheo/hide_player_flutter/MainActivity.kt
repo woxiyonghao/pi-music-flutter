@@ -24,6 +24,16 @@ class MainActivity : FlutterActivity() {
     private var storagePermissionResult: MethodChannel.Result? = null
     private var audioDevices: AndroidAudioDevices? = null
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Android 13+: ask once so the playback notification is visible.
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1003)
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         audioDevices = AndroidAudioDevices(this, MethodChannel(
