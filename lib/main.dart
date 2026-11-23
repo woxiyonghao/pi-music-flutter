@@ -34,7 +34,7 @@ class _HiFiPlayerAppState extends State<HiFiPlayerApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MyHiFi Player',
+      title: 'PhonoraMusic',
       debugShowCheckedModeBanner: false,
       theme: HifiTheme.darkTheme,
       scrollBehavior: const MouseDraggableScrollBehavior(),
