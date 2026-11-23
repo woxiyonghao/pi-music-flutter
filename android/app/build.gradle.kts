@@ -9,6 +9,10 @@ plugins {
 val hifiLocalProperties = Properties().apply {
     rootProject.file("local.properties").inputStream().use { load(it) }
 }
+val hifiKeyProperties = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
 val hifiFlutterSdk = hifiLocalProperties.getProperty("flutter.sdk")
 val hifiDart = "$hifiFlutterSdk/bin/cache/dart-sdk/bin/" +
     if (System.getProperty("os.name").lowercase().contains("windows")) "dart.exe" else "dart"
@@ -51,11 +55,22 @@ android {
         }
     }
 
+    signingConfigs {
+        // Release signing comes from android/key.properties (git-ignored).
+        if (hifiKeyProperties.isNotEmpty()) {
+            create("release") {
+                storeFile = file(hifiKeyProperties.getProperty("storeFile"))
+                storePassword = hifiKeyProperties.getProperty("storePassword")
+                keyAlias = hifiKeyProperties.getProperty("keyAlias")
+                keyPassword = hifiKeyProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // Falls back to debug keys when key.properties is missing (e.g. CI / other machines).
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 }
