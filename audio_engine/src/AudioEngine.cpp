@@ -24,6 +24,7 @@
 #else
 #include "audio_engine/sinks/SdlAudioSink.hpp"
 #include "audio_engine/sinks/AlsaAudioSink.hpp"
+#include "audio_engine/decoders/AlsaCaptureDecoder.hpp"
 #endif
 
 #include <iostream>
@@ -129,6 +130,7 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
 bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_sec, double end_sec) {
     std::lock_guard lock_dev(device_mutex_);
     output_released_.store(false, std::memory_order_release);
+    is_live_stream_.store(false, std::memory_order_release);
 
     start_sec = std::max(0.0, start_sec);
     bool is_section = (end_sec > start_sec);
@@ -333,6 +335,7 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
         seek_base_time_.store(0.0, std::memory_order_relaxed);
         is_eof_.store(false, std::memory_order_relaxed);
         eof_reported_.store(false, std::memory_order_relaxed);
+        is_live_stream_.store(false, std::memory_order_release);
         resetFade();
 
         uint32_t rate = (current_spec_.sample_rate > 0) ? current_spec_.sample_rate : 44100;
@@ -405,6 +408,66 @@ bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_s
     return true;
 }
 
+bool AudioEngine::openLiveCapture(const std::string& device_name) {
+#if defined(__linux__) && !defined(__APPLE__) && !defined(__ANDROID__)
+    std::lock_guard lock_dev(device_mutex_);
+    stop();
+    output_released_.store(false, std::memory_order_release);
+
+    auto capture = std::make_unique<AlsaCaptureDecoder>();
+    if (!capture->open(device_name)) {
+        return false;
+    }
+
+    {
+        std::lock_guard lock(decoder_mutex_);
+        decoder_ = std::move(capture);
+        current_filepath_ = "live://" + device_name;
+        current_spec_ = decoder_->getSpec();
+        duration_sec_ = 0.0;
+        is_section_active_.store(false, std::memory_order_release);
+        section_start_sec_.store(0.0, std::memory_order_release);
+        section_end_sec_.store(0.0, std::memory_order_release);
+        section_frames_read_.store(0, std::memory_order_release);
+        section_total_frames_.store(0, std::memory_order_release);
+        ring_buffer_.reset();
+        equalizer_.reset();
+        frames_consumed_by_sink_.store(0, std::memory_order_relaxed);
+        seek_base_time_.store(0.0, std::memory_order_relaxed);
+        is_eof_.store(false, std::memory_order_relaxed);
+        eof_reported_.store(false, std::memory_order_relaxed);
+        is_live_stream_.store(true, std::memory_order_release);
+        resetFade();
+    }
+
+    if (sink_) {
+        sink_->close();
+        if (!sink_->open(current_spec_, [this](float* output, size_t frame_count) {
+                onSinkDataNeeded(output, frame_count);
+            })) {
+            stop();
+            return false;
+        }
+    }
+
+    is_playing_.store(true, std::memory_order_release);
+    is_paused_.store(false, std::memory_order_release);
+    is_decoding_.store(true, std::memory_order_release);
+    decode_thread_ = WorkerThread([this](StopToken st) { decodeWorker(st); });
+    if (sink_) {
+        sink_->start();
+        if (sink_->hasError()) {
+            stop();
+            return false;
+        }
+    }
+    return true;
+#else
+    (void)device_name;
+    return false;
+#endif
+}
+
 void AudioEngine::play() {
     std::lock_guard device_lock(device_mutex_);
     if (is_playing_.load(std::memory_order_acquire)) {
@@ -475,6 +538,7 @@ void AudioEngine::stop() {
         section_total_frames_.store(0, std::memory_order_relaxed);
         is_eof_.store(false, std::memory_order_relaxed);
         eof_reported_.store(false, std::memory_order_relaxed);
+        is_live_stream_.store(false, std::memory_order_release);
         resetFade();
     }
 }
@@ -508,7 +572,7 @@ void AudioEngine::seek(double target_seconds) {
     if (sink_) sink_->stop();
     {
     std::lock_guard lock(decoder_mutex_);
-    if (!decoder_) return;
+    if (!decoder_ || is_live_stream_.load(std::memory_order_acquire)) return;
 
     double clamped = std::clamp(target_seconds, 0.0, duration_sec_);
     double abs_target = section_start_sec_.load(std::memory_order_relaxed) + clamped;
@@ -820,7 +884,8 @@ void AudioEngine::handleDefaultDeviceChanged() {
         if (!playing) pause();
     }
 #else
-    if (output_released_.load(std::memory_order_acquire)) {
+    if (output_released_.load(std::memory_order_acquire) ||
+        is_live_stream_.load(std::memory_order_acquire)) {
         return;
     }
     const auto host = runtimeContext().hostOutput();
@@ -1412,8 +1477,9 @@ void AudioEngine::decodeWorker(StopToken stop_token) {
             continue;
         }
 
-        size_t frames_to_request = CHUNK_FRAMES;
-        if (is_section_active_.load(std::memory_order_relaxed)) {
+        const bool live = is_live_stream_.load(std::memory_order_relaxed);
+        size_t frames_to_request = live ? 1024 : CHUNK_FRAMES;
+        if (!live && is_section_active_.load(std::memory_order_relaxed)) {
             uint64_t total = section_total_frames_.load(std::memory_order_relaxed);
             uint64_t already = section_frames_read_.load(std::memory_order_relaxed);
             if (already >= total) {
@@ -1435,9 +1501,18 @@ void AudioEngine::decodeWorker(StopToken stop_token) {
         }
 
         if (frames_read > 0) {
+            if (live) {
+                // Keep live capture latency bounded (~185ms) without violating SPSC.
+                const size_t max_live_samples = 8192 * current_spec_.channels;
+                if (ring_buffer_.available_read() > max_live_samples) {
+                    continue;
+                }
+            }
             section_frames_read_.fetch_add(frames_read, std::memory_order_relaxed);
             size_t samples_to_write = frames_read * current_spec_.channels;
             ring_buffer_.write(decode_buf.data(), samples_to_write);
+        } else if (live) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
         } else {
             // 解码完毕 (EOF)
             if (!is_eof_.load(std::memory_order_relaxed)) {
@@ -1457,7 +1532,10 @@ void AudioEngine::onSinkDataNeeded(float* output, size_t frame_count) {
 
     // 若环形缓冲未填满 (或处于末尾)，平滑渐隐防止方波突变引起的爆音/沙沙声
     if (samples_read < samples_needed) {
-        if (!is_eof_.load(std::memory_order_relaxed)) underrun_count_.fetch_add(1, std::memory_order_relaxed);
+        if (!is_eof_.load(std::memory_order_relaxed) &&
+            !is_live_stream_.load(std::memory_order_relaxed)) {
+            underrun_count_.fetch_add(1, std::memory_order_relaxed);
+        }
 #if defined(__APPLE__) && TARGET_OS_IPHONE
         g_iosSinkUnderflowCount.fetch_add(1, std::memory_order_relaxed);
 #endif

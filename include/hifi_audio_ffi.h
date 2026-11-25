@@ -37,6 +37,7 @@ HIFI_EXPORT bool hifi_audio_init();
 // 2. 播放与曲目控制
 HIFI_EXPORT bool hifi_audio_open_and_play(const char* filepath);
 HIFI_EXPORT bool hifi_audio_open_and_play_section(const char* filepath, double start_sec, double end_sec);
+HIFI_EXPORT bool hifi_audio_open_live_capture(const char* device_name);
 HIFI_EXPORT void hifi_audio_play();
 HIFI_EXPORT void hifi_audio_pause();
 HIFI_EXPORT void hifi_audio_toggle();

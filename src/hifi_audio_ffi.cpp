@@ -75,6 +75,11 @@ bool hifi_audio_open_and_play_section(const char* filepath, double start_sec, do
     return audio_engine::AudioEngine::getInstance().openAndPlaySection(filepath, start_sec, end_sec);
 }
 
+bool hifi_audio_open_live_capture(const char* device_name) {
+    if (!audio_engine::runtimeContext().configured()) return false;
+    return audio_engine::AudioEngine::getInstance().openLiveCapture(device_name ? device_name : "");
+}
+
 void hifi_audio_play() {
     audio_engine::AudioEngine::getInstance().play();
 }

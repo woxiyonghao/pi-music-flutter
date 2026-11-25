@@ -42,6 +42,7 @@ public:
      * @brief 打开并播放指定音频文件的时间区间 (用于 CUE 虚拟分轨母带播放)
      */
     bool openAndPlaySection(const std::string& filepath, double start_sec, double end_sec);
+    bool openLiveCapture(const std::string& device_name);
 
     void play();
     void pause();
@@ -148,6 +149,7 @@ private:
     WorkerThread decode_thread_;
     std::atomic<bool> is_decoding_{false};
     std::atomic<bool> is_eof_{false};
+    std::atomic<bool> is_live_stream_{false};
     std::atomic<bool> output_released_{false};
 
     std::atomic<bool> is_playing_{false};
