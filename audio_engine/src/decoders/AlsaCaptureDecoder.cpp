@@ -44,8 +44,8 @@ bool AlsaCaptureDecoder::open(const std::string& device_name) {
         return false;
     }
 
-    if ((err = snd_pcm_prepare(pcm_)) < 0) {
-        std::cerr << "[AlsaCaptureDecoder] snd_pcm_prepare failed: " << snd_strerror(err) << std::endl;
+    if ((err = snd_pcm_prepare(pcm_)) < 0 || (err = snd_pcm_start(pcm_)) < 0) {
+        std::cerr << "[AlsaCaptureDecoder] snd_pcm_prepare/start failed: " << snd_strerror(err) << std::endl;
         snd_pcm_close(pcm_);
         pcm_ = nullptr;
         return false;
@@ -68,6 +68,10 @@ uint64_t AlsaCaptureDecoder::readFrames(float* buffer, uint64_t max_frames) {
         return 0;
     }
 
+    if (snd_pcm_state(pcm_) == SND_PCM_STATE_PREPARED) {
+        snd_pcm_start(pcm_);
+    }
+
     // Bounded wait so stop()/close() never blocks decode_thread_join.
     int ready = snd_pcm_wait(pcm_, 40);
     if (ready == 0 || closed_.load(std::memory_order_acquire)) {
@@ -76,6 +80,7 @@ uint64_t AlsaCaptureDecoder::readFrames(float* buffer, uint64_t max_frames) {
     if (ready < 0) {
         if (ready == -EPIPE || ready == -ESTRPIPE) {
             snd_pcm_recover(pcm_, ready, 1);
+            snd_pcm_start(pcm_);
         }
         return 0;
     }
@@ -86,6 +91,7 @@ uint64_t AlsaCaptureDecoder::readFrames(float* buffer, uint64_t max_frames) {
     if (got < 0) {
         if (got == -EPIPE || got == -ESTRPIPE) {
             snd_pcm_recover(pcm_, static_cast<int>(got), 1);
+            snd_pcm_start(pcm_);
         }
         return 0;
     }
