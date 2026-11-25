@@ -21,6 +21,7 @@ import 'views/mac_magic_tuning_view.dart';
 import 'views/mac_scan_music_view.dart';
 import 'views/mac_system_settings_view.dart';
 import 'views/mac_web_service_view.dart';
+import 'views/mac_wireless_audio_view.dart';
 
 /// macOS / iPad / 树莓派 专业桌面端发烧纯音数播主视窗 (1:1 严格对齐 C++ Application.cpp 全景架构)
 /// 具备：空闲时间全屏屏保检测 (15s/30s/1m/5m/永不)、四角板块平滑滑出动效 (0.4s 缓动插值)、
@@ -485,7 +486,9 @@ class _MacMainViewState extends State<MacMainView> with SingleTickerProviderStat
         MacWebServiceView(isWifiTransfer: false, platform: widget.platform),
         // 9: wifiTransfer
         MacWebServiceView(isWifiTransfer: true, platform: widget.platform),
-        // 10: terminal
+        // 10: wirelessPlay
+        const MacWirelessAudioView(),
+        // 11: terminal
         const MacSystemSettingsView(),
       ],
     );

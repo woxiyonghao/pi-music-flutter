@@ -196,6 +196,13 @@ class _MacSidebarWidgetState extends State<MacSidebarWidget> {
                           isSelected: widget.currentTab == SidebarTab.wifiTransfer,
                           onTap: () => widget.onTabSelected(SidebarTab.wifiTransfer),
                         ),
+                        _buildNavItem(
+                          tab: SidebarTab.wirelessPlay,
+                          label: '无线播放',
+                          iconData: Icons.bluetooth_audio_rounded,
+                          isSelected: widget.currentTab == SidebarTab.wirelessPlay,
+                          onTap: () => widget.onTabSelected(SidebarTab.wirelessPlay),
+                        ),
 
                         const SizedBox(height: 8.0),
 

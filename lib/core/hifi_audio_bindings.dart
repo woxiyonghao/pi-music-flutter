@@ -113,6 +113,8 @@ class HifiAudioBindings {
   bool _hasDeviceCatalog = false;
   _HifiAudioGetDevicesJsonDart? _getDiagnosticsJson;
   _HifiAudioBoolDart? _hasPlaybackCompleted;
+  _HifiAudioVoidDart? _releaseOutput;
+  _HifiAudioVoidDart? _reclaimOutput;
 
   // 内存复用：12 频段频谱指针与 10 频段 EQ 指针 (避免每帧内存分配与 GC 压力)
   late final Pointer<Float> _spectrumBuffer;
@@ -261,6 +263,14 @@ class HifiAudioBindings {
         _getDiagnosticsJson = _lib.lookupFunction<_HifiAudioGetDevicesJsonC,
             _HifiAudioGetDevicesJsonDart>('hifi_audio_get_diagnostics_json');
       } catch (_) {}
+      try {
+        _releaseOutput =
+            _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>(
+                'hifi_audio_release_output');
+        _reclaimOutput =
+            _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>(
+                'hifi_audio_reclaim_output');
+      } catch (_) {}
     } catch (e, stack) {
       loadError = 'LOOKUP_ERROR: $e\n$stack';
       _isLoaded = false;
@@ -343,6 +353,15 @@ class HifiAudioBindings {
   void pause() => _isLoaded ? _pause() : null;
   void toggle() => _isLoaded ? _toggle() : null;
   void stop() => _isLoaded ? _stop() : null;
+  void releaseOutput() {
+    if (!_isLoaded) return;
+    (_releaseOutput ?? _stop)();
+  }
+
+  void reclaimOutput() {
+    if (!_isLoaded) return;
+    _reclaimOutput?.call();
+  }
   void seek(double sec) => _isLoaded ? _seek(sec) : null;
   bool isPlaying() => _isLoaded ? _isPlaying() : false;
   bool isPaused() => _isLoaded ? _isPaused() : false;

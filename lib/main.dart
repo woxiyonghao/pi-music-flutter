@@ -7,6 +7,7 @@ import 'platform/platform_audio_runtime.dart';
 import 'services/dac_setting_service.dart';
 import 'services/music_database_service.dart';
 import 'services/web_remote_service.dart';
+import 'services/wireless_audio_service.dart';
 import 'theme/hifi_theme.dart';
 import 'theme/ui_config.dart';
 import 'ui/pi/pi_main_view.dart';
@@ -28,6 +29,7 @@ void main() async {
   if (!Platform.environment.containsKey('FLUTTER_TEST')) {
     WebRemoteService.instance.start(port: 8088);
     DacSettingService.instance.restoreDx1iiHardwareSettings();
+    WirelessAudioService.instance.init();
   }
 }
 

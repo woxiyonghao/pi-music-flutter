@@ -56,6 +56,10 @@ class HifiAudioService extends ChangeNotifier {
 
   String lastDebugLog = '';
 
+  /// Optional hook called before starting or resuming local playback
+  /// (used on Raspberry Pi to stop Bluetooth/AirPlay and reclaim the DAC).
+  Future<void> Function()? beforeLocalPlaybackHook;
+
   final ValueNotifier<int?> currentTrackIdNotifier = ValueNotifier<int?>(null);
   final ValueNotifier<Track?> currentTrackNotifier =
       ValueNotifier<Track?>(null);
@@ -316,6 +320,8 @@ class HifiAudioService extends ChangeNotifier {
     final resolvedPath = MusicDatabaseService.resolveTrackPath(track.filepath);
     Object? fileError;
     try {
+      await beforeLocalPlaybackHook?.call();
+      if (generation != _loadGeneration) return;
       await (_prepareFileOverride ?? _prepareFile)(resolvedPath);
       if (generation != _loadGeneration) return;
       if (!await PlatformAudioRuntime.instance.activate()) {
@@ -431,6 +437,8 @@ class HifiAudioService extends ChangeNotifier {
     _playWhenPrepared = true;
     if (_isPreparingTrack) return;
     final generation = _loadGeneration;
+    await beforeLocalPlaybackHook?.call();
+    if (generation != _loadGeneration || !_playWhenPrepared) return;
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       if (!await PlatformAudioRuntime.instance.activate()) return;
       if (generation != _loadGeneration || !_playWhenPrepared) return;
@@ -506,6 +514,18 @@ class HifiAudioService extends ChangeNotifier {
       spectrumLevels: List.filled(12, 0.0),
     );
     notifyListeners();
+  }
+
+  /// Stop local playback and close the hardware output handle so external
+  /// receivers (Bluetooth / AirPlay) can use the DAC exclusively.
+  void releaseOutput() {
+    stop();
+    _bindings.releaseOutput();
+  }
+
+  /// Re-enable local hardware output locking after wireless receivers stop.
+  void reclaimOutput() {
+    _bindings.reclaimOutput();
   }
 
   void previous() {

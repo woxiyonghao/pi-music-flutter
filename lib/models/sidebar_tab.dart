@@ -10,5 +10,6 @@ enum SidebarTab {
   systemSettings, // ⚙️ 系统设置
   webService, // 🖥️ Web 遥控服务
   wifiTransfer, // 📶 WiFi 无线传歌
+  wirelessPlay, // 📡 无线播放 (蓝牙 / AirPlay)
   terminal, // 📟 硬件系统终端 (树莓派特有)
 }
