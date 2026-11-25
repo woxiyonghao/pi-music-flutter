@@ -13,8 +13,8 @@ void main() {
         () {
       final service = WirelessAudioService.forTesting(
         runCommand: (exe, args) async => ProcessResult(0, 0, '', ''),
-        releaseLocalOutput: () {},
-        reclaimLocalOutput: () {},
+        startLiveCapture: ({required title, required subtitle}) => true,
+        stopLiveCapture: () {},
         restoreDac: () async {},
       );
       addTearDown(service.dispose);
@@ -26,11 +26,11 @@ void main() {
       expect(service.isWirelessActive, isFalse);
     });
 
-    test('Bluetooth and AirPlay are mutually exclusive and release/reclaim DAC',
+    test('Bluetooth and AirPlay are mutually exclusive and route through audio_engine',
         () async {
       final commands = <String>[];
-      int released = 0;
-      int reclaimed = 0;
+      final startedSessions = <String>[];
+      int stopped = 0;
       int restored = 0;
 
       final service = WirelessAudioService.forTesting(
@@ -41,8 +41,11 @@ void main() {
           }
           return ProcessResult(0, 0, '', '');
         },
-        releaseLocalOutput: () => released++,
-        reclaimLocalOutput: () => reclaimed++,
+        startLiveCapture: ({required title, required subtitle}) {
+          startedSessions.add(title);
+          return true;
+        },
+        stopLiveCapture: () => stopped++,
         restoreDac: () async => restored++,
       );
       addTearDown(service.dispose);
@@ -51,7 +54,7 @@ void main() {
       expect(service.isBluetoothEnabled, isTrue);
       expect(service.isAirplayEnabled, isFalse);
       expect(service.connectedBluetoothDevice, 'iPhone 16');
-      expect(released, 1);
+      expect(startedSessions, ['蓝牙无线音频']);
       expect(commands, contains('sudo systemctl start bluealsa-aplay'));
       expect(commands, contains('sudo systemctl stop shairport-sync'));
 
@@ -60,18 +63,18 @@ void main() {
       expect(service.isBluetoothEnabled, isFalse);
       expect(service.isAirplayEnabled, isTrue);
       expect(service.connectedBluetoothDevice, isNull);
-      expect(released, 2);
+      expect(startedSessions, ['蓝牙无线音频', 'AirPlay 2 无线音频']);
       expect(commands, contains('sudo systemctl stop bluealsa-aplay'));
       expect(commands, contains('sudo systemctl start shairport-sync'));
 
       await service.ensureLocalPlaybackReady();
       expect(service.activeMode, WirelessAudioMode.none);
-      expect(reclaimed, 1);
+      expect(stopped, 1);
       expect(restored, 1);
     });
 
     test('rolls back to local playback if starting receiver fails', () async {
-      int reclaimed = 0;
+      int stopped = 0;
       final service = WirelessAudioService.forTesting(
         runCommand: (exe, args) async {
           if (args.contains('shairport-sync') && args.contains('start')) {
@@ -79,8 +82,8 @@ void main() {
           }
           return ProcessResult(0, 0, '', '');
         },
-        releaseLocalOutput: () {},
-        reclaimLocalOutput: () => reclaimed++,
+        startLiveCapture: ({required title, required subtitle}) => true,
+        stopLiveCapture: () => stopped++,
         restoreDac: () async {},
       );
       addTearDown(service.dispose);
@@ -88,7 +91,7 @@ void main() {
       await service.setAirplayEnabled(true);
       expect(service.activeMode, WirelessAudioMode.none);
       expect(service.errorMessage, contains('unit failed'));
-      expect(reclaimed, 1);
+      expect(stopped, 1);
     });
   });
 

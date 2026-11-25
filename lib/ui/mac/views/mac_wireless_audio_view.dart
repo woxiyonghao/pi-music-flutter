@@ -34,13 +34,13 @@ class MacWirelessAudioView extends StatelessWidget {
 
         final btSubtitle = btOn
             ? (wireless.connectedBluetoothDevice != null
-                ? '已连接设备: ${wireless.connectedBluetoothDevice} · 通过 DX1 II 输出'
-                : '等待手机连接蓝牙 "${WirelessAudioService.deviceBroadcastName}" (可配对)')
-            : '默认无线方式 · 关闭状态下由本机曲库独享 DX1 II';
+                ? '已连接设备: ${wireless.connectedBluetoothDevice} · 经 audio_engine 输出至 DX1 II'
+                : '等待手机连接蓝牙 "${WirelessAudioService.deviceBroadcastName}" (支持表头/EQ)')
+            : '默认无线方式 · 经 audio_engine 驱动表头与均衡器输出至 DX1 II';
 
         final airplaySubtitle = airplayOn
-            ? '已在局域网广播 "${WirelessAudioService.deviceBroadcastName}" · 通过 DX1 II 输出'
-            : '同一 Wi-Fi 下 iPhone / iPad / Mac 隔空播放无损直出';
+            ? '已在局域网广播 "${WirelessAudioService.deviceBroadcastName}" · 经 audio_engine 输出'
+            : '从 iPhone 控制中心播放卡片音频输出选 "${WirelessAudioService.deviceBroadcastName}" (非屏幕镜像)';
 
         return GlassCard(
           borderRadius: UIConfig.containerRounding,
@@ -160,8 +160,8 @@ class MacWirelessAudioView extends StatelessWidget {
                               switching
                                   ? '正在切换音频输出通道，请稍候…'
                                   : (btOn || airplayOn)
-                                      ? '已停止本机音乐并释放 DX1 II，关闭开关或点播本机歌曲可切回本地无损播放。'
-                                      : '当前处于本机播放模式；开启蓝牙或 AirPlay 后将自动停止本机音乐并转接外部音频。',
+                                      ? '音频正经过 audio_engine（支持表头可视化与 10 段 EQ），关闭开关或点播本机歌曲可切回本地曲库。'
+                                      : '当前处于本机播放模式；开启蓝牙或 AirPlay 后将自动停止本机音乐并转接外部音频进入引擎。',
                               style: const TextStyle(
                                 fontSize: 12.0,
                                 color: UIConfig.textMuted,

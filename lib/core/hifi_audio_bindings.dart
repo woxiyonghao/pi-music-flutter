@@ -115,6 +115,7 @@ class HifiAudioBindings {
   _HifiAudioBoolDart? _hasPlaybackCompleted;
   _HifiAudioVoidDart? _releaseOutput;
   _HifiAudioVoidDart? _reclaimOutput;
+  _HifiAudioOpenAndPlayDart? _openLiveCapture;
 
   // 内存复用：12 频段频谱指针与 10 频段 EQ 指针 (避免每帧内存分配与 GC 压力)
   late final Pointer<Float> _spectrumBuffer;
@@ -270,6 +271,9 @@ class HifiAudioBindings {
         _reclaimOutput =
             _lib.lookupFunction<_HifiAudioVoidC, _HifiAudioVoidDart>(
                 'hifi_audio_reclaim_output');
+        _openLiveCapture =
+            _lib.lookupFunction<_HifiAudioOpenAndPlayC, _HifiAudioOpenAndPlayDart>(
+                'hifi_audio_open_live_capture');
       } catch (_) {}
     } catch (e, stack) {
       loadError = 'LOOKUP_ERROR: $e\n$stack';
@@ -346,6 +350,15 @@ class HifiAudioBindings {
     final nativePath = path.toNativeUtf8();
     final res = _openAndPlaySection(nativePath, startSec, endSec);
     calloc.free(nativePath);
+    return res;
+  }
+
+  bool openLiveCapture(String deviceName) {
+    final fn = _openLiveCapture;
+    if (!_isLoaded || fn == null) return false;
+    final nativeDev = deviceName.toNativeUtf8();
+    final res = fn(nativeDev);
+    calloc.free(nativeDev);
     return res;
   }
 

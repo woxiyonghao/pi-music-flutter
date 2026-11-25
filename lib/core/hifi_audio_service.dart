@@ -440,7 +440,8 @@ class HifiAudioService extends ChangeNotifier {
     _playWhenPrepared = true;
     if (_isPreparingTrack) return;
     final generation = _loadGeneration;
-    final hook = beforeLocalPlaybackHook;
+    final isLive = _currentTrack?.filepath.startsWith('live://') ?? false;
+    final hook = isLive ? null : beforeLocalPlaybackHook;
     if (hook != null) {
       await hook();
       if (generation != _loadGeneration || !_playWhenPrepared) return;
@@ -534,8 +535,67 @@ class HifiAudioService extends ChangeNotifier {
     _bindings.reclaimOutput();
   }
 
+  /// Route an external live ALSA capture device (e.g. snd-aloop for Bluetooth
+  /// or AirPlay 2) through AudioEngine so VU meters, spectrum, and 10-band EQ
+  /// process the wireless stream before output to the DAC.
+  bool startLiveWirelessSession({
+    required String title,
+    required String subtitle,
+    String captureDevice = 'plughw:CARD=PhonoraLoop,DEV=1,SUBDEV=0',
+  }) {
+    stop();
+    if (!_bindings.openLiveCapture(captureDevice)) {
+      return false;
+    }
+    final liveTrack = Track(
+      id: -1,
+      title: title,
+      artist: subtitle,
+      album: 'PhonoraMusic 无线输入',
+      filepath: 'live://$captureDevice',
+      format: AudioFormat.flac,
+      sampleRate: 44100,
+      bitDepth: 24,
+      durationSec: 0,
+    );
+    _currentTrack = liveTrack;
+    currentTrackIdNotifier.value = liveTrack.id;
+    currentTrackNotifier.value = liveTrack;
+    isPlayingNotifier.value = true;
+    _state = PlaybackState(
+      isPlaying: true,
+      isPaused: false,
+      isBitPerfect: false,
+      currentTime: 0.0,
+      duration: 0.0,
+      progress: 0.0,
+      volume: _state.volume,
+      isMuted: _state.isMuted,
+      playMode: _playMode,
+      activeDeviceName: _bindings.getDeviceName(),
+      activeSampleRate: 44100,
+      spectrumLevels: _state.spectrumLevels,
+    );
+    notifyListeners();
+    return true;
+  }
+
+  void stopLiveWirelessSession() {
+    stop();
+    if (_currentTrack?.filepath.startsWith('live://') ?? false) {
+      _currentTrack = null;
+      currentTrackIdNotifier.value = null;
+      currentTrackNotifier.value = null;
+      notifyListeners();
+    }
+    reclaimOutput();
+  }
+
   void previous() {
-    if (_playlistQueue.isEmpty) return;
+    if (_playlistQueue.isEmpty ||
+        (_currentTrack?.filepath.startsWith('live://') ?? false)) {
+      return;
+    }
     _completion.reset();
     if (_state.currentTime > 3.0) {
       seek(0.0);
@@ -550,7 +610,10 @@ class HifiAudioService extends ChangeNotifier {
   }
 
   void next({bool isAutomatic = false}) {
-    if (_playlistQueue.isEmpty) return;
+    if (_playlistQueue.isEmpty ||
+        (_currentTrack?.filepath.startsWith('live://') ?? false)) {
+      return;
+    }
     if (_consecutiveErrors >= _playlistQueue.length) {
       _consecutiveErrors = 0;
       _completion.reset();
