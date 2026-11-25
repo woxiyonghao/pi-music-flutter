@@ -162,6 +162,7 @@ class WirelessAudioService extends ChangeNotifier {
 
   Future<void> _enableAirplay() async {
     if (!_isLinux) return;
+    await _runSafe('sudo', ['systemctl', 'start', 'nqptp']);
     await _execChecked('sudo', ['systemctl', 'start', 'shairport-sync']);
   }
 
@@ -174,6 +175,7 @@ class WirelessAudioService extends ChangeNotifier {
 
   Future<void> _stopAirplayServices() async {
     await _runSafe('sudo', ['systemctl', 'stop', 'shairport-sync']);
+    await _runSafe('sudo', ['systemctl', 'stop', 'nqptp']);
   }
 
   Future<void> _execChecked(String exe, List<String> args) async {
