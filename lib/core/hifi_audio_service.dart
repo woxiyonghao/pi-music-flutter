@@ -320,8 +320,11 @@ class HifiAudioService extends ChangeNotifier {
     final resolvedPath = MusicDatabaseService.resolveTrackPath(track.filepath);
     Object? fileError;
     try {
-      await beforeLocalPlaybackHook?.call();
-      if (generation != _loadGeneration) return;
+      final hook = beforeLocalPlaybackHook;
+      if (hook != null) {
+        await hook();
+        if (generation != _loadGeneration) return;
+      }
       await (_prepareFileOverride ?? _prepareFile)(resolvedPath);
       if (generation != _loadGeneration) return;
       if (!await PlatformAudioRuntime.instance.activate()) {
@@ -437,8 +440,11 @@ class HifiAudioService extends ChangeNotifier {
     _playWhenPrepared = true;
     if (_isPreparingTrack) return;
     final generation = _loadGeneration;
-    await beforeLocalPlaybackHook?.call();
-    if (generation != _loadGeneration || !_playWhenPrepared) return;
+    final hook = beforeLocalPlaybackHook;
+    if (hook != null) {
+      await hook();
+      if (generation != _loadGeneration || !_playWhenPrepared) return;
+    }
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
       if (!await PlatformAudioRuntime.instance.activate()) return;
       if (generation != _loadGeneration || !_playWhenPrepared) return;
