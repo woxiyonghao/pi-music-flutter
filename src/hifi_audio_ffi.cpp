@@ -91,6 +91,14 @@ void hifi_audio_stop() {
     audio_engine::AudioEngine::getInstance().stop();
 }
 
+void hifi_audio_release_output() {
+    audio_engine::AudioEngine::getInstance().releaseOutput();
+}
+
+void hifi_audio_reclaim_output() {
+    audio_engine::AudioEngine::getInstance().reclaimOutput();
+}
+
 void hifi_audio_seek(double target_seconds) {
     audio_engine::AudioEngine::getInstance().seek(target_seconds);
 }

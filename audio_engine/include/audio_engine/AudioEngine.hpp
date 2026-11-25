@@ -47,6 +47,8 @@ public:
     void pause();
     void togglePlayPause();
     void stop();
+    void releaseOutput();
+    void reclaimOutput();
     void seek(double target_seconds);
 
     // 音量与位完美控制 (0.0f ~ 1.0f)
@@ -146,6 +148,7 @@ private:
     WorkerThread decode_thread_;
     std::atomic<bool> is_decoding_{false};
     std::atomic<bool> is_eof_{false};
+    std::atomic<bool> output_released_{false};
 
     std::atomic<bool> is_playing_{false};
     std::atomic<bool> is_paused_{false};

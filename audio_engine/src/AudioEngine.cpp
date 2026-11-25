@@ -128,6 +128,7 @@ bool AudioEngine::openAndPlay(const std::string& filepath) {
 
 bool AudioEngine::openAndPlaySection(const std::string& filepath, double start_sec, double end_sec) {
     std::lock_guard lock_dev(device_mutex_);
+    output_released_.store(false, std::memory_order_release);
 
     start_sec = std::max(0.0, start_sec);
     bool is_section = (end_sec > start_sec);
@@ -478,6 +479,24 @@ void AudioEngine::stop() {
     }
 }
 
+void AudioEngine::releaseOutput() {
+    stop();
+    std::lock_guard device_lock(device_mutex_);
+    output_released_.store(true, std::memory_order_release);
+    {
+        std::lock_guard lock(decoder_mutex_);
+        current_filepath_.clear();
+    }
+    if (sink_) {
+        sink_->close();
+    }
+}
+
+void AudioEngine::reclaimOutput() {
+    output_released_.store(false, std::memory_order_release);
+    notifyOutputDeviceChanged();
+}
+
 void AudioEngine::seek(double target_seconds) {
     std::lock_guard device_lock(device_mutex_);
     const bool was_playing = is_playing_.load();
@@ -801,6 +820,9 @@ void AudioEngine::handleDefaultDeviceChanged() {
         if (!playing) pause();
     }
 #else
+    if (output_released_.load(std::memory_order_acquire)) {
+        return;
+    }
     const auto host = runtimeContext().hostOutput();
     uint32_t target_rate = host.sample_rate;
     uint32_t expected_rate = (target_rate > 0) ? target_rate : (current_spec_.sample_rate > 0 ? current_spec_.sample_rate : 44100);

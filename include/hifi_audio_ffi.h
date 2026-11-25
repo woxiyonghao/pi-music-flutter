@@ -41,6 +41,8 @@ HIFI_EXPORT void hifi_audio_play();
 HIFI_EXPORT void hifi_audio_pause();
 HIFI_EXPORT void hifi_audio_toggle();
 HIFI_EXPORT void hifi_audio_stop();
+HIFI_EXPORT void hifi_audio_release_output();
+HIFI_EXPORT void hifi_audio_reclaim_output();
 HIFI_EXPORT void hifi_audio_seek(double target_seconds);
 
 // 3. 状态查询
